@@ -37,7 +37,7 @@ npm test      # vitest
   - `score.ts`: ソフトスコア
   - `diversity.ts`: 3案の多様性選抜
   - `describe.ts`: プランの名前・特徴タグ生成
-  - `generate.ts`: パイプライン全体の統括。`candidatePool`（seed 非依存の全候補。メモ化）と `selectPlans`（seed による選抜）。`GEN_VERSION` もここ
+  - `generate.ts`: パイプライン全体の統括。`candidatePool`（seed 非依存の全候補。メモ化。変種は適用後の帯構成が同一のものを列挙前に省く。readonly は配列レベルのみ）、`dedupeBySig`（反転込みの重複除去）、`selectPlans`（seed による選抜）、`generatePlansUncached`（診断用。キャッシュに入れない）。`GEN_VERSION` もここ
   - `enumerate.ts`: 候補ギャラリー用。`enumeratePlans`（候補プールのコピー）、`galleryPlans`（多様性優先で上位24案）。`planKey`（v2 は `arch-WxH-<変種>`、変種なしは v1 の `arch-WxH`）の生成・解析と、key からの再構築（`planFromKey`。v1 の key は null）もここ
   - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドア開き半径 `DOOR_R` は `derive.ts` にあり、FloorSvg と共有する
 - `src/components/`: React UI（入力フォーム、PlanCard、SVG図面、拡大モーダル）
@@ -77,6 +77,7 @@ npm test      # vitest
 - 北道路・東西道路、L字外形、中庭型
 - 水回り隣接のハード制約
 - 3案が揃わない境界条件（0〜2案）の改善
+- 検討事項: ギャラリーの最遠点選択（`galleryPlans`）はスコアの低い案が混じりうる。スコア下限や重み付けを入れるか検討する（今回は仕様変更しない）
 
 ## コーディング規約
 

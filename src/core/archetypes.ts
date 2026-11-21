@@ -255,7 +255,10 @@ export function buildPlanStage(
     const s1 = f1.rooms.find((r) => r.type === 'stair')
     const s2 = f2.rooms.find((r) => r.type === 'stair')
     if (!s1 || !s2 || s1.x !== s2.x || s1.y !== s2.y || s1.w !== s2.w) return fail('stair')
-    // 吹抜はLDK直上（x・y の両方）にあること
+    // 吹抜はLDK直上（x・y の両方）にあること。
+    // y の検査は、現状の帯の高さ範囲では capH（上の layoutFloor）が効くため構造上は違反が出ない。
+    // capH の退行や将来の帯範囲の変更に備えた二重の守りとして残している
+    // （capH の効きは slicing.test.ts の合成構成で固定してある）
     if (hasVoid) {
       const ldk = f1.rooms.find((r) => r.type === 'ldk')
       const vd = f2.rooms.find((r) => r.type === 'void')

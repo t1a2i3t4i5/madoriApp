@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { GEN_VERSION, candidatePool, generatePlans } from './generate'
 import { feasibility } from './program'
 import { planName, planTags } from './describe'
@@ -93,13 +93,18 @@ describe('gen-v2 スナップショット', () => {
     return
   }
 
-  const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
-  const now = build()
+  // 生成は重いので describe の収集時ではなく beforeAll で行う（フィルタ実行や収集だけのときに走らせない）
+  let fixture: Fixture
+  let now: Fixture
+  beforeAll(() => {
+    fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
+    now = build()
+  }, 300_000)
 
   it('fixture.genVersion が現在の GEN_VERSION と一致する', () => {
     expect(fixture.genVersion).toBe(GEN_VERSION)
   })
-  it('generatePlans の出力（13条件 × 5 seed）が一致する', () => {
+  it('generatePlans の出力（13条件 × 6 seed。2^32 以上の seed を含む）が一致する', () => {
     expect(fixture.cases).toHaveLength(ALL.length * SEEDS.length)
     for (const [i, c] of fixture.cases.entries()) expect(now.cases[i], `${c.name} seed=${c.seed}`).toEqual(c)
   })

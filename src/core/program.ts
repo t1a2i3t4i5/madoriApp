@@ -1,7 +1,7 @@
 import { CANONICAL } from './types'
 import type { Alt, ArchId, Feasibility, PlanConfig } from './types'
 import { bandsFor, buildPlanStage } from './archetypes'
-import { FOOTPRINT_LIMIT, generatePlans } from './generate'
+import { FOOTPRINT_LIMIT, candidatePool, generatePlansUncached } from './generate'
 import { footprintList } from './slicing'
 import { validatePlan } from './validate'
 
@@ -89,7 +89,12 @@ function emptyReason(cfg: PlanConfig): string {
   return '面積は足りていても、部屋の並び（帯の幅・高さ）に収まらず、動線と採光の検証を通過できませんでした。'
 }
 
-/** 0案のときの診断: 理由と、適用すると generatePlans が3案を返すことを確かめた代替案（最大3件） */
+/** 1〜2案だけのときの理由（0案前提の「収まりませんでした」系の文言は出さない） */
+export function fewReason(count: number): string {
+  return `条件に合う案が全${count}案しかなく、顔ぶれの違う3案を選べませんでした。`
+}
+
+/** 3案に満たないときの診断（0案なら崩れた理由、1〜2案なら少ない旨）: 理由と、適用すると generatePlans が3案を返すことを確かめた代替案（最大3件） */
 export function diagnoseEmpty(cfg: PlanConfig): Diagnosis {
   const has = (k: PlanConfig['feats'][number]) => cfg.feats.includes(k)
   const without = (k: PlanConfig['feats'][number]) => cfg.feats.filter((f) => f !== k)
@@ -107,7 +112,8 @@ export function diagnoseEmpty(cfg: PlanConfig): Diagnosis {
   for (const a of candidates) {
     if (alts.length >= 3) break
     const patched: PlanConfig = { ...cfg, feats: [...cfg.feats], ...a.patch }
-    if (feasibility(patched).ok && generatePlans(patched, 1).length === 3) alts.push(a)
+    if (feasibility(patched).ok && generatePlansUncached(patched, 1).length === 3) alts.push(a)
   }
-  return { reason: emptyReason(cfg), alts }
+  const count = candidatePool(cfg).length
+  return { reason: count > 0 ? fewReason(count) : emptyReason(cfg), alts }
 }

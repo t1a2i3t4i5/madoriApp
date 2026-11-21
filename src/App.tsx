@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Alt, PlanConfig, ScoredPlan } from './core/types'
 import { candidatePool, generatePlans } from './core/generate'
-import { galleryPlans, planFromKey, planKey } from './core/enumerate'
+import { GALLERY_LIMIT, galleryPlans, planFromKey, planKey } from './core/enumerate'
 import { mulberry32 } from './core/rng'
 import { diagnoseEmpty, feasibility } from './core/program'
 import { ConditionForm } from './components/ConditionForm'
@@ -65,7 +65,9 @@ export default function App() {
   // 3案に満たないときだけ診断する（代替案の確認で複数条件を生成するため、毎回は走らせない）
   const diagnosis = useMemo(() => (feas.ok && plans.length < 3 ? diagnoseEmpty(cfg) : null), [feas, cfg, plans.length])
   const poolCount = useMemo(() => (feas.ok ? candidatePool(cfg).length : 0), [feas, cfg])
-  const galleryList = useMemo(() => (feas.ok ? galleryPlans(cfg) : []), [feas, cfg])
+  // ギャラリーの24案選抜は重いので、開いたときだけ計算する（ボタンの文言は poolCount から出す）
+  const galleryList = useMemo(() => (feas.ok && showGallery ? galleryPlans(cfg) : []), [feas, cfg, showGallery])
+  const galleryCount = Math.min(GALLERY_LIMIT, poolCount)
 
   // 別タブでお気に入りが変わったら読み直す（storage イベントは他タブの変更だけで発火する）
   useEffect(() => {
@@ -146,7 +148,11 @@ export default function App() {
     body = (
       <Notice
         title="検証を通る案が作れませんでした"
-        body={`${diagnosis?.reason ?? ''}要素を黙って落とす代わりに、実際に3案出ることを確かめた調整案を出します。`}
+        body={
+          diagnosis && diagnosis.alts.length === 0
+            ? diagnosis.reason
+            : `${diagnosis?.reason ?? ''}要素を黙って落とす代わりに、実際に3案出ることを確かめた調整案を出します。`
+        }
         alts={diagnosis?.alts ?? []}
         onAlt={applyAlt}
       />
@@ -176,7 +182,7 @@ export default function App() {
         {exhausted && (
           <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
             この条件で出せる案はここまでです。
-            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（上位{galleryList.length}案／全{poolCount}案）を見る</button>
+            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
             か、条件を少し変えてみてください。
           </p>
         )}
@@ -194,9 +200,9 @@ export default function App() {
             />
           ))}
         </div>
-        {!showGallery && galleryList.length > 0 && (
+        {!showGallery && poolCount > 0 && (
           <div className="mt-4 text-center">
-            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（上位{galleryList.length}案／全{poolCount}案）を見る</button>
+            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
           </div>
         )}
         {showGallery && (

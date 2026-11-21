@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { candidatePool, generatePlans, selectPlans } from './generate'
+import { candidatePool, dedupeBySig, generatePlans, generatePlansUncached, selectPlans } from './generate'
+import { planSignature } from './diversity'
 import { planKey } from './enumerate'
 import { validatePlan } from './validate'
-import { diagnoseEmpty, feasibility } from './program'
+import { diagnoseEmpty, fewReason, feasibility } from './program'
 import { BOUNDARY, CONDITIONS, SEEDS, ZERO_PLAN, defined } from './testing'
-import type { PlanConfig } from './types'
+import type { Plan, PlanConfig, Room, ScoredPlan } from './types'
 
 const POPULAR = CONDITIONS.slice(0, 3).map(({ name, cfg }): [string, PlanConfig] => [name, cfg])
 
@@ -170,5 +171,111 @@ describe('実現可能性', () => {
   })
   it('平屋+吹抜は不可', () => {
     expect(feasibility({ area: 30, floors: 1, rooms: 3, parking: 0, garden: 0, feats: ['void'] }).ok).toBe(false)
+  })
+})
+
+/** 合成データ用: 部屋1つだけの1階プラン（score は指定値、sig は実際のシグネチャ） */
+function synth(x: number, total: number, opts: { arch?: 0 | 1 | 2; y?: number } = {}): ScoredPlan {
+  const room: Room = { type: 'ldk', name: 'LDK', x, y: opts.y ?? 0, w: 4, h: 4, area: 16, target: 16, minArea: 16 }
+  const plan: Plan = { W: 10, H: 10, floors: [{ label: '1F', rooms: [room] }], arch: opts.arch ?? 0, totalArea: 100 }
+  return {
+    ...plan,
+    score: {
+      total,
+      parts: { 採光: 0, 面積適合: 0, 縦横比: 0, 廊下の少なさ: 0, '動線・ドア': 0, 水回り集約: 0, '910モジュール': 0 },
+    },
+    sig: planSignature(plan, false),
+    sigM: planSignature(plan, true),
+  }
+}
+
+describe('selectPlans の補充順（合成 pool）', () => {
+  // 全案が同じ位置 → 多様性しきい値を満たす2案目が作れず、補充に回る。窓（最良から8点）の外は pool 順の補充でだけ入る
+  const inWindow = [synth(0, 50, { y: 0 }), synth(0, 49, { y: 0 }), synth(0, 48, { y: 0 })]
+  const outside = [synth(0, 30), synth(0, 20)]
+  const pool = [...inWindow, ...outside]
+
+  it('窓の中を抽選順で先に使い、窓の外は pool 順で最後に補充する', () => {
+    for (const seed of SEEDS) {
+      const r = selectPlans(pool, seed, 5)
+      expect(r).toHaveLength(5)
+      expect(new Set(r).size).toBe(5)
+      expect(new Set(r.slice(0, 3))).toEqual(new Set(inWindow))
+      expect(r.slice(3)).toEqual(outside) // pool 順（スコア降順）
+    }
+  })
+  it('抽選順は pool 順とは限らない（seed で窓内の並びが変わる）', () => {
+    const orders = new Set(SEEDS.map((seed) => selectPlans(pool, seed, 3).map((p) => inWindow.indexOf(p)).join('')))
+    expect(orders.size).toBeGreaterThan(1)
+  })
+  it('pool が count 未満なら全部返し、pool を書き換えない', () => {
+    const copy = pool.slice()
+    expect(selectPlans(pool.slice(0, 2), 1)).toHaveLength(2)
+    selectPlans(pool, 1)
+    expect(pool).toEqual(copy)
+    expect(selectPlans([], 1)).toEqual([])
+  })
+  it('多様な案は多様性しきい値つきで先に選ばれる（遠い案が窓内にあれば、同位置の案より優先）', () => {
+    const far = synth(6, 49, { arch: 1 })
+    const p = [synth(0, 50), synth(0, 49.5), far]
+    for (const seed of SEEDS) expect(selectPlans(p, seed, 2)).toContain(far)
+  })
+  it('2^32 以上の seed は上位ビットを畳み込む（seed32 = 下位 ^ 上位）', () => {
+    const big = Array.from({ length: 12 }, (_, i) => synth(0, 50 - i * 0.1))
+    const ids = (seed: number) => selectPlans(big, seed, 3).map((p) => big.indexOf(p)).join(',')
+    const hi = 2 ** 40 + 5
+    expect(ids(hi)).toBe(ids((5 ^ (2 ** 8)) >>> 0)) // 2**40 の上位32bit側は 2**8
+    expect(ids(hi)).not.toBe(ids(5)) // 上位ビットが無視されていれば seed 5 と同じになってしまう
+  })
+})
+
+describe('dedupeBySig（合成データ）', () => {
+  // 実データでは「左右反転だけが違う重複」が0件で、この除去は発動しない。ここで合成データで固定する
+  it('同一 sig は先着を残す', () => {
+    const a = synth(0, 50)
+    const dup = { ...synth(0, 40) }
+    expect(dedupeBySig([a, dup])).toEqual([a])
+  })
+  it('左右反転（sigM が既出 sig と一致）の案を除く', () => {
+    const a = synth(0, 50) // x=0..4 → 反転は x=6..10
+    const mirror = synth(6, 49)
+    expect(mirror.sig).toBe(a.sigM)
+    expect(dedupeBySig([a, mirror])).toEqual([a])
+    // 順序が逆でも先着が残る（反転側の sigM は元の sig と一致する）
+    expect(dedupeBySig([mirror, a])).toEqual([mirror])
+  })
+  it('左右対称の案・無関係な案は残る', () => {
+    const sym = synth(3, 50) // x=3..7 は W=10 の中央 → 反転しても同じ
+    const other = synth(1, 49)
+    expect(sym.sig).toBe(sym.sigM)
+    expect(dedupeBySig([sym, other])).toEqual([sym, other])
+  })
+  it('入力を書き換えない', () => {
+    const list = [synth(0, 50), synth(6, 49)]
+    dedupeBySig(list)
+    expect(list).toHaveLength(2)
+  })
+})
+
+describe('診断とキャッシュ', () => {
+  it('generatePlansUncached は generatePlans と同じ結果を返す', () => {
+    for (const [, cfg] of POPULAR) {
+      expect(generatePlansUncached(cfg, 7).map(planKey)).toEqual(generatePlans(cfg, 7).map(planKey))
+    }
+  })
+  it('1〜2案の理由文は0案前提の文言（「収まりませんでした」など）を含まない', () => {
+    // 現行の実データには 1〜2案になる条件が無い（0案か3案）ので、理由文は関数で直接検証する
+    for (const n of [1, 2]) {
+      const r = fewReason(n)
+      expect(r).toContain(`全${n}案`)
+      expect(r).not.toContain('収まりませんでした')
+      expect(r).not.toContain('通過できませんでした')
+    }
+  })
+  it('診断はプールのキャッシュを介さない試行で、現在の条件のプールを追い出さない', () => {
+    const cfg = defined(CONDITIONS[0]).cfg
+    const pool = candidatePool(cfg)
+    diagnoseEmpty(ZERO_PLAN)
+    expect(candidatePool(cfg)).toBe(pool) // 同一参照のまま（再構築されていない）
   })
 })

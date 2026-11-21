@@ -33,7 +33,8 @@ export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全
   { name: '境界: 26坪/2階/個室2/土間（0案）', cfg: ZERO_PLAN, expected: 0 },
 ]
 
-export const SEEDS = [1, 2, 3, 20261121, 99999]
+/** 末尾の 2**40+5 は 2^32 以上の seed（seed32 の上位ビット経路を通す）。golden.test.ts は先頭2件だけ使う */
+export const SEEDS = [1, 2, 3, 20261121, 99999, 2 ** 40 + 5]
 
 /** 配列の添字アクセスなどで undefined を除く（非nullアサーション `!` の代わり。テスト用） */
 export function defined<T>(v: T | null | undefined, what = '値'): T {
