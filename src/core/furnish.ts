@@ -1,6 +1,6 @@
 import type { Door, Room } from './types'
 import { doorSwingRect, type Rect } from './derive'
-import { tatami } from '../lib/format'
+import { tatami } from './rooms'
 
 export type FurnitureKind = 'bed2' | 'bed1' | 'sofa' | 'dining' | 'tv' | 'desk'
 
@@ -90,7 +90,7 @@ export function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /** 壁沿い・角寄りの候補位置。2つの向き × （四隅 → 各壁の中央 → 各壁の1/4・3/4）の順で固定 */
-export function candidates(r: Room, size: { w: number; h: number }): Rect[] {
+export function candidates(r: Room, size: { w: number; h: number }, area?: Rect | null): Rect[] {
   const out: Rect[] = []
   for (const [w, h] of [[size.w, size.h], [size.h, size.w]] as const) {
     const x0 = r.x + INSET
@@ -113,7 +113,37 @@ export function candidates(r: Room, size: { w: number; h: number }): Rect[] {
       out.push({ x, y, w, h })
     }
   }
+  // 畳数行を基準にした候補（末尾追加）。家具の辺を畳数行の上端・下端・左端・右端に合わせ、壁に沿わせる
+  if (area) {
+    for (const [w, h] of [[size.w, size.h], [size.h, size.w]] as const) {
+      const x0 = r.x + INSET
+      const x1 = r.x + r.w - INSET - w
+      const y0 = r.y + INSET
+      const y1 = r.y + r.h - INSET - h
+      if (x1 < x0 - 1e-9 || y1 < y0 - 1e-9) continue
+      const inX = (x: number) => x >= x0 - 1e-9 && x <= x1 + 1e-9
+      const inY = (y: number) => y >= y0 - 1e-9 && y <= y1 + 1e-9
+      const above = area.y - h
+      const below = area.y + area.h
+      const left = area.x - w
+      const right = area.x + area.w
+      if (inY(above)) for (const x of [x0, x1]) out.push({ x, y: above, w, h })
+      if (inY(below)) for (const x of [x0, x1]) out.push({ x, y: below, w, h })
+      if (inX(left)) for (const y of [y0, y1]) out.push({ x: left, y, w, h })
+      if (inX(right)) for (const y of [y0, y1]) out.push({ x: right, y, w, h })
+    }
+  }
   return out
+}
+
+/** 家具が避ける固定領域（ドア開き・部屋名ラベル・対面キッチンのカウンター）。furnish とテストで共有する */
+export function blockedRects(r: Room, swings: readonly Rect[], kitchenFace: boolean): Rect[] {
+  const blocked: Rect[] = [...swings, labelRect(r, kitchenFace)]
+  if (r.type === 'ldk' && kitchenFace) {
+    const c = kitchenCounter(r)
+    blocked.push({ ...c, h: c.h + COUNTER_CLEARANCE })
+  }
+  return blocked
 }
 
 /**
@@ -127,16 +157,13 @@ export function furnish(rooms: readonly Room[], doors: readonly Door[], opts: Fu
   rooms.forEach((r, room) => {
     const kinds = PROGRAM[r.type]
     if (!kinds) return
-    const blocked: Rect[] = [...swings, labelRect(r, opts.kitchenFace)]
+    const blocked = blockedRects(r, swings, opts.kitchenFace)
     const area = areaLabelRect(r, opts.kitchenFace)
-    if (r.type === 'ldk' && opts.kitchenFace) {
-      const c = kitchenCounter(r)
-      blocked.push({ ...c, h: c.h + COUNTER_CLEARANCE })
-    }
     for (const kind of kinds) {
       const cands = candidates(r, SIZE[kind])
+      const candsArea = candidates(r, SIZE[kind], area)
       const free = (c: Rect) => !blocked.some((b) => overlaps(c, b)) && !items.some((it) => it.room === room && overlaps(c, it))
-      const spot = (area ? cands.find((c) => free(c) && !overlaps(c, area)) : undefined) ?? cands.find(free)
+      const spot = (area ? candsArea.find((c) => free(c) && !overlaps(c, area)) : undefined) ?? cands.find(free)
       if (spot) items.push({ kind, room, ...spot })
     }
   })

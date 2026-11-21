@@ -39,3 +39,6 @@ export function cell(type: RoomType, opts?: Partial<Cell>): Cell {
     ...opts,
   }
 }
+
+/** 面積（セル×セル）を畳数の文字列にする（1畳=8セル²、整数なら小数点なし） */
+export const tatami = (w: number, h: number) => ((w * h) / 8).toFixed(1).replace(/\.0$/, '')

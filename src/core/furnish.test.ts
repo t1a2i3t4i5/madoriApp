@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { generatePlans } from './generate'
 import { enumeratePlans } from './enumerate'
 import { computeDoors, doorSwingRect } from './derive'
-import { SIZE, areaLabelRect, candidates, furnish, isVerticalLabel, kitchenCounter, labelRect, overlaps, type FurnitureItem } from './furnish'
+import { PROGRAM, SIZE, areaLabelRect, blockedRects, candidates, furnish, isVerticalLabel, kitchenCounter, labelRect, overlaps, type FurnitureItem } from './furnish'
 import { CONDITIONS, SEEDS } from './testing'
+import type { Rect } from './derive'
 import type { PlanConfig, ScoredPlan } from './types'
+
+/** 畳数行に重なった家具の件数の上限（修正後の実測値。増える退行を止める） */
+const OVERLAP_MAX = 190
 
 function allPlans(): { cfg: PlanConfig; plan: ScoredPlan }[] {
   const out: { cfg: PlanConfig; plan: ScoredPlan }[] = []
@@ -91,18 +95,57 @@ describe('家具配置 furnish', () => {
           if (!area || !overlaps(it, area)) return
           overlapped++
           // 重なった家具について、同じ前提（先に置いた家具・ドア・カウンター・部屋名）で畳数行も避けられる候補が本当になかったか
-          const blocked = [...swings, labelRect(r, kitchenFace), area, ...placed.slice(0, i).filter((o) => o.room === it.room)]
-          if (r.type === 'ldk' && kitchenFace) {
-            const c = kitchenCounter(r)
-            blocked.push({ ...c, h: c.h + 0.7 })
-          }
-          if (candidates(r, SIZE[it.kind]).some((c) => !blocked.some((b) => overlaps(c, b)))) avoidable++
+          const blocked = [...blockedRects(r, swings, kitchenFace), area, ...placed.slice(0, i).filter((o) => o.room === it.room)]
+          if (candidates(r, SIZE[it.kind], area).some((c) => !blocked.some((b) => overlaps(c, b)))) avoidable++
         })
       }
     }
     expect(items).toBeGreaterThan(100)
-    expect(overlapped, '重なりは未解消の件数。避けられる候補があったのに重なった件数は0').toBeGreaterThanOrEqual(0)
+    expect(overlapped, `重なり件数の上限（退行検知）: ${overlapped}`).toBeLessThanOrEqual(OVERLAP_MAX)
     expect(avoidable).toBe(0)
+  })
+
+  it('旧候補リストでは畳数行に重なり、畳数行基準の候補で避けられる例（LDK 5×12 のダイニング）', () => {
+    const ldk = { type: 'ldk', name: 'LDK', x: 0, y: 0, w: 5, h: 12, area: 60, target: 124, minArea: 72 } as const
+    const area = areaLabelRect(ldk, false)
+    expect(area).not.toBeNull()
+    if (!area) return
+    const blocked = blockedRects(ldk, [], false)
+    // 旧版（畳数行基準の候補なし）の2段階配置を再現し、ダイニングが畳数行に重なることを確認
+    const placedOld: Rect[] = []
+    let oldDining: Rect | undefined
+    for (const kind of PROGRAM.ldk ?? []) {
+      const cs = candidates(ldk, SIZE[kind])
+      const free = (c: Rect) => !blocked.some((b) => overlaps(c, b)) && !placedOld.some((o) => overlaps(c, o))
+      const spot = cs.find((c) => free(c) && !overlaps(c, area)) ?? cs.find(free)
+      if (spot) placedOld.push(spot)
+      if (kind === 'dining') oldDining = spot
+    }
+    expect(oldDining).toBeDefined()
+    if (oldDining) expect(overlaps(oldDining, area)).toBe(true)
+    const dining = furnish([ldk], [], { kitchenFace: false }).find((i) => i.kind === 'dining')
+    expect(dining).toBeDefined()
+    if (dining) expect(overlaps(dining, area)).toBe(false)
+  })
+
+  it('配置数の保証: 単段配置（部屋名のみ回避）と2段階配置で置かれる家具の数が一致する', () => {
+    for (const { cfg, plan } of PLANS) {
+      const kitchenFace = cfg.feats.includes('kitchenFace')
+      for (const fl of plan.floors) {
+        const doors = computeDoors(fl.rooms)
+        const swings = doors.map((d) => doorSwingRect(d.edge))
+        const two = furnish(fl.rooms, doors, { kitchenFace })
+        fl.rooms.forEach((r, room) => {
+          const placed: Rect[] = []
+          for (const kind of PROGRAM[r.type] ?? []) {
+            const blocked = blockedRects(r, swings, kitchenFace)
+            const spot = candidates(r, SIZE[kind]).find((c) => !blocked.some((b) => overlaps(c, b)) && !placed.some((p) => overlaps(c, p)))
+            if (spot) placed.push(spot)
+          }
+          expect(two.filter((t) => t.room === room).length, `${r.type} ${JSON.stringify(r)}`).toBe(placed.length)
+        })
+      }
+    }
   })
 
   it('畳数行の見積もり: 描画条件（大きい横書きの部屋のみ）と一致し、部屋名の下に位置する', () => {
