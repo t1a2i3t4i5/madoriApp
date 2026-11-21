@@ -92,6 +92,9 @@ export interface ScoredPlan extends Plan {
   sigM: string
 }
 
+/** 案の識別子 "アーキタイプ-幅xy高さ"（例: "2-18x14"）。同じ条件なら1つの案に対応する */
+export type PlanKey = `${ArchId}-${number}x${number}`
+
 export interface Edge {
   dir: 'v' | 'h'
   at: number

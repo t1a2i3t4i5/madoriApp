@@ -39,6 +39,23 @@ export function doorOK(a: Room, b: Room): boolean {
   return PAIR_OK.has(key)
 }
 
+/** ドアの開き弧の半径（セル）。描画（FloorSvg）と家具配置（furnish）で共有する */
+export const DOOR_R = 1.9
+
+export interface Rect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** ドアの開き弧が占める外接矩形。FloorSvg の弧の描画（at,mid を起点に R 四方）と一致させる */
+export function doorSwingRect(e: Edge): Rect {
+  return e.dir === 'v'
+    ? { x: e.at, y: e.mid - DOOR_R, w: DOOR_R, h: DOOR_R }
+    : { x: e.mid - DOOR_R, y: e.at - DOOR_R, w: DOOR_R, h: DOOR_R }
+}
+
 export function computeDoors(rooms: Room[]): Door[] {
   const doors: Door[] = []
   for (const [i, a] of rooms.entries()) {
