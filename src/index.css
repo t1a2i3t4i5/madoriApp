@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f3f2ee; --surface: #ffffff; --surface2: #eceae3; --ink: #1c1f1d; --ink2: #5a605b;
+  --line: #d9d6cc; --accent: #14604a; --accent-ink: #ffffff; --warm: #c25e3a;
+  --warn-bg: #fdf3e3; --warn-line: #e5c07a; --warn-ink: #7a5410;
+  --chip: #ffffff; --shadow: 0 10px 30px rgba(28, 31, 29, 0.1); --plan-paper: #fdfcf8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --surface: #1e2126; --surface2: #262a30; --ink: #eceee9; --ink2: #a7aca4;
+    --line: #383d44; --accent: #3fae87; --accent-ink: #0d1512; --warm: #e08a63;
+    --warn-bg: #2e2716; --warn-line: #6d5a26; --warn-ink: #e8cd8d;
+    --chip: #262a30; --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+}
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-warm: var(--warm);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-line: var(--warn-line);
+  --color-warn-ink: var(--warn-ink);
+  --color-chip: var(--chip);
+  --color-paper: var(--plan-paper);
+  --shadow-panel: var(--shadow);
+  --font-sans: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+  --font-serif: "Shippori Mincho B1", serif;
+}
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); line-height: 1.6; }
+input[type="range"] { accent-color: var(--accent); }

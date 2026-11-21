@@ -1,0 +1,157 @@
+import { useMemo } from 'react'
+import type { Plan, Room, RoomCategory } from '../core/types'
+import { ROOM } from '../core/rooms'
+import { computeDoors, computeWindows } from '../core/derive'
+import { Fixtures } from './Fixtures'
+import { tatami } from '../lib/format'
+
+const FILL: Record<RoomCategory, string> = {
+  living: '#f3ddba', bed: '#dde7d8', water: '#d3e2ea', store: '#e7ddcb', circ: '#eae4d3', void: '#f4f1e6',
+}
+const PAD = 2.2
+
+export interface FloorSvgProps {
+  plan: Plan
+  floorIdx: number
+  /** pattern id の衝突を避けるための接頭辞 */
+  uid: string
+  kitchenFace?: boolean
+  siteStrip?: boolean
+  /** 全案で同じスケールに揃えるための最大外形 */
+  scale?: { maxW: number; maxH: number }
+}
+
+function RoomLabel({ r, kitchenFace }: { r: Room; kitchenFace?: boolean }) {
+  const cx = r.x + r.w / 2
+  // 対面キッチンのカウンターがあるLDKはラベルを下へ逃がす
+  const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
+  const common = { fontWeight: 700, fill: '#33302a', textAnchor: 'middle' as const }
+  // 細長い部屋（玄関・トイレ等）はラベルを縦積みにして壁に触れさせない
+  if (r.w <= 2.6 && r.h >= r.name.length * 1.15 + 0.6) {
+    const fs = Math.min(1.0, r.w - 0.5)
+    const y0 = cy - ((r.name.length - 1) * 1.08) / 2 + 0.35
+    return (
+      <text fontSize={fs} {...common}>
+        {Array.from(r.name).map((ch, i) => (
+          <tspan key={i} x={cx} y={y0 + i * 1.08}>{ch}</tspan>
+        ))}
+      </text>
+    )
+  }
+  const big = r.w >= 5 && r.h >= 4.5
+  const mid = r.w >= 3.4 && r.h >= 3.2
+  const fitFs = (base: number) => Math.min(base, (r.w - 0.25) / Math.max(1, r.name.length))
+  if (big) {
+    return (
+      <>
+        <text x={cx} y={cy - 0.35} fontSize={fitFs(1.55)} {...common}>{r.name}</text>
+        <text x={cx} y={cy + 1.55} fontSize={1.2} fill="#7a7568" textAnchor="middle">{tatami(r.w, r.h)}畳</text>
+      </>
+    )
+  }
+  if (mid) return <text x={cx} y={cy + 0.5} fontSize={fitFs(1.25)} {...common}>{r.name}</text>
+  if (r.w >= 2 && r.h >= 2.4) return <text x={cx} y={cy + 0.42} fontSize={fitFs(0.98)} {...common}>{r.name}</text>
+  return null
+}
+
+export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, scale }: FloorSvgProps) {
+  const fl = plan.floors[floorIdx]
+  const { W, H } = plan
+  const doors = useMemo(() => computeDoors(fl.rooms), [fl])
+  const windows = useMemo(() => computeWindows(fl.rooms, H), [fl, H])
+  const ldk = fl.rooms.find((r) => r.type === 'ldk')
+  const entry = fl.rooms.find((r) => r.type === 'entry')
+
+  let vbX = -PAD, vbW = W + PAD * 2
+  const vbY = -PAD - 1.6
+  let vbH = H + PAD * 2 + 1.6
+  if (scale) {
+    const targetW = scale.maxW + 4.4
+    vbX -= (targetW - vbW) / 2
+    vbW = targetW
+    vbH = scale.maxH + 4.4 + 1.6
+  }
+  const R = 1.9
+  const cw = ldk ? Math.min(8, ldk.w - 3) : 0
+
+  return (
+    <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={`${fl.label}の間取り図`} className="block h-auto w-full">
+      <defs>
+        <pattern id={`hatch${uid}`} width={1.6} height={1.6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width={1.6} height={1.6} fill="#f4f1e6" />
+          <line x1={0} y1={0} x2={0} y2={1.6} stroke="#c9c2ab" strokeWidth={0.35} />
+        </pattern>
+        <pattern id={`dots${uid}`} width={1.4} height={1.4} patternUnits="userSpaceOnUse">
+          <rect width={1.4} height={1.4} fill="#d9cbae" />
+          <circle cx={0.7} cy={0.7} r={0.16} fill="#b7a67f" />
+        </pattern>
+      </defs>
+      {/* 方位 */}
+      <text x={W - 1.2} y={-PAD - 0.1} fontSize={1.7} fill="#8a8578" textAnchor="middle" fontWeight={700}>N</text>
+      <path d={`M ${W - 1.2} ${-PAD + 0.6} l 0.45 0.9 h -0.9 z`} fill="#8a8578" />
+      {/* 部屋の塗り */}
+      {fl.rooms.map((r, i) => {
+        let fill = FILL[ROOM[r.type].cat]
+        if (r.type === 'doma') fill = `url(#dots${uid})`
+        if (r.type === 'void') fill = `url(#hatch${uid})`
+        if (r.type === 'hall') fill = '#efe9da'
+        if (r.type === 'stair') fill = '#e3ded0'
+        return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} />
+      })}
+      {/* 対面キッチンカウンター */}
+      {ldk && kitchenFace && (
+        <>
+          <rect x={ldk.x + ldk.w - cw - 0.8} y={ldk.y + 1.2} width={cw} height={1.5} fill="#e8c9a0" stroke="#b08b57" strokeWidth={0.14} />
+          <rect x={ldk.x + ldk.w - cw + 0.1} y={ldk.y + 1.45} width={1.7} height={1.0} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
+        </>
+      )}
+      {fl.rooms.map((r, i) => <Fixtures key={i} r={r} />)}
+      {/* 窓: 壁を抜いてから二重線 */}
+      <g stroke="#fdfcf8" strokeWidth={0.55}>
+        {windows.map((wd, i) => {
+          const yy = wd.side === 'S' ? H : 0
+          return <line key={i} x1={wd.cx - wd.len / 2} y1={yy} x2={wd.cx + wd.len / 2} y2={yy} />
+        })}
+      </g>
+      <g stroke="#4a90b8" strokeWidth={0.13}>
+        {windows.map((wd, i) => {
+          const yy = wd.side === 'S' ? H : 0
+          return (
+            <g key={i}>
+              <line x1={wd.cx - wd.len / 2} y1={yy - 0.22} x2={wd.cx + wd.len / 2} y2={yy - 0.22} />
+              <line x1={wd.cx - wd.len / 2} y1={yy + 0.22} x2={wd.cx + wd.len / 2} y2={yy + 0.22} />
+            </g>
+          )
+        })}
+      </g>
+      {/* ドアの開き弧 */}
+      <g stroke="#6d675c" strokeWidth={0.13} fill="rgba(109,103,92,0.10)">
+        {doors.map((d, i) => {
+          const e = d.edge
+          return e.dir === 'v' ? (
+            <path key={i} d={`M ${e.at} ${e.mid} L ${e.at} ${e.mid - R} A ${R} ${R} 0 0 1 ${e.at + R} ${e.mid} Z`} />
+          ) : (
+            <path key={i} d={`M ${e.mid} ${e.at} L ${e.mid - R} ${e.at} A ${R} ${R} 0 0 1 ${e.mid} ${e.at - R} Z`} />
+          )
+        })}
+      </g>
+      {/* 壁（外壁は内壁の約2.5倍の太さ） */}
+      <g fill="none" stroke="#3a382f">
+        {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
+        <rect x={0} y={0} width={W} height={H} strokeWidth={0.42} />
+      </g>
+      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} />)}
+      {/* 玄関ドア（南側・外開き） */}
+      {entry && entry.y + entry.h === H && (() => {
+        const ex = entry.x + entry.w / 2
+        return <path d={`M ${ex} ${H} L ${ex} ${H + 2.0} A 2.0 2.0 0 0 0 ${ex + 2.0} ${H} Z`} fill="rgba(109,103,92,0.10)" stroke="#6d675c" strokeWidth={0.13} />
+      })()}
+      {siteStrip && (
+        <>
+          <rect x={0} y={H + 1.0} width={W} height={1.5} fill="#d8d5cc" />
+          <text x={W / 2} y={H + 2.15} fontSize={1.15} fill="#8a8578" textAnchor="middle">南道路</text>
+        </>
+      )}
+    </svg>
+  )
+}
