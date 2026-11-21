@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import type { Plan, Room, RoomCategory } from '../core/types'
 import { ROOM } from '../core/rooms'
-import { computeDoors, computeWindows } from '../core/derive'
+import { DOOR_R, computeDoors, computeWindows } from '../core/derive'
+import { furnish, kitchenCounter } from '../core/furnish'
+import { Furniture } from './Furniture'
 import { Fixtures } from './Fixtures'
 import { tatami } from '../lib/format'
 
@@ -17,6 +19,8 @@ export interface FloorSvgProps {
   uid: string
   kitchenFace?: boolean
   siteStrip?: boolean
+  /** 家具を描く（拡大表示用） */
+  showFurniture?: boolean
   /** 全案で同じスケールに揃えるための最大外形 */
   scale?: { maxW: number; maxH: number }
 }
@@ -56,12 +60,16 @@ function RoomLabel({ r, kitchenFace }: { r: Room; kitchenFace?: boolean }) {
 
 const NO_ROOMS: Room[] = []
 
-export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, scale }: FloorSvgProps) {
+export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, scale }: FloorSvgProps) {
   const fl = plan.floors[floorIdx]
   const { W, H } = plan
   const rooms = fl?.rooms ?? NO_ROOMS
   const doors = useMemo(() => computeDoors(rooms), [rooms])
   const windows = useMemo(() => computeWindows(rooms, H), [rooms, H])
+  const furniture = useMemo(
+    () => (showFurniture ? furnish(rooms, doors, { kitchenFace: !!kitchenFace }) : []),
+    [showFurniture, rooms, doors, kitchenFace],
+  )
   // 存在しない階を指された場合は何も描かない（フックの後で判定する）
   if (!fl) return null
   const ldk = fl.rooms.find((r) => r.type === 'ldk')
@@ -76,8 +84,8 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, scale }:
     vbW = targetW
     vbH = scale.maxH + 4.4 + 1.6
   }
-  const R = 1.9
-  const cw = ldk ? Math.min(8, ldk.w - 3) : 0
+  const R = DOOR_R
+  const counter = ldk && kitchenFace ? kitchenCounter(ldk) : null
 
   return (
     <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={`${fl.label}の間取り図`} className="block h-auto w-full">
@@ -104,13 +112,14 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, scale }:
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} />
       })}
       {/* 対面キッチンカウンター */}
-      {ldk && kitchenFace && (
+      {ldk && counter && (
         <>
-          <rect x={ldk.x + ldk.w - cw - 0.8} y={ldk.y + 1.2} width={cw} height={1.5} fill="#e8c9a0" stroke="#b08b57" strokeWidth={0.14} />
-          <rect x={ldk.x + ldk.w - cw + 0.1} y={ldk.y + 1.45} width={1.7} height={1.0} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
+          <rect x={counter.x} y={counter.y} width={counter.w} height={counter.h} fill="#e8c9a0" stroke="#b08b57" strokeWidth={0.14} />
+          <rect x={ldk.x + ldk.w - Math.min(8, ldk.w - 3) + 0.1} y={ldk.y + 1.45} width={1.7} height={1.0} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
         </>
       )}
       {fl.rooms.map((r, i) => <Fixtures key={i} r={r} />)}
+      {furniture.length > 0 && <Furniture items={furniture} />}
       {/* 窓: 壁を抜いてから二重線 */}
       <g stroke="#fdfcf8" strokeWidth={0.55}>
         {windows.map((wd, i) => {

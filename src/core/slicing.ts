@@ -194,8 +194,8 @@ export function layoutFloor(W: number, H: number, bands: Band[]): Room[] | null 
   return rooms
 }
 
-/** 外形候補: 目標面積に近く縦横比が極端でない (W,H) を列挙 */
-export function footprintCandidates(targetArea: number, rng: Rng): Footprint[] {
+/** 外形候補（シャッフル前）: 目標面積に近く縦横比が極端でない (W,H) の上位6件。enumerate と共有する */
+export function footprintList(targetArea: number): Footprint[] {
   const list: Footprint[] = []
   for (let W = 12; W <= 30; W++) {
     const H = Math.round(targetArea / W)
@@ -205,5 +205,10 @@ export function footprintCandidates(targetArea: number, rng: Rng): Footprint[] {
     list.push({ W, H, diff: Math.abs(W * H - targetArea) })
   }
   list.sort((a, b) => a.diff - b.diff)
-  return shuffle(list.slice(0, 6), rng)
+  return list.slice(0, 6)
+}
+
+/** 外形候補: footprintList を seed 付き乱数でシャッフルしたもの */
+export function footprintCandidates(targetArea: number, rng: Rng): Footprint[] {
+  return shuffle(footprintList(targetArea), rng)
 }

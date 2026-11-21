@@ -42,4 +42,31 @@ describe('URLハッシュ', () => {
     expect(parseHash('').versionMismatch).toBe(false)
     expect(parseHash('#c=%7Bbroken').versionMismatch).toBe(false)
   })
+
+  describe('p（planKey）', () => {
+    it('往復できる。c と独立に取り出せる', () => {
+      const h = encodeHash(DEFAULT_STATE, '2-18x14')
+      expect(h).toContain('&p=2-18x14')
+      const r = parseHash(h)
+      expect(r.planKey).toBe('2-18x14')
+      expect(r.state).toEqual(DEFAULT_STATE)
+      expect(r.versionMismatch).toBe(false)
+    })
+    it('p なしのハッシュ（従来形式）は planKey なし', () => {
+      expect(encodeHash(DEFAULT_STATE)).not.toContain('p=')
+      expect(parseHash(encodeHash(DEFAULT_STATE)).planKey).toBeUndefined()
+      expect(parseHash('').planKey).toBeUndefined()
+    })
+    it('不正な key は無視し、c の復元には影響しない', () => {
+      const base = encodeHash(DEFAULT_STATE)
+      for (const bad of ['3-18x14', '2-18', '2-0x0', 'x', '2-18x14x', '-1-18x14', '2-181x14', '%E0%A4%A', '', '<script>']) {
+        const r = parseHash(`${base}&p=${bad}`)
+        expect(r.planKey, bad).toBeUndefined()
+        expect(r.state, bad).toEqual(DEFAULT_STATE)
+      }
+    })
+    it('c が壊れていても p は読める（呼び出し側で既定値の条件として扱う）', () => {
+      expect(parseHash('#c=%7Bbroken&p=0-14x12').planKey).toBe('0-14x12')
+    })
+  })
 })

@@ -5,6 +5,7 @@ import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { meters } from '../lib/format'
 import { clampFloor } from '../lib/floor'
+import { StarButton } from './StarButton'
 
 interface Props {
   cfg: PlanConfig
@@ -12,9 +13,13 @@ interface Props {
   index: number
   scale: { maxW: number; maxH: number }
   onOpen: (floor: number) => void
+  starred: boolean
+  onToggleStar: () => void
+  /** FloorSvg の pattern id 衝突を避ける接頭辞（メインの3案とギャラリーで分ける） */
+  uidPrefix?: string
 }
 
-export function PlanCard({ cfg, plan, index, scale, onOpen }: Props) {
+export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleStar, uidPrefix = 'c' }: Props) {
   const [selectedFloor, setFloor] = useState(0)
   // 条件変更で階数が減ってもタブ選択が残るため、存在する階にクランプする
   const floor = clampFloor(selectedFloor, plan.floors.length)
@@ -29,9 +34,10 @@ export function PlanCard({ cfg, plan, index, scale, onOpen }: Props) {
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
       }}
-      className="w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
+      className="relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
     >
-      <p className="mb-0.5 font-serif text-[17.5px] leading-[1.4] font-bold">{name}</p>
+      <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-2" />
+      <p className="mb-0.5 mr-10 font-serif text-[17.5px] leading-[1.4] font-bold">{name}</p>
       <div className="mb-2 flex flex-wrap gap-3 text-[12.5px] text-ink2">
         <span>実測 <b className="text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
         <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室</span>
@@ -43,7 +49,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen }: Props) {
         ))}
       </div>
       <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2">
-        <FloorSvg plan={plan} floorIdx={floor} uid={`c${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+        <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
       </div>
       {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
       <div className="mt-2 flex items-center gap-2 text-xs text-ink2">

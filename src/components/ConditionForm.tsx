@@ -73,9 +73,10 @@ interface Props {
   state: AppState
   onChange: (patch: Partial<AppState>) => void
   onGenerate: () => void
+  onRandom: () => void
 }
 
-export function ConditionForm({ state, onChange, onGenerate }: Props) {
+export function ConditionForm({ state, onChange, onGenerate, onRandom }: Props) {
   const toggle = (k: FeatureKey) =>
     onChange({ feats: state.feats.includes(k) ? state.feats.filter((f) => f !== k) : [...state.feats, k] })
   return (
@@ -105,6 +106,9 @@ export function ConditionForm({ state, onChange, onGenerate }: Props) {
       </div>
       <button type="button" onClick={onGenerate} className="min-h-[50px] w-full cursor-pointer rounded-[11px] border-0 bg-accent p-3 text-base font-black text-accent-ink active:translate-y-px">
         この条件で3案作る
+      </button>
+      <button type="button" onClick={onRandom} className="mt-2 min-h-11 w-full cursor-pointer rounded-[11px] border-[1.5px] border-line bg-surface p-2.5 text-sm font-bold text-ink2 active:translate-y-px">
+        おまかせ条件で作る
       </button>
       <p className="mt-3 text-[11.5px] leading-[1.55] text-ink2">道路は南側・敷地は矩形を想定。間取りはアイデアスケッチで、建築基準法・構造計算は考慮していません。</p>
     </section>
