@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { Plan, Room, RoomCategory } from '../core/types'
 import { ROOM } from '../core/rooms'
 import { DOOR_R, computeDoors, computeWindows } from '../core/derive'
-import { furnish, kitchenCounter } from '../core/furnish'
+import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { Furniture } from './Furniture'
 import { Fixtures } from './Fixtures'
 import { tatami } from '../lib/format'
@@ -31,7 +31,7 @@ function RoomLabel({ r, kitchenFace }: { r: Room; kitchenFace?: boolean }) {
   const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
   const common = { fontWeight: 700, fill: '#33302a', textAnchor: 'middle' as const }
   // 細長い部屋（玄関・トイレ等）はラベルを縦積みにして壁に触れさせない
-  if (r.w <= 2.6 && r.h >= r.name.length * 1.15 + 0.6) {
+  if (isVerticalLabel(r)) {
     const fs = Math.min(1.0, r.w - 0.5)
     const y0 = cy - ((r.name.length - 1) * 1.08) / 2 + 0.35
     return (

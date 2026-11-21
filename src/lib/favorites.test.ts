@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { enumeratePlans, planKey } from '../core/enumerate'
-import { GEN_VERSION } from '../core/generate'
-import { CONDITIONS } from '../core/testing'
+import { GEN_VERSION, generatePlans } from '../core/generate'
+import { CONDITIONS, SEEDS, defined } from '../core/testing'
 import {
   FAVORITES_STORAGE_KEY, MAX_FAVORITES, addFavorite, isFavorited, isOldVersion, loadFavorites, removeFavorite, saveFavorites,
   type Favorite, type KeyValueStorage,
@@ -14,10 +14,10 @@ function memory(initial?: string): KeyValueStorage & { data: Map<string, string>
   return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) }
 }
 
-const { cfg } = CONDITIONS[0]!
+const { cfg } = defined(CONDITIONS[0])
 const plans = enumeratePlans(cfg)
-const p0 = plans[0]!
-const p1 = plans[1]!
+const p0 = defined(plans[0])
+const p1 = defined(plans[1])
 
 function must(r: ReturnType<typeof addFavorite>): Favorite[] {
   if (!r.ok) throw new Error('add failed')
@@ -31,7 +31,7 @@ describe('お気に入り', () => {
     expect(b.map((f) => f.key)).toEqual([planKey(p1), planKey(p0)])
     expect(b[1]).toMatchObject({ key: planKey(p0), cfg, v: GEN_VERSION, savedAt: 100 })
     expect(b[1]?.plan).toEqual(p0)
-    expect(isFavorited(b, cfg, planKey(p0))).toBe(true)
+    expect(isFavorited(b, cfg, p0)).toBe(true)
   })
 
   it('同じ（条件,key）の重複は追加されない。条件が違えば別物', () => {
@@ -42,8 +42,9 @@ describe('お気に入り', () => {
 
   it('削除できる。存在しないものの削除は何も起きない', () => {
     const a = must(addFavorite(must(addFavorite([], cfg, p0, 1)), cfg, p1, 2))
-    expect(removeFavorite(a, cfg, planKey(p0)).map((f) => f.key)).toEqual([planKey(p1)])
-    expect(removeFavorite(a, cfg, '0-99x99')).toHaveLength(2)
+    expect(removeFavorite(a, cfg, p0).map((f) => f.key)).toEqual([planKey(p1)])
+    expect(removeFavorite(a, { ...cfg, rooms: cfg.rooms + 1 }, p0)).toHaveLength(2) // 条件違いは別物なので何も消えない
+    expect(removeFavorite([], cfg, p0)).toHaveLength(0)
   })
 
   it(`上限${MAX_FAVORITES}件: 超える追加は拒否し、既存を消さない`, () => {
@@ -53,7 +54,8 @@ describe('お気に入り', () => {
     const r = addFavorite(list, { ...cfg, garden: 0, parking: 0, area: 21 }, p0, 999)
     expect(r).toEqual({ ok: false, reason: 'full' })
     // 既に入っているものを「追加」しても上限エラーにはならない
-    expect(addFavorite(list, list[0]!.cfg, list[0]!.plan, 1000).ok).toBe(true)
+    const first = defined(list[0])
+    expect(addFavorite(list, first.cfg, first.plan, 1000).ok).toBe(true)
   })
 
   it('保存→読込で往復する', () => {
@@ -71,7 +73,7 @@ describe('お気に入り', () => {
   })
 
   it('壊れた要素だけ捨てて、正常な要素は残す', () => {
-    const good = must(addFavorite([], cfg, p0, 1))[0]!
+    const good = defined(must(addFavorite([], cfg, p0, 1))[0])
     const brokenPlan = { ...good, plan: { ...good.plan, floors: [{ label: '1F', rooms: [{ type: 'ldk' }] }] } }
     const badKey = { ...good, key: 'zzz' }
     const mismatch = { ...good, key: planKey(p1) }
@@ -81,8 +83,40 @@ describe('お気に入り', () => {
   })
 
   it('保存データに重複・上限超えがあっても読込時に整える', () => {
-    const good = must(addFavorite([], cfg, p0, 1))[0]!
+    const good = defined(must(addFavorite([], cfg, p0, 1))[0])
     expect(loadFavorites(memory(JSON.stringify([good, good, good])))).toHaveLength(1)
+  })
+
+  it('左右反転で planKey がずれる案でも、同じ案として☆状態が一致する', () => {
+    let shifted = 0
+    for (const c of CONDITIONS) {
+      const all = enumeratePlans(c.cfg)
+      for (const seed of SEEDS) {
+        for (const g of generatePlans(c.cfg, seed)) {
+          const a = all.find((x) => x.sig === g.sig || x.sigM === g.sig)
+          if (!a || planKey(a) === planKey(g)) continue
+          shifted++
+          const list = must(addFavorite([], c.cfg, a, 1))
+          expect(isFavorited(list, c.cfg, g), `${planKey(a)} と ${planKey(g)}`).toBe(true)
+          expect(must(addFavorite(list, c.cfg, g, 2)), '重複追加しない').toHaveLength(1)
+          expect(removeFavorite(list, c.cfg, g)).toHaveLength(0)
+        }
+      }
+    }
+    expect(shifted, 'key がずれる実例が1件以上ある（空転防止）').toBeGreaterThan(0)
+  })
+
+  it('別配置の案は別物', () => {
+    const list = must(addFavorite([], cfg, p0, 1))
+    const other = defined(plans.find((p) => p.sig !== p0.sig && p.sigM !== p0.sig))
+    expect(isFavorited(list, cfg, other)).toBe(false)
+  })
+
+  it('roomの type は自前プロパティのみ許す（toString 等のプロトタイプ名は壊れたデータ）', () => {
+    const good = defined(must(addFavorite([], cfg, p0, 1))[0])
+    const fl = defined(good.plan.floors[0])
+    const evil = { ...good, plan: { ...good.plan, floors: [{ ...fl, rooms: fl.rooms.map((r) => ({ ...r, type: 'toString' })) }] } }
+    expect(loadFavorites(memory(JSON.stringify([evil])))).toEqual([])
   })
 
   it('ストレージが例外を投げても落ちない', () => {
@@ -95,7 +129,7 @@ describe('お気に入り', () => {
   })
 
   it('v が GEN_VERSION と違えば旧バージョン', () => {
-    const f = must(addFavorite([], cfg, p0, 1))[0]!
+    const f = defined(must(addFavorite([], cfg, p0, 1))[0])
     expect(isOldVersion(f)).toBe(false)
     expect(isOldVersion({ ...f, v: GEN_VERSION - 1 })).toBe(true)
   })
@@ -105,7 +139,7 @@ describe('planMetrics', () => {
   it('LDK畳数・個室平均畳数・廊下率', () => {
     const m = planMetrics(p0)
     const all = p0.floors.flatMap((f) => f.rooms)
-    const ldk = all.find((r) => r.type === 'ldk')!
+    const ldk = defined(all.find((r) => r.type === 'ldk'))
     expect(m.ldkTatami).toBeCloseTo(ldk.area / 8)
     const beds = all.filter((r) => r.type === 'master' || r.type === 'bed')
     expect(m.roomAvgTatami).toBeCloseTo(beds.reduce((s, r) => s + r.area, 0) / beds.length / 8)

@@ -52,13 +52,15 @@ function parsePlanKeyParam(hash: string): PlanKey | undefined {
 }
 
 export function parseHash(hash: string): ParsedHash {
-  const planKey = parsePlanKeyParam(hash)
   const out: AppState = { ...DEFAULT_STATE, feats: [...DEFAULT_STATE.feats] }
   let versionMismatch = false
   try {
     const raw = hash.match(/c=([^&]+)/)?.[1]
-    if (raw === undefined) return { state: out, versionMismatch, planKey }
-    const o = JSON.parse(decodeURIComponent(raw)) as Record<string, unknown>
+    // c が無い・壊れている場合は既定条件になる。その条件で p の案を開くと意図しない案になるので p も捨てる
+    if (raw === undefined) return { state: out, versionMismatch }
+    const parsed: unknown = JSON.parse(decodeURIComponent(raw))
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('c がオブジェクトではない')
+    const o = parsed as Record<string, unknown>
     versionMismatch = o.v !== GEN_VERSION
     if (typeof o.area === 'number') out.area = Math.min(40, Math.max(20, Math.round(o.area)))
     if (o.floors === 1 || o.floors === 2) out.floors = o.floors
@@ -68,7 +70,8 @@ export function parseHash(hash: string): ParsedHash {
     if (isValidSeed(o.seed)) out.seed = o.seed
     if (Array.isArray(o.feats)) out.feats = FEATURES.map((f) => f.key).filter((k) => (o.feats as unknown[]).includes(k))
   } catch {
-    /* 壊れたハッシュは既定値にフォールバック */
+    /* 壊れたハッシュは既定値にフォールバック（p も捨てる） */
+    return { state: { ...DEFAULT_STATE, feats: [...DEFAULT_STATE.feats] }, versionMismatch: false }
   }
-  return { state: out, versionMismatch, planKey }
+  return { state: out, versionMismatch, planKey: parsePlanKeyParam(hash) }
 }

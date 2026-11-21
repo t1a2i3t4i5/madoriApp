@@ -41,7 +41,7 @@ npm test      # vitest
   - `enumerate.ts`: 全候補ギャラリー用。全アーキタイプ × 上位6外形（`slicing.ts` の `footprintList`）をシャッフルなしで組み立て・検証・スコアし、左右反転の重複を除いてスコア順に返す（`enumeratePlans`）。`planKey`（`arch-WxH`）の生成・解析と、key からの再構築（`planFromKey`）もここ。generatePlans の出力は変えない
   - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドア開き半径 `DOOR_R` は `derive.ts` にあり、FloorSvg と共有する
 - `src/components/`: React UI（入力フォーム、PlanCard、SVG図面、拡大モーダル）
-- `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セット
+- `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セット
   - 追加UI: `Gallery`（全候補）、`FavoritesShelf`（お気に入り棚＋比較）、`StarButton`、`Furniture`（拡大表示のみ・「家具を表示」トグル）
 - `src/App.tsx`: 画面の合成と状態管理（表示 seed の履歴は上限20でハッシュには入れない）
 

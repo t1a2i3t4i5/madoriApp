@@ -34,12 +34,16 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
       setCopied('ng')
     }
   }
+  // onClose は親の再描画のたびに新しい関数になる。ref 経由で最新を呼び、effect は初回マウント時の1回だけ
+  // （☆を押した再描画でフォーカスが×ボタンへ飛び、次の Enter/Space でダイアログが閉じるのを防ぐ）
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
   useEffect(() => {
     closeRef.current?.focus()
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
   const name = planName(cfg, plan)
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(10,12,11,.62)] px-3 py-[18px]" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>

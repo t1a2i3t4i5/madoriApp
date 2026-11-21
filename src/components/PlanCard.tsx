@@ -26,14 +26,10 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
   const name = planName(cfg, plan)
   const open = () => onOpen(floor)
   return (
+    // カード全体のクリックはマウス・タッチ用の補助。キーボード・支援技術向けの操作は下の「拡大表示」ボタン（本物の button）が受ける。
+    // role=button の中に☆ボタンやタブのボタンを入れ子にしない。
     <article
-      role="button"
-      tabIndex={0}
-      aria-label={`${name}を拡大表示`}
       onClick={open}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() }
-      }}
       className="relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
     >
       <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-2" />
@@ -57,7 +53,8 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
         <span className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-surface2"><i className="block h-full bg-accent" style={{ width: `${plan.score.total}%` }} /></span>
         <b className="text-[13px] text-ink">{plan.score.total}</b>
       </div>
-      <div className="mt-2.5 text-xs font-bold text-accent">タップで拡大表示 →</div>
+      {/* クリックは article の onClick へ伝わって開く（ここに onClick を付けると二重に開く） */}
+      <button type="button" aria-label={`${name}を拡大表示`} className="mt-2.5 cursor-pointer border-0 bg-transparent p-0 text-xs font-bold text-accent">タップで拡大表示 →</button>
     </article>
   )
 }

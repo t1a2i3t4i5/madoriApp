@@ -65,8 +65,13 @@ describe('URLハッシュ', () => {
         expect(r.state, bad).toEqual(DEFAULT_STATE)
       }
     })
-    it('c が壊れていても p は読める（呼び出し側で既定値の条件として扱う）', () => {
-      expect(parseHash('#c=%7Bbroken&p=0-14x12').planKey).toBe('0-14x12')
+    it('c が壊れている・無い・オブジェクトでないときは p も捨てる（既定条件で意図しない案を開かない）', () => {
+      for (const h of ['#c=%7Bbroken&p=0-14x12', '#p=0-14x12', '#c=123&p=0-14x12', '#c=null&p=0-14x12', '#c=%5B1%5D&p=0-14x12']) {
+        const r = parseHash(h)
+        expect(r.planKey, h).toBeUndefined()
+        expect(r.state, h).toEqual(DEFAULT_STATE)
+        expect(r.versionMismatch, h).toBe(false)
+      }
     })
   })
 })

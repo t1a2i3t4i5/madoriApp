@@ -46,7 +46,7 @@ function isPlan(v: unknown): v is ScoredPlan {
       isObj(fl) && typeof fl.label === 'string' && Array.isArray(fl.rooms) &&
       fl.rooms.every(
         (r: unknown) =>
-          isObj(r) && typeof r.type === 'string' && r.type in ROOM && typeof r.name === 'string' &&
+          isObj(r) && typeof r.type === 'string' && Object.hasOwn(ROOM, r.type) && typeof r.name === 'string' &&
           isNum(r.x) && isNum(r.y) && isNum(r.w) && isNum(r.h) && isNum(r.area) && isNum(r.target) && isNum(r.minArea),
       ),
   )
@@ -84,39 +84,40 @@ export function cfgId(cfg: PlanConfig): string {
   return JSON.stringify([cfg.area, cfg.floors, cfg.rooms, cfg.parking, cfg.garden, [...cfg.feats].sort()])
 }
 
-const favId = (f: Pick<Favorite, 'key' | 'cfg'>) => `${cfgId(f.cfg)}#${f.key}`
+/**
+ * 同じ案か。条件が同じで、planKey が同じか、配置（sig）が同一または左右反転の関係にあること。
+ * enumeratePlans は反転の重複を除くため、generatePlans の案とは planKey（アーキタイプ）がずれることがある。
+ */
+function samePlan(a: ScoredPlan, b: ScoredPlan): boolean {
+  return planKey(a) === planKey(b) || a.sig === b.sig || a.sig === b.sigM || a.sigM === b.sig
+}
+
+const isSame = (f: Favorite, cfg: PlanConfig, plan: ScoredPlan) => cfgId(f.cfg) === cfgId(cfg) && samePlan(f.plan, plan)
 
 function dedupe(list: readonly Favorite[]): Favorite[] {
-  const seen = new Set<string>()
   const out: Favorite[] = []
   for (const f of list) {
-    const id = favId(f)
-    if (seen.has(id)) continue
-    seen.add(id)
-    out.push(f)
+    if (!out.some((o) => isSame(o, f.cfg, f.plan))) out.push(f)
   }
   return out
 }
 
-export function isFavorited(list: readonly Favorite[], cfg: PlanConfig, key: PlanKey): boolean {
-  const id = favId({ cfg, key })
-  return list.some((f) => favId(f) === id)
+export function isFavorited(list: readonly Favorite[], cfg: PlanConfig, plan: ScoredPlan): boolean {
+  return list.some((f) => isSame(f, cfg, plan))
 }
 
 export type AddResult = { ok: true; list: Favorite[] } | { ok: false; reason: 'full' }
 
-/** 先頭に追加。同じ（条件, key）は追加済みとして何もしない。上限なら追加せず full を返す（古いお気に入りを黙って消さない） */
+/** 先頭に追加。同じ（条件, 案）は追加済みとして何もしない。上限なら追加せず full を返す（古いお気に入りを黙って消さない） */
 export function addFavorite(list: readonly Favorite[], cfg: PlanConfig, plan: ScoredPlan, now: number = Date.now()): AddResult {
-  const key = planKey(plan)
-  if (isFavorited(list, cfg, key)) return { ok: true, list: [...list] }
+  if (isFavorited(list, cfg, plan)) return { ok: true, list: [...list] }
   if (list.length >= MAX_FAVORITES) return { ok: false, reason: 'full' }
-  const entry: Favorite = { key, cfg: { ...cfg, feats: [...cfg.feats] }, v: GEN_VERSION, plan, savedAt: now }
+  const entry: Favorite = { key: planKey(plan), cfg: { ...cfg, feats: [...cfg.feats] }, v: GEN_VERSION, plan, savedAt: now }
   return { ok: true, list: [entry, ...list] }
 }
 
-export function removeFavorite(list: readonly Favorite[], cfg: PlanConfig, key: PlanKey): Favorite[] {
-  const id = favId({ cfg, key })
-  return list.filter((f) => favId(f) !== id)
+export function removeFavorite(list: readonly Favorite[], cfg: PlanConfig, plan: ScoredPlan): Favorite[] {
+  return list.filter((f) => !isSame(f, cfg, plan))
 }
 
 export const isOldVersion = (f: Favorite): boolean => f.v !== GEN_VERSION

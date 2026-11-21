@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { generatePlans } from './generate'
 import { enumeratePlans } from './enumerate'
 import { computeDoors, doorSwingRect } from './derive'
-import { furnish, kitchenCounter, overlaps, type FurnitureItem } from './furnish'
+import { furnish, isVerticalLabel, kitchenCounter, labelRect, overlaps, type FurnitureItem } from './furnish'
 import { CONDITIONS, SEEDS } from './testing'
 import type { PlanConfig, ScoredPlan } from './types'
 
@@ -41,6 +41,7 @@ describe('家具配置 furnish', () => {
           expect(it.y + it.h, msg).toBeLessThanOrEqual(r.y + r.h)
           for (const d of doors) expect(overlaps(it, doorSwingRect(d.edge)), `door ${msg}`).toBe(false)
           if (r.type === 'ldk' && kitchenFace) expect(overlaps(it, kitchenCounter(r)), `counter ${msg}`).toBe(false)
+          expect(overlaps(it, labelRect(r, kitchenFace)), `label ${msg}`).toBe(false)
           placed.slice(i + 1).forEach((o) => expect(overlaps(it, o), `${msg} vs ${o.kind}`).toBe(false))
         })
       }
@@ -82,6 +83,21 @@ describe('家具配置 furnish', () => {
         expect(JSON.stringify(fl.rooms)).toBe(before)
       }
     }
+  })
+
+  it('縦積みラベルの部屋: ラベル領域は縦長で、家具はそこを避ける', () => {
+    const narrow = { type: 'study', name: '書斎', x: 0, y: 0, w: 2.6, h: 6, area: 16, target: 16, minArea: 8 } as const
+    expect(isVerticalLabel(narrow)).toBe(true)
+    const lab = labelRect(narrow, false)
+    expect(lab.h).toBeGreaterThan(lab.w) // 横書き前提の見積もり（幅広・低い）ではない
+    expect(lab.x).toBeGreaterThanOrEqual(0)
+    expect(lab.x + lab.w).toBeLessThanOrEqual(narrow.w)
+    expect(lab.y + lab.h).toBeLessThanOrEqual(narrow.h + 0.5)
+    for (const it of furnish([narrow], [], { kitchenFace: false })) expect(overlaps(it, lab), it.kind).toBe(false)
+    // 横書きの部屋は従来どおり横長
+    const wide = { ...narrow, w: 8, h: 6 }
+    expect(isVerticalLabel(wide)).toBe(false)
+    expect(labelRect(wide, false).w).toBeGreaterThan(labelRect(wide, false).h)
   })
 
   it('置けない小部屋では置かない', () => {

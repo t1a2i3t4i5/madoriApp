@@ -11,8 +11,8 @@ import { Notice } from './components/Notice'
 import { PlanCard } from './components/PlanCard'
 import { PlanDialog } from './components/PlanDialog'
 import { encodeHash, parseHash, toConfig, type AppState } from './lib/hash'
-import { addFavorite, isFavorited, loadFavorites, removeFavorite, saveFavorites, MAX_FAVORITES, type Favorite, type KeyValueStorage } from './lib/favorites'
-import { nextDistinctSeed, plansKey } from './lib/seedNav'
+import { addFavorite, isFavorited, isOldVersion, loadFavorites, removeFavorite, saveFavorites, FAVORITES_STORAGE_KEY, MAX_FAVORITES, type Favorite, type KeyValueStorage } from './lib/favorites'
+import { nextDistinctSeed } from './lib/seedNav'
 import { randomConfig } from './lib/randomCondition'
 
 /** 戻れる「3案」の履歴の上限（ハッシュには入れない） */
@@ -31,6 +31,8 @@ interface Detail {
   floor: number
   /** お気に入り棚から開いた場合の保存時条件（現在の条件と違うことがある） */
   favCfg?: PlanConfig
+  /** お気に入りが旧バージョンの生成ロジックで作られたもの（p の key が将来別の案を指しうるので共有リンクを出さない） */
+  favOld?: boolean
 }
 
 export default function App() {
@@ -53,13 +55,25 @@ export default function App() {
   })
   const [favMessage, setFavMessage] = useState<string | null>(null)
 
+  // seed だけが変わるときは cfg の同一性を保ちたいので、条件の各フィールドを依存にする
   const cfg: PlanConfig = useMemo(
-    () => toConfig({ area: state.area, floors: state.floors, rooms: state.rooms, parking: state.parking, garden: state.garden, feats: state.feats }),
+    () => toConfig(state),
     [state.area, state.floors, state.rooms, state.parking, state.garden, state.feats],
   )
   const feas = useMemo(() => feasibility(cfg), [cfg])
   const plans = useMemo(() => (feas.ok ? generatePlans(cfg, state.seed) : []), [feas, cfg, state.seed])
   const allPlans = useMemo(() => (feas.ok ? enumeratePlans(cfg) : []), [feas, cfg])
+
+  // 別タブでお気に入りが変わったら読み直す（storage イベントは他タブの変更だけで発火する）
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== FAVORITES_STORAGE_KEY) return
+      const st = getStorage()
+      if (st) setFavorites(loadFavorites(st))
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   const openKey = detail && !detail.favCfg ? planKey(detail.plan) : undefined
   useEffect(() => {
@@ -80,8 +94,8 @@ export default function App() {
   const next = () => {
     if (!feas.ok) { patch({ seed: state.seed + 1 }); return }
     const sigsOf = (s: number) => generatePlans(cfg, s).map((p) => p.sig)
-    const ns = nextDistinctSeed(state.seed, sigsOf)
-    const changed = plansKey(sigsOf(ns)) !== plansKey(plans.map((p) => p.sig))
+    // 現在の組は表示中の plans から再利用する（found なら組が変わることは確定している）
+    const { seed: ns, found: changed } = nextDistinctSeed(state.seed, sigsOf, undefined, plans.map((p) => p.sig))
     setState((s) => ({ ...s, seed: ns }))
     setDetail(null)
     setStaleVersion(false)
@@ -96,8 +110,9 @@ export default function App() {
     resetView()
   }
   const random = () => {
-    const c = randomConfig(mulberry32((Math.random() * 2 ** 31) >>> 0))
-    if (c) patch({ ...c, seed: state.seed + 1 })
+    const seed = state.seed + 1 // patch 後に実際に使う seed で3案が出る条件を選ぶ
+    const c = randomConfig(mulberry32((Math.random() * 2 ** 31) >>> 0), 200, seed)
+    if (c) patch({ ...c, seed })
   }
 
   const persist = (list: Favorite[]) => {
@@ -106,8 +121,8 @@ export default function App() {
     setFavMessage(st && saveFavorites(st, list) ? null : 'このブラウザでは保存できませんでした。ページを閉じるとお気に入りは消えます。')
   }
   const toggleStar = (c: PlanConfig, plan: ScoredPlan) => {
-    if (isFavorited(favorites, c, planKey(plan))) {
-      persist(removeFavorite(favorites, c, planKey(plan)))
+    if (isFavorited(favorites, c, plan)) {
+      persist(removeFavorite(favorites, c, plan))
       return
     }
     const r = addFavorite(favorites, c, plan)
@@ -117,7 +132,7 @@ export default function App() {
 
   const scale = { maxW: Math.max(0, ...plans.map((p) => p.W)), maxH: Math.max(0, ...plans.map((p) => p.H)) }
   const dlgCfg = detail?.favCfg ?? cfg
-  const shareUrl = detail
+  const shareUrl = detail && !detail.favOld
     ? `${location.origin}${location.pathname}${location.search}${encodeHash({ ...dlgCfg, seed: state.seed }, planKey(detail.plan))}`
     : undefined
 
@@ -159,7 +174,7 @@ export default function App() {
               index={i}
               scale={scale}
               onOpen={(floor) => setDetail({ plan: p, floor })}
-              starred={isFavorited(favorites, cfg, planKey(p))}
+              starred={isFavorited(favorites, cfg, p)}
               onToggleStar={() => toggleStar(cfg, p)}
             />
           ))}
@@ -173,7 +188,7 @@ export default function App() {
           <Gallery
             cfg={cfg}
             plans={allPlans}
-            isStarred={(p) => isFavorited(favorites, cfg, planKey(p))}
+            isStarred={(p) => isFavorited(favorites, cfg, p)}
             onToggleStar={(p) => toggleStar(cfg, p)}
             onOpen={(p, floor) => setDetail({ plan: p, floor })}
             onClose={() => setShowGallery(false)}
@@ -204,8 +219,8 @@ export default function App() {
       <FavoritesShelf
         favorites={favorites}
         message={favMessage}
-        onOpen={(f) => setDetail({ plan: f.plan, floor: 0, favCfg: f.cfg })}
-        onRemove={(f) => persist(removeFavorite(favorites, f.cfg, f.key))}
+        onOpen={(f) => setDetail({ plan: f.plan, floor: 0, favCfg: f.cfg, favOld: isOldVersion(f) })}
+        onRemove={(f) => persist(removeFavorite(favorites, f.cfg, f.plan))}
       />
       {detail && (
         <PlanDialog
@@ -214,7 +229,7 @@ export default function App() {
           plan={detail.plan}
           initialFloor={detail.floor}
           onClose={() => setDetail(null)}
-          starred={isFavorited(favorites, dlgCfg, planKey(detail.plan))}
+          starred={isFavorited(favorites, dlgCfg, detail.plan)}
           onToggleStar={() => toggleStar(dlgCfg, detail.plan)}
           shareUrl={shareUrl}
         />

@@ -4,7 +4,7 @@ interface Props {
   className?: string
 }
 
-/** お気に入りの☆ボタン。親（カード）の開閉操作に伝わらないよう click / keydown を止める */
+/** お気に入りの☆ボタン。親（カード）の開閉操作に伝わらないよう click を止める */
 export function StarButton({ starred, onToggle, className = '' }: Props) {
   return (
     <button
@@ -13,7 +13,6 @@ export function StarButton({ starred, onToggle, className = '' }: Props) {
       aria-label={starred ? 'お気に入りから外す' : 'お気に入りに追加'}
       title={starred ? 'お気に入りから外す' : 'お気に入りに追加'}
       onClick={(e) => { e.stopPropagation(); onToggle() }}
-      onKeyDown={(e) => e.stopPropagation()}
       className={`size-10 cursor-pointer rounded-full border border-line bg-surface text-xl leading-none ${starred ? 'text-warm' : 'text-ink2'} ${className}`}
     >
       {starred ? '★' : '☆'}

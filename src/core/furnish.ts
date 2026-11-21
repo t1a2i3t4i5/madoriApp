@@ -43,13 +43,25 @@ export function kitchenCounter(ldk: Room): Rect {
   return { x: ldk.x + ldk.w - cw - 0.8, y: ldk.y + 1.2, w: cw, h: 1.5 }
 }
 
+/** 細長い部屋（玄関・トイレ等）はラベルを縦積みにする。FloorSvg の描画と furnish の見積もりで共有する */
+export function isVerticalLabel(r: Room): boolean {
+  return r.w <= 2.6 && r.h >= r.name.length * 1.15 + 0.6
+}
+
 /**
  * 部屋名ラベルが占める領域。FloorSvg の RoomLabel と同じ中心・同じ文字サイズ（大きい部屋は 1.55、それ以外は 1.25）で見積もる。
+ * 縦積みラベル（幅の狭い部屋）は、1文字ずつ 1.08 間隔で積む描画に合わせて縦長の矩形にする。
  * 畳数の小さな補助行は含めない（7×8 の主寝室など標準的な部屋にベッドが置けなくなるため。補助行は家具の上に重なって描かれる）。
  */
 export function labelRect(r: Room, kitchenFace: boolean): Rect {
   const cx = r.x + r.w / 2
   const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
+  if (isVerticalLabel(r)) {
+    const fs = Math.min(1.0, r.w - 0.5)
+    const y0 = cy - ((r.name.length - 1) * 1.08) / 2 + 0.35 // 先頭文字のベースライン
+    const w = Math.min(r.w, fs + 0.4)
+    return { x: cx - w / 2, y: y0 - fs, w, h: (r.name.length - 1) * 1.08 + fs + 0.3 }
+  }
   const big = r.w >= 5 && r.h >= 4.5
   const fs = Math.min(big ? 1.55 : 1.25, (r.w - 0.25) / Math.max(1, r.name.length))
   const w = Math.min(r.w, r.name.length * fs + 0.4)

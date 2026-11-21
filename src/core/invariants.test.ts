@@ -1,30 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { generatePlans } from './generate'
 import { ROOM } from './rooms'
-import { CONDITIONS, SEEDS } from './testing'
-import type { Plan } from './types'
-
-/**
- * validatePlan とは独立した検証。validator 自身のバグで不正なプランが素通りしないよう、
- * 同じ関数（touchesOuterWall など）は使わず、セル塗りと素朴な座標比較で確かめる。
- */
-const LIVING = new Set(['ldk', 'master', 'bed', 'study', 'washitsu']) // rooms.ts の HABITABLE と同じ定義を独立に持つ
-
-function paint(plan: Plan, floorIdx: number): number[][] {
-  const grid = Array.from({ length: plan.H }, () => Array.from({ length: plan.W }, () => 0))
-  const fl = plan.floors[floorIdx]
-  if (!fl) throw new Error(`floor ${floorIdx} がない`)
-  for (const r of fl.rooms) {
-    for (let y = r.y; y < r.y + r.h; y++) {
-      for (let x = r.x; x < r.x + r.w; x++) {
-        const row = grid[y]
-        if (!row || row[x] === undefined) throw new Error(`${r.name} が外形(${plan.W}x${plan.H})の外にはみ出している`)
-        row[x] = (row[x] ?? 0) + 1
-      }
-    }
-  }
-  return grid
-}
+import { CONDITIONS, LIVING, SEEDS, paint } from './testing'
 
 describe('validator と独立した構造検証', () => {
   for (const { name, cfg } of CONDITIONS) {
