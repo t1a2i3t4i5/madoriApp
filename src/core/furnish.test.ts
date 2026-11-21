@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { generatePlans } from './generate'
 import { enumeratePlans } from './enumerate'
 import { computeDoors, doorSwingRect } from './derive'
-import { furnish, isVerticalLabel, kitchenCounter, labelRect, overlaps, type FurnitureItem } from './furnish'
+import { SIZE, areaLabelRect, candidates, furnish, isVerticalLabel, kitchenCounter, labelRect, overlaps, type FurnitureItem } from './furnish'
 import { CONDITIONS, SEEDS } from './testing'
 import type { PlanConfig, ScoredPlan } from './types'
 
@@ -70,6 +70,57 @@ describe('家具配置 furnish', () => {
     for (const [name, { ok, total }] of Object.entries(stat)) {
       expect(total, name).toBeGreaterThan(20)
       expect(ok / total, `${name} ${ok}/${total}`).toBeGreaterThanOrEqual(0.8)
+    }
+  })
+
+  it('畳数行: 避けられる位置があるケースでは家具が畳数行に重ならない（なければ部屋名のみ回避にフォールバック）', () => {
+    let overlapped = 0
+    let avoidable = 0
+    let items = 0
+    for (const { cfg, plan } of PLANS) {
+      const kitchenFace = cfg.feats.includes('kitchenFace')
+      for (const fl of plan.floors) {
+        const doors = computeDoors(fl.rooms)
+        const swings = doors.map((d) => doorSwingRect(d.edge))
+        const placed = furnish(fl.rooms, doors, { kitchenFace })
+        placed.forEach((it, i) => {
+          items++
+          const r = fl.rooms[it.room]
+          if (!r) return
+          const area = areaLabelRect(r, kitchenFace)
+          if (!area || !overlaps(it, area)) return
+          overlapped++
+          // 重なった家具について、同じ前提（先に置いた家具・ドア・カウンター・部屋名）で畳数行も避けられる候補が本当になかったか
+          const blocked = [...swings, labelRect(r, kitchenFace), area, ...placed.slice(0, i).filter((o) => o.room === it.room)]
+          if (r.type === 'ldk' && kitchenFace) {
+            const c = kitchenCounter(r)
+            blocked.push({ ...c, h: c.h + 0.7 })
+          }
+          if (candidates(r, SIZE[it.kind]).some((c) => !blocked.some((b) => overlaps(c, b)))) avoidable++
+        })
+      }
+    }
+    expect(items).toBeGreaterThan(100)
+    expect(overlapped, '重なりは未解消の件数。避けられる候補があったのに重なった件数は0').toBeGreaterThanOrEqual(0)
+    expect(avoidable).toBe(0)
+  })
+
+  it('畳数行の見積もり: 描画条件（大きい横書きの部屋のみ）と一致し、部屋名の下に位置する', () => {
+    const room = { type: 'master', name: '主寝室', x: 0, y: 0, w: 7, h: 8, area: 56, target: 56, minArea: 40 } as const
+    const lab = labelRect(room, false)
+    const area = areaLabelRect(room, false)
+    expect(area).not.toBeNull()
+    if (!area) return
+    expect(area.y).toBeGreaterThanOrEqual(lab.y + lab.h - 0.5)
+    expect(areaLabelRect({ ...room, w: 4, h: 4 }, false)).toBeNull()
+    expect(areaLabelRect({ ...room, w: 2.6, h: 8 }, false)).toBeNull()
+    // 部屋名・畳数行を避けられる広さの部屋では、ベッドは両方を避ける
+    const roomy = { ...room, w: 14, h: 10 }
+    const bed = furnish([roomy], [], { kitchenFace: false }).find((i) => i.kind === 'bed2')
+    expect(bed).toBeDefined()
+    if (bed) {
+      expect(overlaps(bed, labelRect(roomy, false))).toBe(false)
+      expect(overlaps(bed, areaLabelRect(roomy, false) ?? { x: 0, y: 0, w: 0, h: 0 })).toBe(false)
     }
   })
 
