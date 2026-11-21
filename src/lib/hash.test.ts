@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { GEN_VERSION } from '../core/generate'
 import { DEFAULT_STATE, decodeHash, encodeHash, isValidSeed, parseHash } from './hash'
 
 describe('URLハッシュ', () => {
@@ -7,7 +8,7 @@ describe('URLハッシュ', () => {
     expect(decodeHash(encodeHash(s))).toEqual(s)
   })
   it('genVersion を含む', () => {
-    expect(decodeURIComponent(encodeHash(DEFAULT_STATE))).toContain('"v":1')
+    expect(decodeURIComponent(encodeHash(DEFAULT_STATE))).toContain(`"v":${GEN_VERSION}`)
   })
   it('壊れたハッシュは既定値になる', () => {
     expect(decodeHash('#c=%7Bbroken')).toEqual(DEFAULT_STATE)
@@ -64,6 +65,18 @@ describe('URLハッシュ', () => {
         expect(r.planKey, bad).toBeUndefined()
         expect(r.state, bad).toEqual(DEFAULT_STATE)
       }
+    })
+    it('versionMismatch（旧バージョン・未記載）のときは p を捨て、c は復元する', () => {
+      const old = '#c=' + encodeURIComponent(JSON.stringify({ area: 33, floors: 2, rooms: 3, parking: 1, garden: 1, feats: [], seed: 5, v: 1 })) + '&p=2-18x14'
+      const r = parseHash(old)
+      expect(r.versionMismatch).toBe(true)
+      expect(r.planKey).toBeUndefined()
+      expect(r.state.area).toBe(33)
+      const noV = '#c=' + encodeURIComponent('{"area":30}') + '&p=2-18x14-E00000'
+      expect(parseHash(noV).planKey).toBeUndefined()
+    })
+    it('v2 形式の key（変種つき）も往復できる', () => {
+      expect(parseHash(encodeHash(DEFAULT_STATE, '1-16x14-E01000')).planKey).toBe('1-16x14-E01000')
     })
     it('c が壊れている・無い・オブジェクトでないときは p も捨てる（既定条件で意図しない案を開かない）', () => {
       for (const h of ['#c=%7Bbroken&p=0-14x12', '#p=0-14x12', '#c=123&p=0-14x12', '#c=null&p=0-14x12', '#c=%5B1%5D&p=0-14x12']) {

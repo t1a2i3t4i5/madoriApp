@@ -9,6 +9,9 @@ import { BOUNDARY, CONDITIONS, INFEASIBLE, SEEDS } from './testing'
 import type { PlanConfig, ScoredPlan } from './types'
 
 /**
+ * GEN_VERSION 2 で生成方式を変えたため、generatePlans の legacy 比較は外した（v2 の出力は golden-v2.test.ts）。
+ * ここに残すのは、生成方式に依存しない planName / planTags / feasibility の比較。
+ *
  * legacy/index.html（移植元）の <script> から、DOM 非依存の core 部分（view/ の手前まで）を
  * 取り出して Node の vm で実行し、新実装と出力JSONが一致することを確認するゴールデンテスト。
  */
@@ -46,16 +49,8 @@ function canon(v: unknown): string {
 const legacy = loadLegacyCore()
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 
-describe('legacy とのゴールデン比較', () => {
+describe('legacy との比較（planName / planTags / feasibility）', () => {
   for (const { name, cfg } of [...CONDITIONS, ...BOUNDARY]) {
-    it(`${name}: generatePlans が複数seedで legacy と一致`, () => {
-      for (const seed of SEEDS) {
-        const mine = generatePlans(copy(cfg), seed)
-        const theirs = legacy.generatePlans(copy(cfg), seed)
-        expect(canon(mine), `seed=${seed}`).toBe(canon(theirs))
-      }
-    })
-
     it(`${name}: planName / planTags が legacy と一致`, () => {
       for (const seed of SEEDS.slice(0, 2)) {
         for (const p of generatePlans(copy(cfg), seed)) {
@@ -69,6 +64,12 @@ describe('legacy とのゴールデン比較', () => {
   it('比較が空振りしていない（全条件で少なくとも1つは案が出る）', () => {
     const nonEmpty = CONDITIONS.filter(({ cfg }) => SEEDS.some((s) => generatePlans(copy(cfg), s).length > 0))
     expect(nonEmpty).toHaveLength(CONDITIONS.length)
+  })
+
+  it('legacy の generatePlans は呼べる（v1 の正解として参照できる状態が保たれている）', () => {
+    const { cfg } = CONDITIONS[0] ?? { cfg: undefined }
+    if (!cfg) throw new Error('CONDITIONS が空')
+    expect(legacy.generatePlans(copy(cfg), 1)).toHaveLength(3)
   })
 
   it('feasibility が legacy と一致（可・不可の両方）', () => {

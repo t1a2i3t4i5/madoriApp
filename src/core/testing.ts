@@ -1,4 +1,4 @@
-import type { Plan, PlanConfig } from './types'
+import type { Plan, PlanConfig, Room } from './types'
 
 /** テスト用の入力条件セット（generate / golden / invariants で共有） */
 const base = { parking: 2, garden: 1 }
@@ -23,21 +23,21 @@ export const INFEASIBLE: { name: string; cfg: PlanConfig }[] = [
   { name: '22坪/和室+書斎+個室4', cfg: { ...base, area: 22, floors: 1, rooms: 4, feats: ['washitsu', 'study'] } },
 ]
 
-/** 実現可能と判定されるのに、検証を通る案が0になる条件（fallbackAlts の経路） */
+/** 実現可能と判定されるのに、検証を通る案が0になる条件（diagnoseEmpty の経路） */
 export const ZERO_PLAN: PlanConfig = { ...base, area: 26, floors: 2, rooms: 2, feats: ['doma'] }
 
-/** 0案・2案しか出ない境界条件（legacy と同じ結果になること自体を確認する用） */
-export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全 SEEDS で返す件数（enumeratePlans の件数とも一致する） */ expected: number }[] = [
+/** 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 2 の実測。36坪/吹抜+個室4+WIC は3案に改善） */
+export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全 SEEDS で返す件数（0案なら候補プールも空） */ expected: number }[] = [
   { name: '境界: 36坪/2階/吹抜+個室4+WIC+書斎（0案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'study', 'kitchenFace'] }, expected: 0 },
-  { name: '境界: 36坪/2階/吹抜+個室4+WIC（2案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'kitchenFace'] }, expected: 2 },
+  { name: '境界: 36坪/2階/吹抜+個室4+WIC（3案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'kitchenFace'] }, expected: 3 },
   { name: '境界: 26坪/2階/個室2/土間（0案）', cfg: ZERO_PLAN, expected: 0 },
 ]
 
 export const SEEDS = [1, 2, 3, 20261121, 99999]
 
 /** 配列の添字アクセスなどで undefined を除く（非nullアサーション `!` の代わり。テスト用） */
-export function defined<T>(v: T | undefined, what = '値'): T {
-  if (v === undefined) throw new Error(`${what} が undefined`)
+export function defined<T>(v: T | null | undefined, what = '値'): T {
+  if (v === undefined || v === null) throw new Error(`${what} が undefined か null`)
   return v
 }
 
@@ -64,7 +64,23 @@ export function paint(plan: Plan, floorIdx: number): number[][] {
   return grid
 }
 
-/** 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する */
+/** 2部屋が長さ2セル以上の辺を共有するか（derive.ts の sharedEdge とは別に素朴に書いた独立版） */
+export function sharesEdge(a: Room, b: Room): boolean {
+  const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) - Math.max(a0, b0)
+  const vert = (a.x + a.w === b.x || b.x + b.w === a.x) && overlap(a.y, a.y + a.h, b.y, b.y + b.h) >= 2
+  const horz = (a.y + a.h === b.y || b.y + b.h === a.y) && overlap(a.x, a.x + a.w, b.x, b.x + b.w) >= 2
+  return vert || horz
+}
+
+/** 辺を共有すべきクラスタ（同じ階に両方あれば隣接していること） */
+const CLUSTER_PAIRS: [Room['type'], Room['type'], string][] = [
+  ['wash', 'bath', '洗面-浴室'], ['master', 'wic', '主寝室-WIC'], ['ldk', 'kitchen', 'LDK-キッチン'], ['entry', 'doma', '玄関-土間'],
+]
+
+/**
+ * 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する／
+ * クラスタの辺の共有／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
+ */
 export function independentViolations(plan: Plan): string[] {
   const out: string[] = []
   plan.floors.forEach((fl, f) => {
@@ -81,5 +97,27 @@ export function independentViolations(plan: Plan): string[] {
       if (LIVING.has(r.type) && !(r.x === 0 || r.y === 0 || r.x + r.w === plan.W || r.y + r.h === plan.H)) out.push(`${fl.label} ${r.name}: 居室が外壁に接していない`)
     }
   })
+  plan.floors.forEach((fl) => {
+    for (const [ta, tb, label] of CLUSTER_PAIRS) {
+      const a = fl.rooms.find((r) => r.type === ta)
+      const b = fl.rooms.find((r) => r.type === tb)
+      if (a && b && !sharesEdge(a, b)) out.push(`${fl.label} ${label} が辺を共有していない`)
+    }
+  })
+  if (plan.floors.length === 2) {
+    const [f1, f2] = plan.floors
+    const s1 = f1?.rooms.find((r) => r.type === 'stair')
+    const s2 = f2?.rooms.find((r) => r.type === 'stair')
+    if (!s1 || !s2) out.push('階段が両階にない')
+    else if (s1.x !== s2.x || s1.w !== s2.w) out.push(`階段の x が両階で不一致 (${s1.x}+${s1.w} / ${s2.x}+${s2.w})`)
+    const ldk = f1?.rooms.find((r) => r.type === 'ldk')
+    const vd = f2?.rooms.find((r) => r.type === 'void')
+    if (vd) {
+      if (!ldk) out.push('吹抜があるのに1Fに LDK がない')
+      else if (vd.x < ldk.x || vd.x + vd.w > ldk.x + ldk.w || vd.y < ldk.y || vd.y + vd.h > ldk.y + ldk.h) {
+        out.push('吹抜が LDK の x・y の範囲に収まっていない')
+      }
+    }
+  }
   return out
 }

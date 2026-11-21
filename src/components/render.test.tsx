@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { enumeratePlans } from '../core/enumerate'
+import { enumeratePlans, galleryPlans } from '../core/enumerate'
 import { CONDITIONS, defined } from '../core/testing'
 import { addFavorite } from '../lib/favorites'
 import { FavoritesShelf } from './FavoritesShelf'
@@ -28,7 +28,7 @@ describe('コンポーネントの描画', () => {
   it('PlanDialog / Gallery / FavoritesShelf', () => {
     const plan = defined(plans[0])
     expect(renderToStaticMarkup(<PlanDialog cfg={cfg} plan={plan} initialFloor={0} onClose={noop} starred={false} onToggleStar={noop} shareUrl="http://x/#c=1&p=0-1x1" />)).toContain('家具を表示')
-    expect(renderToStaticMarkup(<Gallery cfg={cfg} plans={plans} isStarred={() => false} onToggleStar={noop} onOpen={noop} onClose={noop} />)).toContain(`全候補 ${plans.length}案`)
+    expect(renderToStaticMarkup(<Gallery cfg={cfg} plans={galleryPlans(cfg)} total={plans.length} isStarred={() => false} onToggleStar={noop} onOpen={noop} onClose={noop} />)).toContain(`候補（上位${galleryPlans(cfg).length}案／全${plans.length}案）`)
     const r = addFavorite([], cfg, plan, 1)
     if (!r.ok) throw new Error('add failed')
     const old = r.list.map((f) => ({ ...f, v: 0 }))

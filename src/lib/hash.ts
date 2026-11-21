@@ -27,7 +27,7 @@ export interface ParsedHash {
   state: AppState
   /** ハッシュが現在と異なる genVersion（または未記載）で作られており、同じ間取りは再現されない */
   versionMismatch: boolean
-  /** 開く案の planKey。不正な形式は無視（undefined） */
+  /** 開く案の planKey。不正な形式、および versionMismatch のときは undefined */
   planKey?: PlanKey
 }
 
@@ -73,5 +73,6 @@ export function parseHash(hash: string): ParsedHash {
     /* 壊れたハッシュは既定値にフォールバック（p も捨てる） */
     return { state: { ...DEFAULT_STATE, feats: [...DEFAULT_STATE.feats] }, versionMismatch: false }
   }
-  return { state: out, versionMismatch, planKey: parsePlanKeyParam(hash) }
+  // 旧バージョンのリンクの p は、いまのロジックでは別の案を指しうるので捨てる
+  return { state: out, versionMismatch, planKey: versionMismatch ? undefined : parsePlanKeyParam(hash) }
 }

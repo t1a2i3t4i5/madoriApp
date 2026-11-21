@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Alt, PlanConfig, ScoredPlan } from './core/types'
-import { generatePlans } from './core/generate'
-import { enumeratePlans, planFromKey, planKey } from './core/enumerate'
+import { candidatePool, generatePlans } from './core/generate'
+import { galleryPlans, planFromKey, planKey } from './core/enumerate'
 import { mulberry32 } from './core/rng'
-import { fallbackAlts, feasibility } from './core/program'
+import { diagnoseEmpty, feasibility } from './core/program'
 import { ConditionForm } from './components/ConditionForm'
 import { FavoritesShelf } from './components/FavoritesShelf'
 import { Gallery } from './components/Gallery'
@@ -62,7 +62,10 @@ export default function App() {
   )
   const feas = useMemo(() => feasibility(cfg), [cfg])
   const plans = useMemo(() => (feas.ok ? generatePlans(cfg, state.seed) : []), [feas, cfg, state.seed])
-  const allPlans = useMemo(() => (feas.ok ? enumeratePlans(cfg) : []), [feas, cfg])
+  // 3案に満たないときだけ診断する（代替案の確認で複数条件を生成するため、毎回は走らせない）
+  const diagnosis = useMemo(() => (feas.ok && plans.length < 3 ? diagnoseEmpty(cfg) : null), [feas, cfg, plans.length])
+  const poolCount = useMemo(() => (feas.ok ? candidatePool(cfg).length : 0), [feas, cfg])
+  const galleryList = useMemo(() => (feas.ok ? galleryPlans(cfg) : []), [feas, cfg])
 
   // 別タブでお気に入りが変わったら読み直す（storage イベントは他タブの変更だけで発火する）
   useEffect(() => {
@@ -143,8 +146,8 @@ export default function App() {
     body = (
       <Notice
         title="検証を通る案が作れませんでした"
-        body="面積は足りていても、部屋の並び（帯の幅・高さ）に収まらず、動線と採光の検証を通過できませんでした。条件を少し緩めると作れます。"
-        alts={fallbackAlts(cfg)}
+        body={`${diagnosis?.reason ?? ''}要素を黙って落とす代わりに、実際に3案出ることを確かめた調整案を出します。`}
+        alts={diagnosis?.alts ?? []}
         onAlt={applyAlt}
       />
     )
@@ -158,10 +161,22 @@ export default function App() {
             <button type="button" onClick={next} className="min-h-[42px] cursor-pointer rounded-full border-[1.5px] border-accent bg-transparent px-[18px] py-[9px] text-sm font-extrabold text-accent active:translate-y-px">別の3案を作る</button>
           </div>
         </div>
+        {plans.length < 3 && diagnosis && (
+          <div role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+            <p>この条件では{plans.length}案です。{diagnosis.reason}</p>
+            {diagnosis.alts.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {diagnosis.alts.map((a) => (
+                  <button key={a.label} type="button" onClick={() => applyAlt(a)} className="min-h-[38px] cursor-pointer rounded-full border-[1.5px] border-warn-line bg-surface px-3.5 py-1.5 text-[13px] font-extrabold text-ink">{a.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {exhausted && (
           <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
             この条件で出せる案はここまでです。
-            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（{allPlans.length}案）を見る</button>
+            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（上位{galleryList.length}案／全{poolCount}案）を見る</button>
             か、条件を少し変えてみてください。
           </p>
         )}
@@ -179,15 +194,16 @@ export default function App() {
             />
           ))}
         </div>
-        {!showGallery && allPlans.length > 0 && (
+        {!showGallery && galleryList.length > 0 && (
           <div className="mt-4 text-center">
-            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（{allPlans.length}案）を見る</button>
+            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（上位{galleryList.length}案／全{poolCount}案）を見る</button>
           </div>
         )}
         {showGallery && (
           <Gallery
             cfg={cfg}
-            plans={allPlans}
+            plans={galleryList}
+            total={poolCount}
             isStarred={(p) => isFavorited(favorites, cfg, p)}
             onToggleStar={(p) => toggleStar(cfg, p)}
             onOpen={(p, floor) => setDetail({ plan: p, floor })}
@@ -209,7 +225,7 @@ export default function App() {
         <section aria-label="生成結果">
           {staleVersion && (
             <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
-              このURLは別バージョンの生成ロジックで作られたため、保存時と同じ間取りにならない場合があります。
+              このリンクは旧バージョンで作られたため同じ間取りは再現できません。同じ条件で新しく生成した案を表示しています
             </p>
           )}
           {body}

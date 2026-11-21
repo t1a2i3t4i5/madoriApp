@@ -32,10 +32,18 @@ function isCfg(v: unknown): v is PlanConfig {
   )
 }
 
-/** 描画で落ちない程度に、案データの形を確かめる */
+function isVariant(v: unknown): boolean {
+  return (
+    isObj(v) && (v.stairEnd === 'E' || v.stairEnd === 'W') && (v.bedShift === -1 || v.bedShift === 0 || v.bedShift === 1 || v.bedShift === 2) &&
+    Array.isArray(v.rev) && v.rev.length === 4 && v.rev.every((b: unknown) => typeof b === 'boolean')
+  )
+}
+
+/** 描画で落ちない程度に、案データの形を確かめる（variant は GEN_VERSION 1 の旧データでは無い） */
 function isPlan(v: unknown): v is ScoredPlan {
   if (!isObj(v) || !isNum(v.W) || !isNum(v.H) || !isNum(v.totalArea) || !(v.arch === 0 || v.arch === 1 || v.arch === 2)) return false
   if (typeof v.sig !== 'string' || typeof v.sigM !== 'string') return false
+  if (v.variant !== undefined && !isVariant(v.variant)) return false
   const sc = v.score
   if (!isObj(sc) || !isNum(sc.total) || !isObj(sc.parts)) return false
   const parts = sc.parts

@@ -7,13 +7,18 @@ import { CONDITIONS, SEEDS } from './testing'
 import type { Rect } from './derive'
 import type { PlanConfig, ScoredPlan } from './types'
 
-/** 畳数行に重なった家具の件数の上限（修正後の実測値。増える退行を止める） */
-const OVERLAP_MAX = 190
+/**
+ * 畳数行に重なった家具の件数の上限（GEN_VERSION 2 の標本での実測値382に余裕を足したもの。増える退行を止める）。
+ * v2 は変種が増え、同じ部屋形状が複数の案に現れるため v1 の標本（実測値190）より件数が多い。
+ * 「避けられるのに重なった」件数は別途 0 を要求している
+ */
+const OVERLAP_MAX = 400
 
+/** 標本: 条件ごとに候補プールのスコア上位24案 + seed 2つの3案（ギャラリーの多様性優先は極端な形が増えるので使わない） */
 function allPlans(): { cfg: PlanConfig; plan: ScoredPlan }[] {
   const out: { cfg: PlanConfig; plan: ScoredPlan }[] = []
   for (const { cfg } of CONDITIONS) {
-    for (const plan of enumeratePlans(cfg)) out.push({ cfg, plan })
+    for (const plan of enumeratePlans(cfg).slice(0, 24)) out.push({ cfg, plan })
     for (const seed of SEEDS.slice(0, 2)) for (const plan of generatePlans(cfg, seed)) out.push({ cfg, plan })
   }
   return out
