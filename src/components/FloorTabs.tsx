@@ -5,7 +5,12 @@ interface Props {
 
 export function FloorTabs({ value, onChange }: Props) {
   return (
-    <div className="mt-2.5 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="mt-2.5 flex gap-1.5"
+      onClick={(e) => e.stopPropagation()}
+      // 親カード（role=button）の Enter/Space 開閉にタブ操作のキーが伝わらないようにする
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       {['1F', '2F'].map((label, i) => (
         <button
           key={label}

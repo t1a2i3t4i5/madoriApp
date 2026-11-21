@@ -15,9 +15,11 @@ export function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
   const a = arr.slice()
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
-    const t = a[i]
-    a[i] = a[j]
-    a[j] = t
+    const x = a[i]
+    const y = a[j]
+    if (x === undefined || y === undefined) continue // j <= i < length なので到達しない
+    a[i] = y
+    a[j] = x
   }
   return a
 }

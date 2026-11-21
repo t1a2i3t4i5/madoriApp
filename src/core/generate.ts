@@ -1,4 +1,4 @@
-import type { PlanConfig, ScoredPlan } from './types'
+import type { ArchId, PlanConfig, ScoredPlan } from './types'
 import { mulberry32 } from './rng'
 import { buildPlan } from './archetypes'
 import { footprintCandidates } from './slicing'
@@ -10,7 +10,7 @@ import { planSignature, pickDiverse } from './diversity'
 export function generatePlans(cfg: PlanConfig, seed: number): ScoredPlan[] {
   const targetPerFloor = (cfg.area * 16) / cfg.floors
   const candidates: ScoredPlan[] = []
-  const archs = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
+  const archs: ArchId[] = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
   for (const arch of archs) {
     for (let k = 0; k < 10; k++) {
       const rng = mulberry32(seed * 7919 + arch * 104729 + k * 1299709)

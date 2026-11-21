@@ -1,3 +1,5 @@
+import type { SCORE_WEIGHTS } from './score'
+
 /** 単位: 455mmグリッド。1坪 = 16単位²、1畳 = 8単位²。 */
 
 export type RoomType =
@@ -68,17 +70,20 @@ export interface Floor {
   rooms: Room[]
 }
 
+/** アーキタイプ番号（ARCH_INFO の添字） */
+export type ArchId = 0 | 1 | 2
+
 export interface Plan {
   W: number
   H: number
   floors: Floor[]
-  arch: number
+  arch: ArchId
   totalArea: number
 }
 
 export interface ScoreResult {
   total: number
-  parts: Record<string, number>
+  parts: Record<keyof typeof SCORE_WEIGHTS, number>
 }
 
 export interface ScoredPlan extends Plan {

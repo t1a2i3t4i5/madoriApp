@@ -54,11 +54,16 @@ function RoomLabel({ r, kitchenFace }: { r: Room; kitchenFace?: boolean }) {
   return null
 }
 
+const NO_ROOMS: Room[] = []
+
 export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, scale }: FloorSvgProps) {
   const fl = plan.floors[floorIdx]
   const { W, H } = plan
-  const doors = useMemo(() => computeDoors(fl.rooms), [fl])
-  const windows = useMemo(() => computeWindows(fl.rooms, H), [fl, H])
+  const rooms = fl?.rooms ?? NO_ROOMS
+  const doors = useMemo(() => computeDoors(rooms), [rooms])
+  const windows = useMemo(() => computeWindows(rooms, H), [rooms, H])
+  // 存在しない階を指された場合は何も描かない（フックの後で判定する）
+  if (!fl) return null
   const ldk = fl.rooms.find((r) => r.type === 'ldk')
   const entry = fl.rooms.find((r) => r.type === 'entry')
 

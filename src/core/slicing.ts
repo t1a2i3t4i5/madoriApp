@@ -22,20 +22,21 @@ export function waterfill(total: number, items: WaterfillItem[]): number[] | nul
     else hi = mid
   }
   const t = (lo + hi) / 2
-  const raw = items.map((i) => clamp(i.w * t, i.min, i.max))
-  const base = raw.map((v) => Math.floor(v))
-  let rem = total - base.reduce((s, v) => s + v, 0)
-  const order = raw
-    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
-    .sort((a, b) => b.frac - a.frac)
+  // 各要素を整数部(val)と小数部(frac)に分け、最大剰余法で端数を配る（添字アクセスを避けるためスロット化）
+  const slots = items.map((i) => {
+    const raw = clamp(i.w * t, i.min, i.max)
+    return { min: i.min, max: i.max, val: Math.floor(raw), frac: raw - Math.floor(raw) }
+  })
+  let rem = total - slots.reduce((s, o) => s + o.val, 0)
+  const order = slots.slice().sort((a, b) => b.frac - a.frac)
   let guard = 0
   while (rem > 0 && guard < 10000) {
     guard++
     let progressed = false
     for (const o of order) {
       if (rem <= 0) break
-      if (base[o.i] < items[o.i].max) {
-        base[o.i]++
+      if (o.val < o.max) {
+        o.val++
         rem--
         progressed = true
       }
@@ -46,15 +47,15 @@ export function waterfill(total: number, items: WaterfillItem[]): number[] | nul
     let progressed = false
     for (const o of order) {
       if (rem >= 0) break
-      if (base[o.i] > items[o.i].min) {
-        base[o.i]--
+      if (o.val > o.min) {
+        o.val--
         rem++
         progressed = true
       }
     }
     if (!progressed) return null
   }
-  return base
+  return slots.map((o) => o.val)
 }
 
 /** 幅が余る場合に余りを吸わせるセルの優先順（収納系→居室の順） */
@@ -72,9 +73,9 @@ function mergePair(
 ): Cell[] | null {
   const i1 = cells.findIndex((c) => c.type === t1)
   const i2 = cells.findIndex((c) => c.type === t2)
-  if (i1 < 0 || i2 < 0) return null
   const a = cells[i1]
   const b = cells[i2]
+  if (!a || !b) return null
   const merged: Cell = {
     type: keepType,
     name: label,
@@ -113,13 +114,16 @@ function tryBand(cells: Cell[], W: number, y: number, h: number): Room[] | null 
         }
       })
       if (best < 0) best = 0
-      items[best].max = avail
+      const absorber = items[best]
+      if (absorber) absorber.max = avail
     }
     const alloc = waterfill(avail, items)
     if (!alloc) return null
-    flex.forEach((c, i) => {
-      widths[cells.indexOf(c)] = alloc[i]
-    })
+    for (const [i, c] of flex.entries()) {
+      const w = alloc[i]
+      if (w === undefined) return null
+      widths[cells.indexOf(c)] = w
+    }
   }
   let x = 0
   const rooms: Room[] = []
@@ -162,23 +166,25 @@ export function layoutFloor(W: number, H: number, bands: Band[]): Room[] | null 
     })
     const needH = H - fixedH
     if (items.reduce((s, i) => s + i.max, 0) < needH) {
-      let bi = 0
-      items.forEach((it, i) => {
-        if (it.w > items[bi].w) bi = i
-      })
-      items[bi].max = needH
+      let widest: WaterfillItem | undefined
+      for (const it of items) {
+        if (!widest || it.w > widest.w) widest = it
+      }
+      if (widest) widest.max = needH
     }
     const alloc = waterfill(needH, items)
     if (!alloc) return null
-    flexBands.forEach((b, i) => {
-      heights[bands.indexOf(b)] = alloc[i]
-    })
+    for (const [i, b] of flexBands.entries()) {
+      const h = alloc[i]
+      if (h === undefined) return null
+      heights[bands.indexOf(b)] = h
+    }
   }
   let y = 0
   const rooms: Room[] = []
-  for (let i = 0; i < bands.length; i++) {
-    const b = bands[i]
+  for (const [i, b] of bands.entries()) {
     const h = b.fixedH || heights[i]
+    if (h === undefined) return null
     const rs = layoutBand(b, W, y, h)
     if (!rs) return null
     rs.forEach((r) => rooms.push(r))

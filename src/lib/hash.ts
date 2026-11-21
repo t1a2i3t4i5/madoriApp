@@ -26,21 +26,38 @@ export function encodeHash(s: AppState): string {
   return '#c=' + encodeURIComponent(JSON.stringify(o))
 }
 
+export interface ParsedHash {
+  state: AppState
+  /** ハッシュが現在と異なる genVersion（または未記載）で作られており、同じ間取りは再現されない */
+  versionMismatch: boolean
+}
+
+/** seed として使える値か。seed+1（「別の3案」）でも値が変わり続けるよう、seed+1 も安全整数であることを要求する */
+export function isValidSeed(v: unknown): v is number {
+  return typeof v === 'number' && Number.isSafeInteger(v) && Number.isSafeInteger(v + 1)
+}
+
 export function decodeHash(hash: string): AppState {
+  return parseHash(hash).state
+}
+
+export function parseHash(hash: string): ParsedHash {
   const out: AppState = { ...DEFAULT_STATE, feats: [...DEFAULT_STATE.feats] }
+  let versionMismatch = false
   try {
-    const m = hash.match(/c=([^&]+)/)
-    if (!m) return out
-    const o = JSON.parse(decodeURIComponent(m[1])) as Record<string, unknown>
+    const raw = hash.match(/c=([^&]+)/)?.[1]
+    if (raw === undefined) return { state: out, versionMismatch }
+    const o = JSON.parse(decodeURIComponent(raw)) as Record<string, unknown>
+    versionMismatch = o.v !== GEN_VERSION
     if (typeof o.area === 'number') out.area = Math.min(40, Math.max(20, Math.round(o.area)))
     if (o.floors === 1 || o.floors === 2) out.floors = o.floors
     if (typeof o.rooms === 'number') out.rooms = Math.min(5, Math.max(2, Math.round(o.rooms)))
     if (typeof o.parking === 'number') out.parking = Math.min(2, Math.max(0, Math.round(o.parking)))
     if (typeof o.garden === 'number') out.garden = Math.min(2, Math.max(0, Math.round(o.garden)))
-    if (typeof o.seed === 'number') out.seed = o.seed
+    if (isValidSeed(o.seed)) out.seed = o.seed
     if (Array.isArray(o.feats)) out.feats = FEATURES.map((f) => f.key).filter((k) => (o.feats as unknown[]).includes(k))
   } catch {
     /* 壊れたハッシュは既定値にフォールバック */
   }
-  return out
+  return { state: out, versionMismatch }
 }

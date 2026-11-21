@@ -1,4 +1,4 @@
-import type { Band, FeatureKey, Plan, PlanConfig } from './types'
+import type { ArchId, Band, FeatureKey, Plan, PlanConfig } from './types'
 import type { Rng } from './rng'
 import { cell } from './rooms'
 import { footprintCandidates, layoutFloor } from './slicing'
@@ -6,7 +6,7 @@ import { footprintCandidates, layoutFloor } from './slicing'
 export type { Rng }
 
 /** アーキタイプ定義（クラスタ単位の帯構成を返す）。floor は 1始まり。 */
-export function bandsFor(cfg: PlanConfig, arch: number, floor: number, W?: number): Band[] | null {
+export function bandsFor(cfg: PlanConfig, arch: ArchId, floor: number, W?: number): Band[] | null {
   const voidW = W ? (W >= 18 ? 8 : W >= 15 ? 6 : 5) : 8
   const F = cfg.feats
   const has = (k: FeatureKey) => F.indexOf(k) >= 0
@@ -128,7 +128,7 @@ export const ARCH_INFO = [
 ] as const
 
 /** 外形(W,H)にアーキタイプを当てはめて1案を組み立てる。構造検査に落ちたら null */
-export function buildPlan(cfg: PlanConfig, arch: number, fp: { W: number; H: number }): Plan | null {
+export function buildPlan(cfg: PlanConfig, arch: ArchId, fp: { W: number; H: number }): Plan | null {
   const { W, H } = fp
   const f1bands = bandsFor(cfg, arch, 1, W)
   if (!f1bands) return null

@@ -4,6 +4,7 @@ import { planName, planTags } from '../core/describe'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { meters } from '../lib/format'
+import { clampFloor } from '../lib/floor'
 
 interface Props {
   cfg: PlanConfig
@@ -14,7 +15,9 @@ interface Props {
 }
 
 export function PlanCard({ cfg, plan, index, scale, onOpen }: Props) {
-  const [floor, setFloor] = useState(0)
+  const [selectedFloor, setFloor] = useState(0)
+  // 条件変更で階数が減ってもタブ選択が残るため、存在する階にクランプする
+  const floor = clampFloor(selectedFloor, plan.floors.length)
   const name = planName(cfg, plan)
   const open = () => onOpen(floor)
   return (

@@ -41,10 +41,10 @@ export function doorOK(a: Room, b: Room): boolean {
 
 export function computeDoors(rooms: Room[]): Door[] {
   const doors: Door[] = []
-  for (let i = 0; i < rooms.length; i++) {
-    for (let j = i + 1; j < rooms.length; j++) {
-      const e = sharedEdge(rooms[i], rooms[j])
-      if (e && doorOK(rooms[i], rooms[j])) doors.push({ a: rooms[i], b: rooms[j], edge: e })
+  for (const [i, a] of rooms.entries()) {
+    for (const b of rooms.slice(i + 1)) {
+      const e = sharedEdge(a, b)
+      if (e && doorOK(a, b)) doors.push({ a, b, edge: e })
     }
   }
   return doors

@@ -5,6 +5,7 @@ import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
 import { meters, tatami } from '../lib/format'
+import { clampFloor } from '../lib/floor'
 
 interface Props {
   cfg: PlanConfig
@@ -14,7 +15,8 @@ interface Props {
 }
 
 export function PlanDialog({ cfg, plan, initialFloor, onClose }: Props) {
-  const [floor, setFloor] = useState(initialFloor)
+  const [selectedFloor, setFloor] = useState(initialFloor)
+  const floor = clampFloor(selectedFloor, plan.floors.length)
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     closeRef.current?.focus()

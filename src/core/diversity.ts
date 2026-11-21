@@ -17,18 +17,19 @@ export function planSignature(plan: Plan, mirror: boolean): string {
 export function planDistance(a: Plan, b: Plan): number {
   const d = a.arch !== b.arch ? 0.45 : 0
   const mapOf = (p: Plan) => {
-    const m: Record<string, [number, number]> = {}
+    const m = new Map<string, [number, number]>()
     p.floors.forEach((fl, fi) => {
-      for (const r of fl.rooms) m[r.type + fi] = [r.x + r.w / 2, r.y + r.h / 2]
+      for (const r of fl.rooms) m.set(r.type + fi, [r.x + r.w / 2, r.y + r.h / 2])
     })
     return m
   }
   const ma = mapOf(a)
   const mb = mapOf(b)
   let s = 0, n = 0
-  for (const k of Object.keys(ma)) {
-    if (mb[k]) {
-      s += Math.hypot(ma[k][0] - mb[k][0], ma[k][1] - mb[k][1]) / Math.max(a.W, a.H)
+  for (const [k, pa] of ma) {
+    const pb = mb.get(k)
+    if (pb) {
+      s += Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) / Math.max(a.W, a.H)
       n++
     }
   }

@@ -6,10 +6,12 @@ import { ConditionForm } from './components/ConditionForm'
 import { Notice } from './components/Notice'
 import { PlanCard } from './components/PlanCard'
 import { PlanDialog } from './components/PlanDialog'
-import { decodeHash, encodeHash, type AppState } from './lib/hash'
+import { encodeHash, parseHash, type AppState } from './lib/hash'
 
 export default function App() {
-  const [state, setState] = useState<AppState>(() => decodeHash(location.hash))
+  const [boot] = useState(() => parseHash(location.hash))
+  const [state, setState] = useState<AppState>(boot.state)
+  const [staleVersion, setStaleVersion] = useState(boot.versionMismatch)
   const [detail, setDetail] = useState<{ index: number; floor: number } | null>(null)
 
   useEffect(() => {
@@ -23,10 +25,11 @@ export default function App() {
   const feas = useMemo(() => feasibility(cfg), [cfg])
   const plans = useMemo(() => (feas.ok ? generatePlans(cfg, state.seed) : []), [feas, cfg, state.seed])
 
-  const patch = (p: Partial<AppState>) => { setState((s) => ({ ...s, ...p })); setDetail(null) }
+  const patch = (p: Partial<AppState>) => { setState((s) => ({ ...s, ...p })); setDetail(null); setStaleVersion(false) }
   const applyAlt = (a: Alt) => patch({ ...a.patch, seed: state.seed + 1 })
   const next = () => patch({ seed: state.seed + 1 })
 
+  const detailPlan = detail ? plans[detail.index] : undefined
   const scale = { maxW: Math.max(0, ...plans.map((p) => p.W)), maxH: Math.max(0, ...plans.map((p) => p.H)) }
 
   let body
@@ -66,12 +69,17 @@ export default function App() {
       <div className="grid items-start gap-5 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
         <ConditionForm state={state} onChange={patch} onGenerate={next} />
         <section aria-label="生成結果">
+          {staleVersion && (
+            <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+              このURLは別バージョンの生成ロジックで作られたため、保存時と同じ間取りにならない場合があります。
+            </p>
+          )}
           {body}
           <p className="mt-[22px] text-[11.5px] leading-[1.6] text-ink2">※ 建築基準法・構造は未考慮、敷地は想定の図面です。実際の設計は建築士にご相談ください。寸法は455mmグリッド基準、1坪＝約3.31㎡で換算しています。</p>
         </section>
       </div>
-      {detail && plans[detail.index] && (
-        <PlanDialog key={`${state.seed}-${detail.index}`} cfg={cfg} plan={plans[detail.index]} initialFloor={detail.floor} onClose={() => setDetail(null)} />
+      {detail && detailPlan && (
+        <PlanDialog key={`${state.seed}-${detail.index}`} cfg={cfg} plan={detailPlan} initialFloor={detail.floor} onClose={() => setDetail(null)} />
       )}
     </div>
   )

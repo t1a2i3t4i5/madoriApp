@@ -18,7 +18,7 @@ export function planName(cfg: PlanConfig, plan: Plan): string {
 
 export function planTags(cfg: PlanConfig, plan: Plan): string[] {
   const tags: string[] = []
-  const ldk = plan.floors[0].rooms.find((r) => r.type === 'ldk')
+  const ldk = plan.floors[0]?.rooms.find((r) => r.type === 'ldk')
   if (ldk && ldk.y + ldk.h === plan.H) tags.push('南LDK')
   if (cfg.feats.includes('kitchenFace')) tags.push('対面キッチン')
   if (cfg.feats.includes('doma')) tags.push('土間あり')
@@ -26,6 +26,7 @@ export function planTags(cfg: PlanConfig, plan: Plan): string[] {
   const hallArea = plan.floors.reduce(
     (s, fl) => s + fl.rooms.filter((r) => r.type === 'hall').reduce((a, r) => a + r.area, 0), 0)
   if (hallArea / plan.totalArea < 0.07) tags.push('廊下短め')
-  tags.push(ARCH_INFO[plan.arch].desc.split('、')[0])
+  const [descHead] = ARCH_INFO[plan.arch].desc.split('、')
+  if (descHead) tags.push(descHead)
   return tags.slice(0, 4)
 }

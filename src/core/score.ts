@@ -52,7 +52,7 @@ export function scorePlan(plan: Plan): ScoreResult {
     d /= waters.length
     waterScore = clamp(1 - d / (plan.W * 0.55), 0, 1)
   }
-  const parts: Record<string, number> = {
+  const parts: ScoreResult['parts'] = {
     採光: lightN ? light / lightN : 1,
     面積適合: fitN ? fit / fitN : 1,
     縦横比: aspN ? aspect / aspN : 1,
@@ -62,6 +62,6 @@ export function scorePlan(plan: Plan): ScoreResult {
     '910モジュール': modN ? mod / modN : 1,
   }
   let total = 0
-  for (const k of Object.keys(parts)) total += parts[k] * SCORE_WEIGHTS[k as keyof typeof SCORE_WEIGHTS]
+  for (const k of Object.keys(SCORE_WEIGHTS) as (keyof typeof SCORE_WEIGHTS)[]) total += parts[k] * SCORE_WEIGHTS[k]
   return { total: Math.round(total * 100), parts }
 }
