@@ -25,7 +25,7 @@ export interface FloorSvgProps {
   scale?: { maxW: number; maxH: number }
 }
 
-function RoomLabel({ r, kitchenFace }: { r: Room; kitchenFace?: boolean }) {
+function RoomLabel({ r, kitchenFace, furnished }: { r: Room; kitchenFace?: boolean; furnished?: boolean }) {
   const cx = r.x + r.w / 2
   // 対面キッチンのカウンターがあるLDKはラベルを下へ逃がす
   const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
@@ -49,7 +49,14 @@ function RoomLabel({ r, kitchenFace }: { r: Room; kitchenFace?: boolean }) {
     return (
       <>
         <text x={cx} y={cy - 0.35} fontSize={fitFs(1.55)} {...common}>{r.name}</text>
-        <text x={cx} y={cy + 1.55} fontSize={1.2} fill="#7a7568" textAnchor="middle">{tatami(r.w, r.h)}畳</text>
+        <text
+          x={cx}
+          y={cy + 1.55}
+          fontSize={1.2}
+          fill="#7a7568"
+          textAnchor="middle"
+          {...(furnished ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {})}
+        >{tatami(r.w, r.h)}畳</text>
       </>
     )
   }
@@ -154,7 +161,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
         <rect x={0} y={0} width={W} height={H} strokeWidth={0.42} />
       </g>
-      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} />)}
+      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} />)}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === H && (() => {
         const ex = entry.x + entry.w / 2

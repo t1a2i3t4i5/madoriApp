@@ -1,5 +1,6 @@
 import type { Door, Room } from './types'
 import { doorSwingRect, type Rect } from './derive'
+import { tatami } from './rooms'
 
 export type FurnitureKind = 'bed2' | 'bed1' | 'sofa' | 'dining' | 'tv' | 'desk'
 
@@ -15,7 +16,7 @@ export interface FurnishOpts {
 }
 
 /** 家具寸法（セル単位。1セル=455mm）。w は短辺側ではなく「基準の向き」の横幅 */
-const SIZE: Record<FurnitureKind, { w: number; h: number }> = {
+export const SIZE: Record<FurnitureKind, { w: number; h: number }> = {
   bed2: { w: 3.1, h: 4.3 },
   bed1: { w: 2.1, h: 4.3 },
   sofa: { w: 4.4, h: 1.9 },
@@ -30,7 +31,7 @@ const INSET = 0.3
 const COUNTER_CLEARANCE = 0.7
 
 /** 部屋ごとに置く家具（この順に試す） */
-const PROGRAM: Partial<Record<Room['type'], FurnitureKind[]>> = {
+export const PROGRAM: Partial<Record<Room['type'], FurnitureKind[]>> = {
   ldk: ['tv', 'sofa', 'dining'],
   master: ['bed2'],
   bed: ['bed1', 'desk'],
@@ -51,7 +52,7 @@ export function isVerticalLabel(r: Room): boolean {
 /**
  * 部屋名ラベルが占める領域。FloorSvg の RoomLabel と同じ中心・同じ文字サイズ（大きい部屋は 1.55、それ以外は 1.25）で見積もる。
  * 縦積みラベル（幅の狭い部屋）は、1文字ずつ 1.08 間隔で積む描画に合わせて縦長の矩形にする。
- * 畳数の小さな補助行は含めない（7×8 の主寝室など標準的な部屋にベッドが置けなくなるため。補助行は家具の上に重なって描かれる）。
+ * 畳数行は含めない（含めると標準的な主寝室にベッドが置けなくなるため）。畳数行は areaLabelRect で別に見積もり、furnish が2段階で避ける。
  */
 export function labelRect(r: Room, kitchenFace: boolean): Rect {
   const cx = r.x + r.w / 2
@@ -69,13 +70,27 @@ export function labelRect(r: Room, kitchenFace: boolean): Rect {
   return { x: cx - w / 2, y: cy - (big ? 0.35 : -0.5) - fs - 0.1, w, h }
 }
 
+/**
+ * 畳数行（「7畳」等の補助行）が占める領域。FloorSvg の RoomLabel と同じ条件（縦積みでなく、幅5以上かつ高さ4.5以上の部屋）でのみ描かれる。
+ * 描画は fontSize 1.2、ベースライン cy+1.55、中央揃え。幅は 数字0.65・小数点0.35・「畳」1.2 で見積もる（余裕込み）。
+ */
+export function areaLabelRect(r: Room, kitchenFace: boolean): Rect | null {
+  if (isVerticalLabel(r) || !(r.w >= 5 && r.h >= 4.5)) return null
+  const cx = r.x + r.w / 2
+  const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
+  const text = tatami(r.w, r.h)
+  const w = Math.min(r.w, Array.from(text).reduce((a, ch) => a + (ch === '.' ? 0.35 : 0.65), 0) + 1.2 + 0.4)
+  const fs = 1.2
+  return { x: cx - w / 2, y: cy + 1.55 - fs, w, h: fs + 0.3 }
+}
+
 export function overlaps(a: Rect, b: Rect): boolean {
   const eps = 1e-9
   return a.x < b.x + b.w - eps && b.x < a.x + a.w - eps && a.y < b.y + b.h - eps && b.y < a.y + a.h - eps
 }
 
 /** 壁沿い・角寄りの候補位置。2つの向き × （四隅 → 各壁の中央 → 各壁の1/4・3/4）の順で固定 */
-function candidates(r: Room, size: { w: number; h: number }): Rect[] {
+export function candidates(r: Room, size: { w: number; h: number }, area?: Rect | null): Rect[] {
   const out: Rect[] = []
   for (const [w, h] of [[size.w, size.h], [size.h, size.w]] as const) {
     const x0 = r.x + INSET
@@ -98,12 +113,43 @@ function candidates(r: Room, size: { w: number; h: number }): Rect[] {
       out.push({ x, y, w, h })
     }
   }
+  // 畳数行を基準にした候補（末尾追加）。家具の辺を畳数行の上端・下端・左端・右端に合わせ、壁に沿わせる
+  if (area) {
+    for (const [w, h] of [[size.w, size.h], [size.h, size.w]] as const) {
+      const x0 = r.x + INSET
+      const x1 = r.x + r.w - INSET - w
+      const y0 = r.y + INSET
+      const y1 = r.y + r.h - INSET - h
+      if (x1 < x0 - 1e-9 || y1 < y0 - 1e-9) continue
+      const inX = (x: number) => x >= x0 - 1e-9 && x <= x1 + 1e-9
+      const inY = (y: number) => y >= y0 - 1e-9 && y <= y1 + 1e-9
+      const above = area.y - h
+      const below = area.y + area.h
+      const left = area.x - w
+      const right = area.x + area.w
+      if (inY(above)) for (const x of [x0, x1]) out.push({ x, y: above, w, h })
+      if (inY(below)) for (const x of [x0, x1]) out.push({ x, y: below, w, h })
+      if (inX(left)) for (const y of [y0, y1]) out.push({ x: left, y, w, h })
+      if (inX(right)) for (const y of [y0, y1]) out.push({ x: right, y, w, h })
+    }
+  }
   return out
+}
+
+/** 家具が避ける固定領域（ドア開き・部屋名ラベル・対面キッチンのカウンター）。furnish とテストで共有する */
+export function blockedRects(r: Room, swings: readonly Rect[], kitchenFace: boolean): Rect[] {
+  const blocked: Rect[] = [...swings, labelRect(r, kitchenFace)]
+  if (r.type === 'ldk' && kitchenFace) {
+    const c = kitchenCounter(r)
+    blocked.push({ ...c, h: c.h + COUNTER_CLEARANCE })
+  }
+  return blocked
 }
 
 /**
  * 1フロア分の家具を決定的に配置する（純関数・乱数なし）。
  * ドア開きの外接矩形・対面キッチンのカウンター・ラベル領域・既配置の家具と重ならない最初の位置に置き、置けなければ置かない。
+ * 2段階: 第1優先は部屋名＋畳数行の両方を避ける位置。なければ部屋名だけを避ける従来の位置にフォールバックする（配置率を落とさない）。
  */
 export function furnish(rooms: readonly Room[], doors: readonly Door[], opts: FurnishOpts): FurnitureItem[] {
   const swings = doors.map((d) => doorSwingRect(d.edge))
@@ -111,15 +157,13 @@ export function furnish(rooms: readonly Room[], doors: readonly Door[], opts: Fu
   rooms.forEach((r, room) => {
     const kinds = PROGRAM[r.type]
     if (!kinds) return
-    const blocked: Rect[] = [...swings, labelRect(r, opts.kitchenFace)]
-    if (r.type === 'ldk' && opts.kitchenFace) {
-      const c = kitchenCounter(r)
-      blocked.push({ ...c, h: c.h + COUNTER_CLEARANCE })
-    }
+    const blocked = blockedRects(r, swings, opts.kitchenFace)
+    const area = areaLabelRect(r, opts.kitchenFace)
     for (const kind of kinds) {
-      const spot = candidates(r, SIZE[kind]).find(
-        (c) => !blocked.some((b) => overlaps(c, b)) && !items.some((it) => it.room === room && overlaps(c, it)),
-      )
+      const cands = candidates(r, SIZE[kind])
+      const candsArea = candidates(r, SIZE[kind], area)
+      const free = (c: Rect) => !blocked.some((b) => overlaps(c, b)) && !items.some((it) => it.room === room && overlaps(c, it))
+      const spot = (area ? candsArea.find((c) => free(c) && !overlaps(c, area)) : undefined) ?? cands.find(free)
       if (spot) items.push({ kind, room, ...spot })
     }
   })
