@@ -25,7 +25,7 @@ type RoomPair = readonly [RoomType, RoomType]
 /** ドアを付けないペア。照合は pairKey で正規化した Set で行うので順不同でも効くが、定義は正規形（アルファベット順）で書く（テストで検査） */
 export const NO_DOOR_PAIRS: readonly RoomPair[] = [
   ['bath', 'entry'], ['entry', 'wc'], ['bath', 'ldk'], ['ldk', 'wc'], ['bath', 'wc'],
-  ['bath', 'master'], ['master', 'wc'], ['bath', 'bed'], ['bed', 'wc'], ['stair', 'void'],
+  ['bath', 'master'], ['master', 'wc'], ['bath', 'bed'], ['bed', 'wc'], ['stair', 'void'], ['stair', 'wc'],
 ]
 /** VIA の判定とは別に、明示的にドアを許すペア（VIA を含むペアも含む）。NO_DOOR に該当するペアは除く */
 export const PAIR_OK_PAIRS: readonly RoomPair[] = [
@@ -45,6 +45,8 @@ export function doorOK(a: Room, b: Room): boolean {
   if (a.type === 'void' || b.type === 'void') return false
   const key = pairKey(a.type, b.type)
   if (NO_DOOR.has(key)) return false
+  // 浴室のドアは洗面とだけ付ける（ホール・階段などの VIA 室とも付けない）
+  if (a.type === 'bath' || b.type === 'bath') return key === pairKey('bath', 'wash')
   if (VIA[a.type] || VIA[b.type]) return true
   return PAIR_OK.has(key)
 }

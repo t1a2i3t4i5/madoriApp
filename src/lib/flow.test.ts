@@ -43,12 +43,11 @@ describe('computeFlows', () => {
     expect(computeFlows(p, 5)).toEqual([])
   })
 
-  it('洗面が無く浴室だけでも生活動線は描く。つながらない浴室なら描かない', () => {
+  it('浴室のドアは洗面とだけ付くため、洗面が無い浴室だけでは生活動線を描かない（隣接していても）', () => {
     const base = defined(tiny().floors[0]).rooms.filter((r) => r.type !== 'wash' && r.type !== 'bath')
     const touching: Plan = { ...tiny(), floors: [{ label: '1F', rooms: [...base, room('bath', 3, 0, 3, 4)] }] }
-    const life = defined(computeFlows(touching, 0).find((l) => l.kind === 'life'))
-    expect(defined(life.stops[life.stops.length - 1])).toMatchObject({ role: 'end', x: 4.5, y: 2 })
-    // 他のどの部屋とも辺を共有しない浴室（ドアが付かない）
+    expect(computeFlows(touching, 0).map((l) => l.kind)).toEqual(['guest'])
+    // 他のどの部屋とも辺を共有しない浴室
     const isolated: Plan = { ...tiny(), W: 20, floors: [{ label: '1F', rooms: [...base, room('bath', 16, 0, 3, 4)] }] }
     expect(computeFlows(isolated, 0).map((l) => l.kind)).toEqual(['guest'])
   })
