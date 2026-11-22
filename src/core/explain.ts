@@ -16,7 +16,8 @@ export const EXPLAIN_TH = {
   weak: 0.55,
 } as const
 
-const pct = (v: number) => `${Math.round(v * 100)}%`
+/** 割合の表示。しきい値（7%・11% など）と食い違って見えないよう、小数1桁へ切り捨てる（6.96% を「7%」と書かない） */
+const pct = (v: number) => `${(Math.floor(v * 1000 + 1e-9) / 10).toFixed(1)}%`
 
 /** 1つの事実。つなぐとき用の「〜て」形と、文末用の「〜です。」形を持つ */
 interface Clause { te: string; end: string }
@@ -62,13 +63,15 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   const s1: Clause[] = []
   if (ldk) {
     const south = ldk.y + ldk.h === plan.H
-    const tatami = Math.round(ldk.area / 8)
+    // キッチンが独立している案は、LDK の畳数にキッチンを含める（LDK として使う広さ）
+    const kitchen = plan.floors[ldkFloor]?.rooms.find((r) => r.type === 'kitchen')
+    const tatami = Math.round((ldk.area + (kitchen?.area ?? 0)) / 8)
     const where = plan.floors.length === 2 ? `${plan.floors[ldkFloor]?.label ?? ''}の` : ''
     s1.push(south
-      ? clause(`${where}LDKは南側で日当たりがよく（約${tatami}畳）`, `${where}LDKは南側で日当たりがよく、約${tatami}畳です。`)
+      ? clause(`${where}LDKは南側で日当たりがよく約${tatami}畳あり`, `${where}LDKは南側で日当たりがよく、約${tatami}畳です。`)
       : clause(`${where}LDKは約${tatami}畳で`, `${where}LDKは約${tatami}畳です。`))
   }
-  if (hasVoid) s1.push(clause('吹抜でLDKに縦の広がりがあり', '吹抜でLDKに縦の広がりがあります。'))
+  if (hasVoid) s1.push(clause('吹抜で縦の広がりもあり', '吹抜で縦の広がりもあります。'))
   else if (plan.floors.length === 1) s1.push(clause('ワンフロアで生活が完結し', 'ワンフロアで生活が完結します。'))
 
   // --- 2文目: 動線・水回り・収納 ---
@@ -82,21 +85,32 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   if (s1.length) sentences.push(sentence(s1))
   if (s2.length) sentences.push(sentence(s2))
 
-  // --- 3文目: 階段（個室が面しているかを事実として）か、気になる点 ---
-  const st = stairSide(plan)
-  if (st && plan.floors.length === 2) {
-    const stairs = plan.floors.flatMap((f) => f.rooms.filter((r) => r.type === 'stair'))
-    const beds = rooms.filter((r) => r.type === 'master' || r.type === 'bed')
-    const facing = beds.some((b) => stairs.some((s) => sharedEdge(b, s)))
-    sentences.push(beds.length && !facing
-      ? `階段は${st.side}端にあり、個室は階段に面していないため静かに保ちやすい配置です。`
-      : `階段は${st.side}端に寄せています。`)
-  }
+  // --- 3文目: 階段（個室が面しているかを階ごとの事実として）と、気になる点 ---
+  // 弱点がある案では必ず触れる。枠（3文）が足りないときは階段の文と1文にまとめる
   const weak: string[] = []
   if (hallRatio >= EXPLAIN_TH.hallLong) weak.push('廊下がやや長いこと')
   if (parts.縦横比 < EXPLAIN_TH.weak) weak.push('細長い部屋があること')
   if (parts.面積適合 < EXPLAIN_TH.weak) weak.push('目標の広さから外れた部屋があること')
-  if (weak.length && sentences.length < 3) sentences.push(`気になる点は、${weak.join('、')}です。`)
+  const weakText = weak.length ? `気になる点は、${weak.join('、')}です。` : ''
+
+  const st = stairSide(plan)
+  if (st && plan.floors.length === 2) {
+    // 階ごとに、その階の個室（cat が bed: 主寝室・洋室・書斎・和室）がその階の階段に面しているかを見る
+    const perFloor = plan.floors.map((f) => {
+      const stair = f.rooms.find((r) => r.type === 'stair')
+      const beds = f.rooms.filter((r) => ROOM[r.type].cat === 'bed')
+      return { beds, facing: !!stair && beds.some((b) => sharedEdge(b, stair)) }
+    })
+    const hasBeds = perFloor.some((f) => f.beds.length > 0)
+    const quiet = hasBeds && perFloor.every((f) => !f.facing)
+    const stairText = quiet
+      ? `階段は${st.side}端にあり、個室は階段に面していないため静かに保ちやすい配置です。`
+      : `階段は${st.side}端に寄せています。`
+    if (weakText && sentences.length >= 2) sentences.push(`階段は${st.side}端に寄せていますが、${weakText}`)
+    else sentences.push(stairText, ...(weakText ? [weakText] : []))
+  } else if (weakText) {
+    sentences.push(weakText)
+  }
 
   // --- 補い: 2文に満たないときは事実だけを足す ---
   if (sentences.length < 2) {

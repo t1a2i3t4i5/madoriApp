@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { enumeratePlans } from '../core/enumerate'
 import { CONDITIONS, defined } from '../core/testing'
 import type { Plan, Room } from '../core/types'
+import { VIA } from '../core/rooms'
+import { computeDoors } from '../core/derive'
 import { computeFlows } from './flow'
 
 const room = (type: Room['type'], x: number, y: number, w: number, h: number): Room =>
@@ -118,5 +120,62 @@ describe('computeFlows', () => {
     }
     expect(computeFlows(p, 0)).toEqual([])
     expect(computeFlows(p, 1)).toEqual([])
+  })
+  it('合成: 近道にキッチンがあってもホール経由を選ぶ。VIA だけで届かないときに限りキッチンを通す', () => {
+    // 玄関─キッチン─LDK が一直線（最短）。上の帯のホールは玄関・キッチン・LDK すべてに接する
+    const p: Plan = {
+      W: 12, H: 8, arch: 0, totalArea: 96,
+      floors: [{ label: '1F', rooms: [
+        room('hall', 0, 0, 12, 4), room('entry', 0, 4, 3, 4), room('kitchen', 3, 4, 3, 4), room('ldk', 6, 4, 6, 4),
+      ] }],
+    }
+    const guest = defined(computeFlows(p, 0).find((l) => l.kind === 'guest'))
+    expect(guest.stops.filter((s) => s.role === 'via').map((s) => [s.x, s.y])).toEqual([[6, 2]])
+    // ホールが無く、キッチンだけが玄関とLDKをつなぐ。それでも来客動線は途切れさせない（最後の手段）
+    const q: Plan = {
+      W: 12, H: 8, arch: 0, totalArea: 96,
+      floors: [{ label: '1F', rooms: [room('entry', 0, 4, 3, 4), room('kitchen', 3, 4, 3, 4), room('ldk', 6, 4, 6, 4), room('store', 0, 0, 12, 4)] }],
+    }
+    const g2 = defined(computeFlows(q, 0).find((l) => l.kind === 'guest'))
+    expect(g2.stops.filter((s) => s.role === 'via').map((s) => [s.x, s.y])).toEqual([[4.5, 6]])
+  })
+
+  it('全条件の全候補・全階: VIA のみの経路があるのに VIA 以外を経由した動線はない', () => {
+    let lines = 0, viaThrough = 0
+    for (const { cfg } of CONDITIONS) {
+      for (const plan of enumeratePlans(cfg)) {
+        for (const [fi, fl] of plan.floors.entries()) {
+          const at = (x: number, y: number) => fl.rooms.find((r) => r.x + r.w / 2 === x && r.y + r.h / 2 === y)
+          const doors = computeDoors(fl.rooms)
+          for (const l of computeFlows(plan, fi)) {
+            lines++
+            const first = defined(at(defined(l.stops[0]).x, defined(l.stops[0]).y))
+            const lastStop = defined(l.stops[l.stops.length - 1])
+            const last = defined(at(lastStop.x, lastStop.y))
+            const vias = l.stops.filter((s) => s.role === 'via').map((s) => defined(at(s.x, s.y)))
+            const nonVia = vias.filter((r) => !VIA[r.type])
+            if (!nonVia.length) continue
+            // 端点以外は VIA 室だけを通る経路（幅優先）が存在するか
+            const seen = new Set<Room>([first])
+            const queue = [first]
+            while (queue.length) {
+              const cur = defined(queue.shift())
+              if (cur === last) break
+              for (const d of doors) {
+                const o = d.a === cur ? d.b : d.b === cur ? d.a : null
+                if (!o || seen.has(o) || (o !== last && !VIA[o.type])) continue
+                seen.add(o)
+                queue.push(o)
+              }
+            }
+            expect(seen.has(last), `${cfg.area}坪 ${fl.label}: VIA だけで届くのに ${nonVia.map((r) => r.type)} を経由`).toBe(false)
+            viaThrough++
+          }
+        }
+      }
+    }
+    expect(lines).toBeGreaterThan(1000)
+    // VIA のみの経路がなく例外的に通した動線は、あってもごく一部
+    expect(viaThrough).toBeLessThan(lines * 0.05)
   })
 })

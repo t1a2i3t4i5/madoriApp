@@ -41,13 +41,15 @@ input[type="range"] { accent-color: var(--accent); }
 @media print {
   :root {
     --bg: #fff; --surface: #fff; --surface2: #eceae3; --ink: #1c1f1d; --ink2: #3d423e;
-    --line: #bbb; --accent: #14604a; --warm: #c25e3a; --plan-paper: #fdfcf8; --shadow: none;
+    --line: #bbb; --accent: #14604a; --accent-ink: #fff; --warm: #c25e3a; --plan-paper: #fdfcf8; --shadow: none;
+    --chip: #fff; --warn-bg: #fdf3e3; --warn-line: #e5c07a; --warn-ink: #7a5410;
   }
   @page { margin: 12mm; }
   body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print, button, [role="dialog"], input, label { display: none !important; }
   .app-grid { display: block !important; }
-  .plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8mm !important; }
+  /* 1案に全階（1F/2F）を横に並べるので、案は1列に積む */
+  .plan-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 8mm !important; }
   .print-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; cursor: auto !important; }
   h2 { break-after: avoid; }
 }

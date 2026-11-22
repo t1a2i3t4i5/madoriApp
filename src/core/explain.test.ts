@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { enumeratePlans } from './enumerate'
-import { explainPlan } from './explain'
-import { CONDITIONS, defined } from './testing'
+import { EXPLAIN_TH, explainPlan } from './explain'
+import { CONDITIONS, defined, sharesEdge } from './testing'
 import type { ScoredPlan } from './types'
 
 const cond = (name: string) => defined(CONDITIONS.find((c) => c.name === name), name)
@@ -70,5 +70,72 @@ describe('explainPlan', () => {
     const texts = new Set(enumeratePlans(cfg).map((p) => /階段は[東西]端(にあり|に寄せ)/.exec(explainPlan(cfg, p))?.[1]))
     expect(texts.has('にあり')).toBe(true)
     expect(texts.has('に寄せ')).toBe(true)
+  })
+  it('全候補: 「個室は階段に面していない」と書くなら、階ごとに全ての個室（書斎・和室を含む）が階段と辺を共有しない', () => {
+    const BED = new Set(['master', 'bed', 'study', 'washitsu']) // rooms.ts の cat='bed' とは別に独立して列挙
+    let claimed = 0, studyOrWashitsuFacing = 0, total = 0
+    for (const { cfg } of CONDITIONS) {
+      for (const p of enumeratePlans(cfg)) {
+        total++
+        const text = explainPlan(cfg, p)
+        const facing = p.floors.some((f) => {
+          const stair = f.rooms.find((r) => r.type === 'stair')
+          return !!stair && f.rooms.some((r) => BED.has(r.type) && sharesEdge(r, stair))
+        })
+        if (p.floors.some((f) => { const st = f.rooms.find((r) => r.type === 'stair'); return !!st && f.rooms.some((r) => (r.type === 'study' || r.type === 'washitsu') && sharesEdge(r, st)) })) studyOrWashitsuFacing++
+        if (text.includes('個室は階段に面していない')) {
+          claimed++
+          expect(facing, `${cfg.area}坪: ${text}`).toBe(false)
+          expect(p.floors.some((f) => f.rooms.some((r) => BED.has(r.type)))).toBe(true)
+        }
+      }
+    }
+    expect(total).toBeGreaterThan(100)
+    expect(claimed).toBeGreaterThan(0)
+    // 旧実装が見落としていた「書斎・和室が階段に面する案」が検証対象に含まれている
+    expect(studyOrWashitsuFacing).toBeGreaterThan(0)
+  })
+
+  it('全候補: 弱点（廊下が長い・縦横比・面積適合）が配置・スコアにある案は、必ずそれに触れる。文は3文まで', () => {
+    let weakPlans = 0
+    for (const { cfg } of CONDITIONS) {
+      for (const p of enumeratePlans(cfg)) {
+        const text = explainPlan(cfg, p)
+        const rooms = p.floors.flatMap((f) => f.rooms)
+        const hall = rooms.filter((r) => r.type === 'hall').reduce((s, r) => s + r.w * r.h, 0) / p.totalArea
+        const expected = [
+          [hall >= EXPLAIN_TH.hallLong, '廊下がやや長い'],
+          [p.score.parts.縦横比 < EXPLAIN_TH.weak, '細長い部屋'],
+          [p.score.parts.面積適合 < EXPLAIN_TH.weak, '目標の広さから外れた'],
+        ] as const
+        if (expected.some(([w]) => w)) weakPlans++
+        for (const [w, phrase] of expected) if (w) expect(text, `${cfg.area}坪: ${text}`).toContain(phrase)
+        expect(sentenceCount(text)).toBeLessThanOrEqual(3)
+      }
+    }
+    expect(weakPlans).toBeGreaterThan(50)
+  })
+
+  it('キッチン独立案: LDK の畳数はキッチンを含む。割合はしきい値と食い違わない（小数1桁・切り捨て）', () => {
+    let kitchenPlans = 0
+    for (const { cfg } of CONDITIONS) {
+      for (const p of enumeratePlans(cfg)) {
+        const text = explainPlan(cfg, p)
+        for (const f of p.floors) {
+          const ldk = f.rooms.find((r) => r.type === 'ldk')
+          const k = f.rooms.find((r) => r.type === 'kitchen')
+          if (!ldk || !k) continue
+          kitchenPlans++
+          expect(text).toContain(`約${Math.round((ldk.w * ldk.h + k.w * k.h) / 8)}畳`)
+        }
+        // 「廊下は延床の約X%と短め」の X は 7.0 未満、「収納室が延床の約X%」の X は 7.0 以上
+        const hallM = /廊下は延床の約([\d.]+)%と短め/.exec(text)
+        if (hallM) expect(Math.round(Number(hallM[1]) * 10)).toBeLessThan(Math.round(EXPLAIN_TH.hallShort * 1000))
+        const storeM = /収納室が延床の約([\d.]+)%/.exec(text)
+        if (storeM) expect(Math.round(Number(storeM[1]) * 10)).toBeGreaterThanOrEqual(Math.round(EXPLAIN_TH.storeHigh * 1000))
+        expect(text).not.toMatch(/畳）、/)
+      }
+    }
+    expect(kitchenPlans).toBeGreaterThan(0)
   })
 })

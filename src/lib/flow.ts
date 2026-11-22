@@ -1,5 +1,12 @@
 import type { Plan, Room, RoomType } from '../core/types'
 import { computeDoors } from '../core/derive'
+import { VIA } from '../core/rooms'
+
+/**
+ * 通り抜けできない部屋（キッチン・浴室など）を中継点にするコスト。
+ * VIA だけの経路がどれだけ長くても負けないよう、床面の経路長（高々数百セル）より十分大きくする。
+ */
+export const NON_VIA_PENALTY = 1e6
 
 /** 動線の系統。guest: 玄関→LDK（来客）、life: LDK→洗面・浴室まわり（生活） */
 export type FlowKind = 'guest' | 'life'
@@ -34,7 +41,10 @@ function findRoom(plan: Plan, type: RoomType): Target | null {
   return null
 }
 
-/** 1つの階の中で from → to のドア経由の最短経路（距離はドア位置込み）。つながらなければ null */
+/**
+ * 1つの階の中で from → to のドア経由の最短経路（距離はドア位置込み）。つながらなければ null。
+ * 中継は VIA 室だけの経路を優先し、届かないときに限り VIA 以外を大きなコストで通す
+ */
 function routeInFloor(rooms: Room[], from: Room, to: Room): { rooms: Room[]; points: FlowPoint[] } | null {
   if (from === to) return { rooms: [from], points: [center(from)] }
   const doors = computeDoors(rooms)
@@ -56,7 +66,9 @@ function routeInFloor(rooms: Room[], from: Room, to: Room): { rooms: Room[]; poi
       if (!other || !todo.has(other)) continue
       const dp: FlowPoint = d.edge.dir === 'v' ? { x: d.edge.at, y: d.edge.mid } : { x: d.edge.mid, y: d.edge.at }
       const c1 = center(here), c2 = center(other)
-      const nd = (dist.get(here) ?? 0) + Math.hypot(dp.x - c1.x, dp.y - c1.y) + Math.hypot(c2.x - dp.x, c2.y - dp.y)
+      // 終点以外で VIA でない部屋に入る（＝そこを通り抜ける）のは最後の手段
+      const through = other !== to && !VIA[other.type] ? NON_VIA_PENALTY : 0
+      const nd = (dist.get(here) ?? 0) + through + Math.hypot(dp.x - c1.x, dp.y - c1.y) + Math.hypot(c2.x - dp.x, c2.y - dp.y)
       if (nd < (dist.get(other) ?? Infinity)) {
         dist.set(other, nd)
         prev.set(other, { room: here, via: dp })

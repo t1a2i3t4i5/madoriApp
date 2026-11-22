@@ -7,7 +7,7 @@ import { Furniture } from './Furniture'
 import { Fixtures } from './Fixtures'
 import { tatami } from '../lib/format'
 import { computeFlows } from '../lib/flow'
-import { FlowOverlay } from './FlowOverlay'
+import { FlowOverlay, legendHeight, legendWidth } from './FlowOverlay'
 
 const FILL: Record<RoomCategory, string> = {
   living: '#f3ddba', bed: '#dde7d8', water: '#d3e2ea', store: '#e7ddcb', circ: '#eae4d3', void: '#f4f1e6',
@@ -29,11 +29,13 @@ export interface FloorSvgProps {
   scale?: { maxW: number; maxH: number }
 }
 
-function RoomLabel({ r, kitchenFace, furnished }: { r: Room; kitchenFace?: boolean; furnished?: boolean }) {
+function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean }) {
   const cx = r.x + r.w / 2
   // 対面キッチンのカウンターがあるLDKはラベルを下へ逃がす
   const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
-  const common = { fontWeight: 700, fill: '#33302a', textAnchor: 'middle' as const }
+  // 動線表示中は、下を通る線の上でも読めるよう白い縁取りを付ける
+  const haloProps = halo ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {}
+  const common = { fontWeight: 700, fill: '#33302a', textAnchor: 'middle' as const, ...haloProps }
   // 細長い部屋（玄関・トイレ等）はラベルを縦積みにして壁に触れさせない
   if (isVerticalLabel(r)) {
     const fs = Math.min(1.0, r.w - 0.5)
@@ -59,7 +61,7 @@ function RoomLabel({ r, kitchenFace, furnished }: { r: Room; kitchenFace?: boole
           fontSize={1.2}
           fill="#7a7568"
           textAnchor="middle"
-          {...(furnished ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {})}
+          {...(furnished || halo ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {})}
         >{tatami(r.w, r.h)}畳</text>
       </>
     )
@@ -96,6 +98,16 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
     vbW = targetW
     vbH = scale.maxH + 4.4 + 1.6
   }
+  // 敷地帯（南道路）の矩形の下端 H+2.5 まで、余白 0.3 を足して viewBox に収める
+  if (siteStrip) {
+    const need = H + 2.5 + 0.3 - (vbY + vbH)
+    if (need > 0) vbH += need
+  }
+  // 動線の凡例は、敷地帯・玄関ドアの弧より下に専用の帯を足して置く（北マーカー・図面と重ならない）
+  const legendY = vbY + vbH
+  // 外形が狭くて凡例の文字が右にはみ出す場合は、右へ広げる
+  vbW = Math.max(vbW, 1.2 + legendWidth(flows) + 0.6)
+  vbH += legendHeight(flows.length)
   const R = DOOR_R
   const counter = ldk && kitchenFace ? kitchenCounter(ldk) : null
 
@@ -166,8 +178,9 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
         <rect x={0} y={0} width={W} height={H} strokeWidth={0.42} />
       </g>
-      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} />)}
-      {showFlow && <FlowOverlay flows={flows} />}
+      {/* 動線は部屋名ラベルより下 */}
+      {showFlow && <FlowOverlay flows={flows} legendY={legendY} legendX={vbX + 1.2} />}
+      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} />)}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === H && (() => {
         const ex = entry.x + entry.w / 2

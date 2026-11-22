@@ -46,8 +46,16 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
         ))}
       </div>
       <p className="mb-2.5 text-[12.5px] leading-[1.7] text-ink2">{explainPlan(cfg, plan)}</p>
-      <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2">
+      <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2 print:hidden">
         <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+      </div>
+      {/* 印刷専用: 画面は表示中の階だけなので、印刷時は全階を並べる（pattern id は画面用と分ける） */}
+      <div data-print-floors className="hidden gap-2 print:grid print:grid-cols-2" aria-hidden="true">
+        {plan.floors.map((_, fi) => (
+          <div key={fi} className="rounded-[9px] border border-[#e3e0d2] bg-paper p-1.5">
+            <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+          </div>
+        ))}
       </div>
       {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
       <div className="mt-2 flex items-center gap-2 text-xs text-ink2">

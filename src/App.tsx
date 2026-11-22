@@ -171,7 +171,7 @@ export default function App() {
           <div role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
             <p>この条件では{plans.length}案です。{diagnosis.reason}</p>
             {diagnosis.alts.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="no-print mt-2 flex flex-wrap gap-2">
                 {diagnosis.alts.map((a) => (
                   <button key={a.label} type="button" onClick={() => applyAlt(a)} className="min-h-[38px] cursor-pointer rounded-full border-[1.5px] border-warn-line bg-surface px-3.5 py-1.5 text-[13px] font-extrabold text-ink">{a.label}</button>
                 ))}
@@ -180,7 +180,7 @@ export default function App() {
           </div>
         )}
         {exhausted && (
-          <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+          <p role="status" className="no-print mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
             この条件で出せる案はここまでです。
             <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
             か、条件を少し変えてみてください。
@@ -201,7 +201,7 @@ export default function App() {
           ))}
         </div>
         {!showGallery && poolCount > 0 && (
-          <div className="mt-4 text-center">
+          <div className="no-print mt-4 text-center">
             <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
           </div>
         )}

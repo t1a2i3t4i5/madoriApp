@@ -39,10 +39,13 @@ npm test      # vitest
   - `describe.ts`: プランの名前・特徴タグ生成
   - `generate.ts`: パイプライン全体の統括。`candidatePool`（seed 非依存の全候補。メモ化。変種は適用後の帯構成が同一のものを列挙前に省く。readonly は配列レベルのみ）、`dedupeBySig`（反転込みの重複除去）、`selectPlans`（seed による選抜）、`generatePlansUncached`（診断用。キャッシュに入れない）。`GEN_VERSION` もここ
   - `enumerate.ts`: 候補ギャラリー用。`enumeratePlans`（候補プールのコピー）、`galleryPlans`（多様性優先で上位24案）。`planKey`（v2 は `arch-WxH-<変種>`、変種なしは v1 の `arch-WxH`）の生成・解析と、key からの再構築（`planFromKey`。v1 の key は null）もここ
+  - `explain.ts`: 間取りの解説文 `explainPlan`（純関数）。スコア内訳・配置・入力だけから2〜3文を作り、当てはまらない特徴は書かない。階段と個室の関係は階ごとに `ROOM[type].cat === 'bed'`（書斎・和室を含む）で判定。弱点（廊下が長い・縦横比・面積適合）がある案は必ず触れる（枠が足りなければ階段の文と1文にまとめる）。LDK の畳数はキッチン独立案ではキッチンを含む。割合は小数1桁に切り捨て。しきい値は `EXPLAIN_TH`
   - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドア開き半径 `DOOR_R` は `derive.ts` にあり、FloorSvg と共有する
 - `src/components/`: React UI（入力フォーム、PlanCard、SVG図面、拡大モーダル）
 - `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セットと独立検証（クラスタの辺共有・階段x一致・吹抜⊂LDK を含む）
-  - 追加UI: `Gallery`（候補。上位24案／全N案）、`FavoritesShelf`（お気に入り棚＋比較）、`StarButton`、`Furniture`（拡大表示のみ・「家具を表示」トグル）
+  - `flow.ts`: 動線（来客: 玄関→LDK、生活: LDK→洗面・浴室）の計算 `computeFlows`（純関数、`src/core/` ではなく `src/lib/`）。ドアでつながる部屋の最短経路。中継は VIA 室だけを優先し、VIA だけで届かないときに限り `NON_VIA_PENALTY` を課して VIA 以外を通す。階をまたぐ区間は階段までを描く
+  - `exportPng.ts`: SVG → PNG 書き出し。文字列処理（`buildExportSvg` など。置換は関数 replacer／slice 連結で `$` を壊さない）とブラウザ API（`svgElementToPng`・`downloadBlob`）を分けている。ObjectURL の解放は `REVOKE_DELAY_MS`（60秒）後
+  - 追加UI: `Gallery`（候補。上位24案／全N案）、`FavoritesShelf`（お気に入り棚＋比較）、`StarButton`、`Furniture`（拡大表示のみ・「家具を表示」トグル）、`FlowOverlay`（動線の重ね表示。拡大表示のみ。部屋ラベルより下に描き、凡例は FloorSvg が viewBox 下端に足す専用の帯に置く）。印刷は PlanCard の print 専用ブロックが全階を並べ、ボタンを含む文は no-print で文ごと隠す
 - `src/App.tsx`: 画面の合成と状態管理（表示 seed の履歴は上限20でハッシュには入れない）
 
 ## 生成ロジックの不変条件（安易に変えないこと）
@@ -69,9 +72,6 @@ npm test      # vitest
 
 ### その他の見送り候補（v2 以降）
 
-- 解説文（なぜこの案が良いか／どこが弱いか）の生成
-- PNG 保存・印刷用CSS
-- 動線の重ね表示（玄関→水回り→LDK など）
 - アイソメ表示
 - 好みプリセット（家事動線重視、収納重視 など）
 - 北道路・東西道路、L字外形、中庭型

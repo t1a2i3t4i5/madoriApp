@@ -2,6 +2,8 @@
 
 const EXPORT_FONT = "'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Noto Sans CJK JP','Yu Gothic',sans-serif"
 const PAPER = '#fdfcf8'
+/** ObjectURL を解放するまでの待ち時間（ms） */
+export const REVOKE_DELAY_MS = 60_000
 
 export interface ViewBox { x: number; y: number; w: number; h: number }
 
@@ -32,10 +34,13 @@ export function buildExportSvg(markup: string, targetWidth = 1600): { svg: strin
   const { width, height } = exportSize(vb, targetWidth)
   let tag = open[0]
     .replace(/\s(width|height|class)="[^"]*"/g, '')
-    .replace(/^<svg\b/, `<svg width="${width}" height="${height}" font-family="${EXPORT_FONT}"`)
-  if (!/\sxmlns="/.test(tag)) tag = tag.replace(/^<svg\b/, '<svg xmlns="http://www.w3.org/2000/svg"')
+    // 置換文字列の特殊パターン（$& など）を解釈させないよう、関数で返す
+    .replace(/^<svg\b/, () => `<svg width="${width}" height="${height}" font-family="${EXPORT_FONT}"`)
+  if (!/\sxmlns="/.test(tag)) tag = tag.replace(/^<svg\b/, () => '<svg xmlns="http://www.w3.org/2000/svg"')
   const bg = `<rect x="${vb.x}" y="${vb.y}" width="${vb.w}" height="${vb.h}" fill="${PAPER}"/>`
-  return { svg: markup.replace(open[0], tag + bg), width, height }
+  // slice 連結で差し替える（replace の置換文字列では `$` を含む属性値が壊れる）
+  const at = open.index
+  return { svg: markup.slice(0, at) + tag + bg + markup.slice(at + open[0].length), width, height }
 }
 
 /** ファイル名に使えない文字を除く */
@@ -76,5 +81,6 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  // iOS Safari はダウンロード開始が遅れることがあるため、すぐには解放しない
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS)
 }

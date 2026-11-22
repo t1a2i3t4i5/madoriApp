@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildExportSvg, exportSize, parseViewBox, safeFileName } from './exportPng'
+import { REVOKE_DELAY_MS, buildExportSvg, exportSize, parseViewBox, safeFileName } from './exportPng'
 
 const SAMPLE = '<svg viewBox="-2.2 -3.8 20 10" xmlns="http://www.w3.org/2000/svg" role="img" class="block h-auto w-full"><rect x="0" y="0" width="1" height="1"/></svg>'
 
@@ -30,6 +30,16 @@ describe('exportPng（純粋部分）', () => {
     expect(r.svg).toMatch(/<svg[^>]*><rect x="-2.2" y="-3.8" width="20" height="10" fill="#fdfcf8"\/><rect x="0"/)
   })
 
+  it('buildExportSvg: $ を含む内容（置換文字列の特殊パターン）でも壊れない', () => {
+    const markup = '<svg viewBox="0 0 4 2" aria-label="$&-$1-$$-$`-$\'"><text>$&</text></svg>'
+    const r = buildExportSvg(markup, 400)
+    if (!r) throw new Error('null')
+    expect(r.svg).toContain('aria-label="$&-$1-$$-$`-$\'"')
+    expect(r.svg).toContain('<text>$&</text>')
+    expect(r.svg.match(/<svg\b/g)?.length).toBe(1)
+    expect(r.svg.endsWith('</svg>')).toBe(true)
+  })
+
   it('xmlns がなければ補う。svg でない・viewBox なしは null', () => {
     const r = buildExportSvg('<svg viewBox="0 0 4 2"></svg>')
     expect(r?.svg).toContain('xmlns="http://www.w3.org/2000/svg"')
@@ -40,5 +50,9 @@ describe('exportPng（純粋部分）', () => {
   it('safeFileName', () => {
     expect(safeFileName('上下で分ける/2F: 案?')).toBe('上下で分ける_2F_案')
     expect(safeFileName('///')).toBe('madori')
+  })
+
+  it('ObjectURL の解放は十分遅らせる（iOS Safari 対策）', () => {
+    expect(REVOKE_DELAY_MS).toBeGreaterThanOrEqual(30_000)
   })
 })
