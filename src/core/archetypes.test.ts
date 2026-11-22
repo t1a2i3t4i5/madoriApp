@@ -41,7 +41,17 @@ describe('applyVariant', () => {
   it('rev でユニット（洗面+浴室+ランドリー）が崩れずに逆順になる', () => {
     const bands = defined(bandsFor(cfg, 1, 1, 16))
     const t = types(defined(applyVariant(bands, 1, v({ rev: [true, false, false, false] }), false)), 0)
-    expect(t).toEqual(['wc', 'wash', 'bath', 'laundry', 'stair'])
+    // ユニット内は常に ランドリー → 洗面 → 浴室（rev はユニット単位の並べ替えで、ユニット内は反転しない）
+    expect(t).toEqual(['wc', 'laundry', 'wash', 'bath', 'stair'])
+  })
+
+  it('水回りユニットは ランドリー → 洗面 → 浴室（洗面が中心）。ランドリーなしなら 洗面 → 浴室', () => {
+    const bands = defined(bandsFor(cfg, 1, 1, 16))
+    const t = types(defined(applyVariant(bands, 1, v({ rev: [false, false, false, false] }), false)), 0)
+    expect(t.slice(t.indexOf('laundry'), t.indexOf('laundry') + 3)).toEqual(['laundry', 'wash', 'bath'])
+    const c = { ...cfg, feats: [] as PlanConfig['feats'] }
+    const t2 = types(defined(applyVariant(defined(bandsFor(c, 1, 1, 16)), 1, v({ rev: [false, false, false, false] }), false)), 0)
+    expect(t2.slice(t2.indexOf('wash'), t2.indexOf('wash') + 2)).toEqual(['wash', 'bath'])
   })
 
   it('吹抜ありの1F ldk ユニットは rev でも西端のまま（kitchen/pantry が続く）', () => {

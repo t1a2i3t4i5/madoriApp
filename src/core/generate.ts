@@ -7,7 +7,7 @@ import { scorePlan } from './score'
 import { planDistance, planSignature } from './diversity'
 
 /** 生成ロジックのバージョン。アルゴリズムを変えたら上げる（URLハッシュに保存） */
-export const GEN_VERSION = 2
+export const GEN_VERSION = 3
 
 /** 外形候補の件数（縦横比 0.62〜1.62 の制限は footprintList 側で不変） */
 export const FOOTPRINT_LIMIT = 10
