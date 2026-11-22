@@ -27,7 +27,7 @@ export const NO_DOOR_PAIRS: readonly RoomPair[] = [
   ['bath', 'entry'], ['entry', 'wc'], ['bath', 'ldk'], ['ldk', 'wc'], ['bath', 'wc'],
   ['bath', 'master'], ['master', 'wc'], ['bath', 'bed'], ['bed', 'wc'], ['stair', 'void'],
 ]
-/** VIA（通り抜け可）の部屋を含まないペアのうち、ドアを付けてよいもの */
+/** VIA の判定とは別に、明示的にドアを許すペア（VIA を含むペアも含む）。NO_DOOR に該当するペアは除く */
 export const PAIR_OK_PAIRS: readonly RoomPair[] = [
   ['kitchen', 'pantry'], ['master', 'wic'], ['laundry', 'wash'], ['bath', 'wash'], ['doma', 'entry'], ['bed', 'hall'],
 ]

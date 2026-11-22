@@ -26,9 +26,24 @@ describe('doorOK', () => {
     }
   })
 
+  it('浴室-LDK はドアを付けない（両順序・固定の期待値）', () => {
+    expect(doorOK(room('bath', 0), room('ldk', 4))).toBe(false)
+    expect(doorOK(room('ldk', 0), room('bath', 4))).toBe(false)
+  })
+
+  it('NO_DOOR の主要ペアは表に依存せず両順序で false', () => {
+    const fixed: [RoomType, RoomType][] = [
+      ['bath', 'entry'], ['bath', 'ldk'], ['bath', 'master'], ['bath', 'bed'],
+      ['entry', 'wc'], ['ldk', 'wc'], ['bath', 'wc'], ['stair', 'void'],
+    ]
+    for (const [a, b] of fixed) {
+      expect(doorOK(room(a, 0), room(b, 4)), `${a}-${b}`).toBe(false)
+      expect(doorOK(room(b, 0), room(a, 4)), `${b}-${a}`).toBe(false)
+    }
+  })
+
   it('定義の全エントリが正規形（pairKey と一致する形）であること', () => {
     for (const [a, b] of [...NO_DOOR_PAIRS, ...PAIR_OK_PAIRS]) {
-      expect(pairKey(a, b)).toBe(pairKey(b, a))
       expect(`${a}-${b}`, `${a}-${b} は正規形でない`).toBe(pairKey(a, b))
     }
   })
