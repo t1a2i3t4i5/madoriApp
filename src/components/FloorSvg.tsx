@@ -6,6 +6,8 @@ import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { Furniture } from './Furniture'
 import { Fixtures } from './Fixtures'
 import { tatami } from '../lib/format'
+import { computeFlows } from '../lib/flow'
+import { FlowOverlay } from './FlowOverlay'
 
 const FILL: Record<RoomCategory, string> = {
   living: '#f3ddba', bed: '#dde7d8', water: '#d3e2ea', store: '#e7ddcb', circ: '#eae4d3', void: '#f4f1e6',
@@ -21,6 +23,8 @@ export interface FloorSvgProps {
   siteStrip?: boolean
   /** 家具を描く（拡大表示用） */
   showFurniture?: boolean
+  /** 動線（来客・生活）を重ねる（拡大表示用） */
+  showFlow?: boolean
   /** 全案で同じスケールに揃えるための最大外形 */
   scale?: { maxW: number; maxH: number }
 }
@@ -67,7 +71,7 @@ function RoomLabel({ r, kitchenFace, furnished }: { r: Room; kitchenFace?: boole
 
 const NO_ROOMS: Room[] = []
 
-export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, scale }: FloorSvgProps) {
+export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, showFlow, scale }: FloorSvgProps) {
   const fl = plan.floors[floorIdx]
   const { W, H } = plan
   const rooms = fl?.rooms ?? NO_ROOMS
@@ -77,6 +81,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
     () => (showFurniture ? furnish(rooms, doors, { kitchenFace: !!kitchenFace }) : []),
     [showFurniture, rooms, doors, kitchenFace],
   )
+  const flows = useMemo(() => (showFlow ? computeFlows(plan, floorIdx) : []), [showFlow, plan, floorIdx])
   // 存在しない階を指された場合は何も描かない（フックの後で判定する）
   if (!fl) return null
   const ldk = fl.rooms.find((r) => r.type === 'ldk')
@@ -162,6 +167,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         <rect x={0} y={0} width={W} height={H} strokeWidth={0.42} />
       </g>
       {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} />)}
+      {showFlow && <FlowOverlay flows={flows} />}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === H && (() => {
         const ex = entry.x + entry.w / 2

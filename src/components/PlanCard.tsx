@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PlanConfig, ScoredPlan } from '../core/types'
 import { planName, planTags } from '../core/describe'
+import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { meters } from '../lib/format'
@@ -30,7 +31,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
     // role=button の中に☆ボタンやタブのボタンを入れ子にしない。
     <article
       onClick={open}
-      className="relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
+      className="print-card relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
     >
       <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-2" />
       <p className="mb-0.5 mr-10 font-serif text-[17.5px] leading-[1.4] font-bold">{name}</p>
@@ -44,6 +45,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
           <span key={t} className={`rounded-full px-[9px] py-[3px] text-[11.5px] font-bold ${i === 0 ? 'bg-warm/15 text-warm' : 'bg-surface2 text-ink2'}`}>{t}</span>
         ))}
       </div>
+      <p className="mb-2.5 text-[12.5px] leading-[1.7] text-ink2">{explainPlan(cfg, plan)}</p>
       <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2">
         <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
       </div>
