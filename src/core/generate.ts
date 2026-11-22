@@ -44,7 +44,7 @@ function variantsFor(cfg: PlanConfig): Variant[] {
  * arch の変種のうち、適用後の帯構成（両階）が正規形の列挙順で先に出たものと同一になるものを省く。
  * 動かせるユニットが1つ以下の帯での rev など、結果が変わらない変種は buildPlan まで回しても
  * 同一の案（同じ sig）になって重複除去で捨てられるだけなので、列挙前に落としてプール構築を速くする。
- * 先着を残すので、プールの中身・順序は変わらない（golden-v2 が検証）。
+ * 先着を残すので、プールの中身・順序は変わらない（golden-fixture が検証）。
  */
 function distinctVariants(cfg: PlanConfig, arch: ArchId, variants: Variant[]): Variant[] {
   const hasVoid = cfg.feats.indexOf('void') >= 0
