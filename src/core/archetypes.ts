@@ -129,12 +129,12 @@ export const ARCH_INFO = [
 ] as const
 
 /** ユニット分解: 従属クラスタ → 先頭（ヘッド）の部屋種別 */
-/** 水回りユニット内の並び順（小さいほど西側）: ランドリー → 洗面 → 浴室 */
-const WET_ORDER: Partial<Record<RoomType, number>> = { laundry: 0, wash: 1, bath: 2 }
-
 const FOLLOWS: Partial<Record<RoomType, RoomType>> = {
   wic: 'master', bath: 'wash', laundry: 'wash', kitchen: 'ldk', pantry: 'ldk', doma: 'entry',
 }
+
+/** 水回りユニット内の並び順（小さいほど西側）: ランドリー → 洗面 → 浴室 */
+const WET_ORDER: Partial<Record<RoomType, number>> = { laundry: 0, wash: 1, bath: 2 }
 
 /**
  * 変種を帯に適用する。bands / cells は書き換えず新しく作る。floor は 1始まり。

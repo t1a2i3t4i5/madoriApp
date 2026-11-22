@@ -89,7 +89,7 @@ npm test      # vitest
 
 ## テスト方針
 
-- golden は2本立て。**v1 の正解は `legacy/index.html`**（`src/core/golden.test.ts` が vm で実行し、`planName` / `planTags` / `feasibility` を比較する。`generatePlans` は GEN_VERSION 2 で生成方式が変わったため比較しない）。**版別の出力は `src/core/__fixtures__/gen-v<GEN_VERSION>.json`**（現行は gen-v3.json。gen-v2.json は v2 からの移行検証用に残す。`golden-fixture.test.ts`: 生成案65件・候補プールの件数/上位10件/ハッシュ・feasibility グリッド192条件の3案）
+- golden は2本立て。**v1 の正解は `legacy/index.html`**（`src/core/golden.test.ts` が vm で実行し、`planName` / `planTags` / `feasibility` を比較する。`generatePlans` は GEN_VERSION 2 で生成方式が変わったため比較しない）。**版別の出力は `src/core/__fixtures__/gen-v<GEN_VERSION>.json`**（現行は gen-v3.json。gen-v2.json は v2 からの移行検証用に残す。`golden-fixture.test.ts`: 生成案78件（13条件×6 seed）・候補プールの件数/上位10件/ハッシュ・feasibility グリッド192条件の3案）
 - アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げたうえで `UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts` で fixture を書き出す。fixture の genVersion が現在の `GEN_VERSION` と同じまま中身だけ変わる更新は拒否される（`UPDATE_GOLDEN=force` のときだけ許可）
 - core のテストを vitest で書く。最低限:
   - 人気条件（30坪/2階/個室3、30坪/平屋/個室3、35坪/2階/個室4）で複数 seed とも3案生成できる

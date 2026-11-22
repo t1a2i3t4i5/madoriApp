@@ -109,6 +109,10 @@ export function independentViolations(plan: Plan): string[] {
   plan.floors.forEach((fl) => {
     const wets = fl.rooms.filter((r) => r.type === 'bath' || r.type === 'wash' || r.type === 'laundry')
     if (wets.length === 0) return
+    // 浴室・ランドリーがあれば、同じ階に洗面がある（CLUSTER_PAIRS は両方ある場合しか見ないため別に確認）
+    if (wets.some((r) => r.type === 'bath' || r.type === 'laundry') && !fl.rooms.some((r) => r.type === 'wash')) {
+      out.push(`${fl.label} 浴室・ランドリーがあるのに洗面がない`)
+    }
     for (const wc of fl.rooms) {
       if (wc.type === 'wc' && !wets.some((w) => sharesEdge(wc, w))) out.push(`${fl.label} ${wc.name} が水回りに接していない`)
     }
