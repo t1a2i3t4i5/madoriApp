@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PlanConfig, ScoredPlan } from '../core/types'
 import { planName, planTags } from '../core/describe'
+import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
 import { meters, tatami } from '../lib/format'
 import { clampFloor } from '../lib/floor'
 import { StarButton } from './StarButton'
+import { downloadBlob, safeFileName, svgElementToPng } from '../lib/exportPng'
 
 interface Props {
   cfg: PlanConfig
@@ -24,6 +26,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
   const floor = clampFloor(selectedFloor, plan.floors.length)
   const closeRef = useRef<HTMLButtonElement>(null)
   const [furniture, setFurniture] = useState(false)
+  const [flow, setFlow] = useState(false)
   const [copied, setCopied] = useState<'ok' | 'ng' | null>(null)
   const copy = async () => {
     if (!shareUrl) return
@@ -32,6 +35,21 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
       setCopied('ok')
     } catch {
       setCopied('ng')
+    }
+  }
+  const svgBoxRef = useRef<HTMLDivElement>(null)
+  const [pngState, setPngState] = useState<'idle' | 'busy' | 'ng'>('idle')
+  /** 表示中の階・家具の ON/OFF をそのまま PNG にする */
+  const savePng = async () => {
+    const svg = svgBoxRef.current?.querySelector('svg')
+    if (!svg) return
+    setPngState('busy')
+    try {
+      const blob = await svgElementToPng(svg)
+      downloadBlob(blob, `${safeFileName(`${planName(cfg, plan)}_${plan.floors[floor]?.label ?? ''}`)}.png`)
+      setPngState('idle')
+    } catch {
+      setPngState('ng')
     }
   }
   // onClose は親の再描画のたびに新しい関数になる。ref 経由で最新を呼び、effect は初回マウント時の1回だけ
@@ -59,22 +77,31 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
         <div className="flex flex-wrap gap-1.5">
           {planTags(cfg, plan).map((t) => <span key={t} className="rounded-full bg-surface2 px-[9px] py-[3px] text-[11.5px] font-bold text-ink2">{t}</span>)}
         </div>
+        <p className="mt-2.5 text-[13.5px] leading-[1.75] text-ink">{explainPlan(cfg, plan)}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
           <label className="mt-2.5 inline-flex min-h-9 cursor-pointer select-none items-center gap-2 text-[13px] font-bold text-ink2">
             <input type="checkbox" className="size-[17px]" checked={furniture} onChange={(e) => setFurniture(e.target.checked)} />
             家具を表示
           </label>
+          <label className="mt-2.5 inline-flex min-h-9 cursor-pointer select-none items-center gap-2 text-[13px] font-bold text-ink2">
+            <input type="checkbox" className="size-[17px]" checked={flow} onChange={(e) => setFlow(e.target.checked)} />
+            動線を表示
+          </label>
           {shareUrl && (
             <button type="button" onClick={copy} className="mt-2.5 min-h-9 cursor-pointer rounded-[7px] border border-line bg-surface px-3 py-1 text-[12.5px] font-bold text-ink2">この案のリンクをコピー</button>
           )}
+          <button type="button" onClick={savePng} disabled={pngState === 'busy'} className="no-print mt-2.5 min-h-9 cursor-pointer rounded-[7px] border border-line bg-surface px-3 py-1 text-[12.5px] font-bold text-ink2 disabled:opacity-50">
+            {pngState === 'busy' ? '作成中…' : 'PNGで保存'}
+          </button>
+          {pngState === 'ng' && <span role="status" className="mt-2.5 text-xs text-ink2">PNGを作れませんでした。お使いのブラウザでは対応していない可能性があります</span>}
           <span role="status" className="mt-2.5 text-xs text-ink2">
             {copied === 'ok' && 'コピーしました'}
             {copied === 'ng' && 'コピーできませんでした。アドレスバーのURLをお使いください'}
           </span>
         </div>
-        <div className="mt-2.5 rounded-[9px] border border-[#e3e0d2] bg-paper p-3">
-          <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip showFurniture={furniture} />
+        <div ref={svgBoxRef} className="mt-2.5 rounded-[9px] border border-[#e3e0d2] bg-paper p-3">
+          <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip showFurniture={furniture} showFlow={flow} />
         </div>
         <div className="mt-4 grid gap-[18px] max-[640px]:grid-cols-1 min-[641px]:grid-cols-2">
           <div>

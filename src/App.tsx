@@ -171,7 +171,7 @@ export default function App() {
           <div role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
             <p>この条件では{plans.length}案です。{diagnosis.reason}</p>
             {diagnosis.alts.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="no-print mt-2 flex flex-wrap gap-2">
                 {diagnosis.alts.map((a) => (
                   <button key={a.label} type="button" onClick={() => applyAlt(a)} className="min-h-[38px] cursor-pointer rounded-full border-[1.5px] border-warn-line bg-surface px-3.5 py-1.5 text-[13px] font-extrabold text-ink">{a.label}</button>
                 ))}
@@ -180,13 +180,13 @@ export default function App() {
           </div>
         )}
         {exhausted && (
-          <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+          <p role="status" className="no-print mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
             この条件で出せる案はここまでです。
             <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
             か、条件を少し変えてみてください。
           </p>
         )}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+        <div className="plan-grid grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
           {plans.map((p, i) => (
             <PlanCard
               key={`${state.seed}-${i}`}
@@ -201,12 +201,12 @@ export default function App() {
           ))}
         </div>
         {!showGallery && poolCount > 0 && (
-          <div className="mt-4 text-center">
+          <div className="no-print mt-4 text-center">
             <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
           </div>
         )}
         {showGallery && (
-          <Gallery
+          <div className="no-print"><Gallery
             cfg={cfg}
             plans={galleryList}
             total={poolCount}
@@ -214,7 +214,7 @@ export default function App() {
             onToggleStar={(p) => toggleStar(cfg, p)}
             onOpen={(p, floor) => setDetail({ plan: p, floor })}
             onClose={() => setShowGallery(false)}
-          />
+          /></div>
         )}
       </>
     )
@@ -226,8 +226,8 @@ export default function App() {
         <h1 className="mb-1.5 font-serif text-[clamp(24px,4.5vw,36px)] leading-[1.3] font-bold">条件を選ぶと、間取りが3案出てくる。</h1>
         <p className="max-w-[640px] text-[14.5px] text-ink2">延床・階数・部屋数とこだわりを指定すると、455mmグリッドの上で間取り候補を大量生成し、動線・採光・階段位置を検証して残った中から、顔ぶれの違う3案を並べます。</p>
       </div>
-      <div className="grid items-start gap-5 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
-        <ConditionForm state={state} onChange={patch} onGenerate={next} onRandom={random} />
+      <div className="app-grid grid items-start gap-5 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
+        <div className="no-print"><ConditionForm state={state} onChange={patch} onGenerate={next} onRandom={random} /></div>
         <section aria-label="生成結果">
           {staleVersion && (
             <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
@@ -238,12 +238,12 @@ export default function App() {
           <p className="mt-[22px] text-[11.5px] leading-[1.6] text-ink2">※ 建築基準法・構造は未考慮、敷地は想定の図面です。実際の設計は建築士にご相談ください。寸法は455mmグリッド基準、1坪＝約3.31㎡で換算しています。</p>
         </section>
       </div>
-      <FavoritesShelf
+      <div className="no-print"><FavoritesShelf
         favorites={favorites}
         message={favMessage}
         onOpen={(f) => setDetail({ plan: f.plan, floor: 0, favCfg: f.cfg, favOld: isOldVersion(f) })}
         onRemove={(f) => persist(removeFavorite(favorites, f.cfg, f.plan))}
-      />
+      /></div>
       {detail && (
         <PlanDialog
           key={`${planKey(detail.plan)}-${detail.favCfg ? 'fav' : 'cur'}`}

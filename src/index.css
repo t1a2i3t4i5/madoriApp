@@ -36,3 +36,20 @@
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); line-height: 1.6; }
 input[type="range"] { accent-color: var(--accent); }
+
+/* 印刷: 結果の3案カードだけを読みやすく並べる（操作UI・拡大ダイアログ・ギャラリー・お気に入り棚は隠す） */
+@media print {
+  :root {
+    --bg: #fff; --surface: #fff; --surface2: #eceae3; --ink: #1c1f1d; --ink2: #3d423e;
+    --line: #bbb; --accent: #14604a; --accent-ink: #fff; --warm: #c25e3a; --plan-paper: #fdfcf8; --shadow: none;
+    --chip: #fff; --warn-bg: #fdf3e3; --warn-line: #e5c07a; --warn-ink: #7a5410;
+  }
+  @page { margin: 12mm; }
+  body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print, button, [role="dialog"], input, label { display: none !important; }
+  .app-grid { display: block !important; }
+  /* 1案に全階（1F/2F）を横に並べるので、案は1列に積む */
+  .plan-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 8mm !important; }
+  .print-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; cursor: auto !important; }
+  h2 { break-after: avoid; }
+}

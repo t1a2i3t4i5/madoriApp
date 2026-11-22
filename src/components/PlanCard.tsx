@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { PlanConfig, ScoredPlan } from '../core/types'
 import { planName, planTags } from '../core/describe'
+import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { meters } from '../lib/format'
@@ -30,7 +31,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
     // role=button の中に☆ボタンやタブのボタンを入れ子にしない。
     <article
       onClick={open}
-      className="relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
+      className="print-card relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
     >
       <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-2" />
       <p className="mb-0.5 mr-10 font-serif text-[17.5px] leading-[1.4] font-bold">{name}</p>
@@ -44,8 +45,17 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
           <span key={t} className={`rounded-full px-[9px] py-[3px] text-[11.5px] font-bold ${i === 0 ? 'bg-warm/15 text-warm' : 'bg-surface2 text-ink2'}`}>{t}</span>
         ))}
       </div>
-      <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2">
+      <p className="mb-2.5 text-[12.5px] leading-[1.7] text-ink2">{explainPlan(cfg, plan)}</p>
+      <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2 print:hidden">
         <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+      </div>
+      {/* 印刷専用: 画面は表示中の階だけなので、印刷時は全階を並べる（pattern id は画面用と分ける） */}
+      <div data-print-floors className="hidden gap-2 print:grid print:grid-cols-2" aria-hidden="true">
+        {plan.floors.map((_, fi) => (
+          <div key={fi} className="rounded-[9px] border border-[#e3e0d2] bg-paper p-1.5">
+            <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+          </div>
+        ))}
       </div>
       {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
       <div className="mt-2 flex items-center gap-2 text-xs text-ink2">
