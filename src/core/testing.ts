@@ -75,12 +75,12 @@ export function sharesEdge(a: Room, b: Room): boolean {
 
 /** 辺を共有すべきクラスタ（同じ階に両方あれば隣接していること） */
 const CLUSTER_PAIRS: [Room['type'], Room['type'], string][] = [
-  ['wash', 'bath', '洗面-浴室'], ['master', 'wic', '主寝室-WIC'], ['ldk', 'kitchen', 'LDK-キッチン'], ['entry', 'doma', '玄関-土間'],
+  ['wash', 'bath', '洗面-浴室'], ['laundry', 'wash', 'ランドリー-洗面'], ['master', 'wic', '主寝室-WIC'], ['ldk', 'kitchen', 'LDK-キッチン'], ['entry', 'doma', '玄関-土間'],
 ]
 
 /**
  * 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する／
- * クラスタの辺の共有／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
+ * クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
  */
 export function independentViolations(plan: Plan): string[] {
   const out: string[] = []
@@ -103,6 +103,14 @@ export function independentViolations(plan: Plan): string[] {
       const a = fl.rooms.find((r) => r.type === ta)
       const b = fl.rooms.find((r) => r.type === tb)
       if (a && b && !sharesEdge(a, b)) out.push(`${fl.label} ${label} が辺を共有していない`)
+    }
+  })
+  // トイレは、同じ階に浴室・洗面・ランドリーのどれかがあれば、そのいずれかに接する
+  plan.floors.forEach((fl) => {
+    const wets = fl.rooms.filter((r) => r.type === 'bath' || r.type === 'wash' || r.type === 'laundry')
+    if (wets.length === 0) return
+    for (const wc of fl.rooms) {
+      if (wc.type === 'wc' && !wets.some((w) => sharesEdge(wc, w))) out.push(`${fl.label} ${wc.name} が水回りに接していない`)
     }
   })
   if (plan.floors.length === 2) {
