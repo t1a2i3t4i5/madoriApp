@@ -73,12 +73,27 @@ export interface Floor {
 /** アーキタイプ番号（ARCH_INFO の添字） */
 export type ArchId = 0 | 1 | 2
 
+/**
+ * アーキタイプ内の変種（GEN_VERSION 2）。rev は帯ごとのクラスタ列の逆順フラグ（1F北,1F南,2F北,2F南）、
+ * bedShift は2Fの個室の南北配分（+d: 南の末尾d個を北へ、-1: 北の先頭1個を南へ）
+ */
+export interface Variant {
+  stairEnd: 'E' | 'W'
+  rev: [boolean, boolean, boolean, boolean]
+  bedShift: -1 | 0 | 1 | 2
+}
+
+/** 正規形（v1 と同じ並び） */
+export const CANONICAL: Variant = { stairEnd: 'E', rev: [false, false, false, false], bedShift: 0 }
+
 export interface Plan {
   W: number
   H: number
   floors: Floor[]
   arch: ArchId
   totalArea: number
+  /** 変種。GEN_VERSION 1 の旧データでは undefined */
+  variant?: Variant
 }
 
 export interface ScoreResult {
@@ -92,8 +107,11 @@ export interface ScoredPlan extends Plan {
   sigM: string
 }
 
-/** 案の識別子 "アーキタイプ-幅xy高さ"（例: "2-18x14"）。同じ条件なら1つの案に対応する */
-export type PlanKey = `${ArchId}-${number}x${number}`
+/**
+ * 案の識別子。v1: "アーキタイプ-幅x高さ"（例: "2-18x14"）。
+ * v2: 末尾に変種 "-" + stairEnd + rev4桁 + shift（例: "1-16x14-E01000"）。同じ条件なら1つの案に対応する
+ */
+export type PlanKey = `${ArchId}-${number}x${number}` | `${ArchId}-${number}x${number}-${string}`
 
 export interface Edge {
   dir: 'v' | 'h'

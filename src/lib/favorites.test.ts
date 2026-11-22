@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { enumeratePlans, planKey } from '../core/enumerate'
-import { GEN_VERSION, generatePlans } from '../core/generate'
-import { CONDITIONS, SEEDS, defined } from '../core/testing'
+import { GEN_VERSION } from '../core/generate'
+import type { ScoredPlan } from '../core/types'
+import { CONDITIONS, defined } from '../core/testing'
 import {
   FAVORITES_STORAGE_KEY, MAX_FAVORITES, addFavorite, isFavorited, isOldVersion, loadFavorites, removeFavorite, saveFavorites,
   type Favorite, type KeyValueStorage,
@@ -87,23 +88,33 @@ describe('お気に入り', () => {
     expect(loadFavorites(memory(JSON.stringify([good, good, good])))).toHaveLength(1)
   })
 
-  it('左右反転で planKey がずれる案でも、同じ案として☆状態が一致する', () => {
+  it('planKey が違っても、左右反転の関係（sig / sigM）にある案は同じ案として☆状態が一致する（v1 の key で保存した案など）', () => {
     let shifted = 0
     for (const c of CONDITIONS) {
-      const all = enumeratePlans(c.cfg)
-      for (const seed of SEEDS) {
-        for (const g of generatePlans(c.cfg, seed)) {
-          const a = all.find((x) => x.sig === g.sig || x.sigM === g.sig)
-          if (!a || planKey(a) === planKey(g)) continue
-          shifted++
-          const list = must(addFavorite([], c.cfg, a, 1))
-          expect(isFavorited(list, c.cfg, g), `${planKey(a)} と ${planKey(g)}`).toBe(true)
-          expect(must(addFavorite(list, c.cfg, g, 2)), '重複追加しない').toHaveLength(1)
-          expect(removeFavorite(list, c.cfg, g)).toHaveLength(0)
-        }
+      for (const a of enumeratePlans(c.cfg).slice(0, 5)) {
+        // 反転した配置（sig と sigM が入れ替わる）で、v1 形式の key（variant なし）の案
+        const g: ScoredPlan = { ...a, variant: undefined, sig: a.sigM, sigM: a.sig }
+        if (planKey(a) === planKey(g)) continue
+        shifted++
+        const list = must(addFavorite([], c.cfg, a, 1))
+        expect(isFavorited(list, c.cfg, g), `${planKey(a)} と ${planKey(g)}`).toBe(true)
+        expect(must(addFavorite(list, c.cfg, g, 2)), '重複追加しない').toHaveLength(1)
+        expect(removeFavorite(list, c.cfg, g)).toHaveLength(0)
       }
     }
     expect(shifted, 'key がずれる実例が1件以上ある（空転防止）').toBeGreaterThan(0)
+  })
+
+  it('v1 の旧データ（variant なし・接尾辞なしの key）は有効なまま読め、旧バージョン扱いになる。壊れた variant は捨てる', () => {
+    const { variant: _v, ...v1plan } = p0
+    void _v
+    const old: Favorite = { key: planKey(v1plan), cfg, v: 1, plan: v1plan, savedAt: 5 }
+    expect(old.key).toMatch(/^\d-\d+x\d+$/)
+    const loaded = loadFavorites(memory(JSON.stringify([old])))
+    expect(loaded).toHaveLength(1)
+    expect(isOldVersion(defined(loaded[0]))).toBe(true)
+    const broken = { ...must(addFavorite([], cfg, p0, 1))[0], plan: { ...p0, variant: { stairEnd: 'X', rev: [], bedShift: 9 } } }
+    expect(loadFavorites(memory(JSON.stringify([broken])))).toHaveLength(0)
   })
 
   it('別配置の案は別物', () => {

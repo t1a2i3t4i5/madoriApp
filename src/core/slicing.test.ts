@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { mulberry32 } from './rng'
-import { waterfill, type WaterfillItem } from './slicing'
+import { layoutBand, layoutFloor, waterfill, type WaterfillItem } from './slicing'
+import { cell } from './rooms'
+import type { Band } from './types'
 
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0)
 
@@ -95,5 +97,90 @@ describe('waterfill', () => {
   it('決定的（同じ入力で同じ出力）', () => {
     const items: WaterfillItem[] = [{ min: 2, max: 9, w: 1.3 }, { min: 2, max: 9, w: 2.7 }, { min: 2, max: 9, w: 0.9 }]
     expect(waterfill(17, items)).toEqual(waterfill(17, items))
+  })
+})
+
+describe('layoutBand', () => {
+  it('土間がなくても、溢れたらキッチン+パントリーを結合して再試行する（打ち切らない）', () => {
+    // 幅 W に ldk + kitchen + pantry + entry の min 面積は収まらないが、kitchen+pantry の結合なら収まる
+    const band: Band = { cells: [cell('entry'), cell('ldk'), cell('kitchen'), cell('pantry')] }
+    let merged: string[] | null = null
+    for (let W = 14; W <= 30 && !merged; W++) {
+      for (let h = 7; h <= 12; h++) {
+        const rs = layoutBand(band, W, 0, h)
+        if (rs && rs.length === 3) {
+          merged = rs.map((r) => r.name)
+          break
+        }
+      }
+    }
+    expect(merged).not.toBeNull()
+    expect(merged).toContain('キッチン・パントリー')
+  })
+  it('結合しても収まらなければ null', () => {
+    expect(layoutBand({ cells: [cell('ldk'), cell('entry')] }, 6, 0, 8)).toBeNull()
+  })
+})
+
+describe('layoutFloor', () => {
+  const bands = (): Band[] => [
+    { cells: [cell('wash'), cell('bath'), cell('wc'), cell('stair', { fixedW: 4 })], minH: 4, maxH: 8 },
+    { cells: [cell('hall')], fixedH: 2 },
+    { cells: [cell('entry'), cell('ldk')], minH: 7, maxH: 12 },
+  ]
+  it('帯の高さを返し、合計が H になる', () => {
+    const r = layoutFloor(16, 16, bands())
+    expect(r).not.toBeNull()
+    expect(r?.heights.reduce((s, h) => s + h, 0)).toBe(16)
+    expect(r?.heights[1]).toBe(2)
+  })
+  it('capH を超えない。cap が min 未満なら null', () => {
+    const free = layoutFloor(16, 16, bands())
+    const south = free?.heights[2] ?? 0
+    expect(south).toBeGreaterThan(7)
+    const capped = layoutFloor(16, 16, bands(), { capH: { 2: south - 1 } })
+    expect(capped).not.toBeNull()
+    expect(capped?.heights[2]).toBeLessThanOrEqual(south - 1)
+    expect(capped?.heights.reduce((s, h) => s + h, 0)).toBe(16)
+    expect(layoutFloor(16, 16, bands(), { capH: { 2: 6 } })).toBeNull()
+  })
+  it('上限の拡張（maxH 合計が H に満たない）でも cap を守る', () => {
+    // 16x24: maxH 合計 8+12 < 22 なので、通常は幅の大きい南帯を 15 まで広げる
+    const free = layoutFloor(16, 24, bands())
+    expect(free?.heights[2]).toBe(15)
+    const capped = layoutFloor(16, 24, bands(), { capH: { 2: 14 } })
+    expect(capped).not.toBeNull()
+    expect(capped?.heights[2]).toBe(14)
+    expect(capped?.heights.reduce((s, h) => s + h, 0)).toBe(24)
+    // cap が小さすぎて合計が H に届かなければ null
+    expect(layoutFloor(16, 24, bands(), { capH: { 2: 12 } })).toBeNull()
+  })
+  it('吹抜の y 保証: 1F南帯より2F南帯が高くなる合成構成で、cap が実際に効く', () => {
+    // 1F の南帯は maxH 8、2F の南帯は cap なしだと 9 になる（吹抜がLDKの y 範囲からはみ出す構成）
+    const f1: Band[] = [
+      { cells: [cell('wash'), cell('bath'), cell('wc'), cell('stair', { fixedW: 4 })], minH: 4, maxH: 8 },
+      { cells: [cell('hall')], fixedH: 2 },
+      { cells: [cell('entry'), cell('ldk')], minH: 7, maxH: 8 },
+    ]
+    const f2 = (): Band[] => [
+      { cells: [cell('wc'), cell('bed'), cell('stair', { fixedW: 4 })], minH: 5, maxH: 9 },
+      { cells: [cell('hall')], fixedH: 2 },
+      { cells: [cell('master'), cell('bed'), cell('bed')], minH: 6, maxH: 12 },
+    ]
+    const south1 = layoutFloor(16, 16, f1)?.heights[2]
+    expect(south1).toBe(8)
+    const uncapped = layoutFloor(16, 16, f2())
+    expect(uncapped).not.toBeNull()
+    expect(uncapped?.heights[2]).toBeGreaterThan(south1 ?? 0) // cap がなければ違反になる
+    const capped = layoutFloor(16, 16, f2(), { capH: { 2: south1 ?? 0 } })
+    expect(capped).not.toBeNull()
+    expect(capped?.heights[2]).toBeLessThanOrEqual(south1 ?? 0)
+    expect(capped?.heights).toEqual([6, 2, 8])
+  })
+  it('入力の bands を書き換えない', () => {
+    const b = bands()
+    const before = JSON.stringify(b)
+    layoutFloor(16, 16, b, { capH: { 2: 9 } })
+    expect(JSON.stringify(b)).toBe(before)
   })
 })

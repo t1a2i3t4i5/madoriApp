@@ -11,19 +11,6 @@ export function mulberry32(seed: number): Rng {
   }
 }
 
-export function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
-  const a = arr.slice()
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    const x = a[i]
-    const y = a[j]
-    if (x === undefined || y === undefined) continue // j <= i < length なので到達しない
-    a[i] = y
-    a[j] = x
-  }
-  return a
-}
-
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v))
 }

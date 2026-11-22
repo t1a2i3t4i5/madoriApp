@@ -1,5 +1,5 @@
 import type { Band, Cell, Footprint, Room } from './types'
-import { clamp, shuffle, type Rng } from './rng'
+import { clamp } from './rng'
 
 export interface WaterfillItem {
   min: number
@@ -142,60 +142,96 @@ function tryBand(cells: Cell[], W: number, y: number, h: number): Room[] | null 
 
 /** 帯（バンド）1本を横に割り付ける。fixedWセルは固定幅、それ以外はwater-filling */
 export function layoutBand(band: Band, W: number, y: number, h: number): Room[] | null {
-  let cells: Cell[] | null = band.cells
-  // 小物セルが多すぎてmin合計が溢れる場合はクラスタを結合して再試行する
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const first = tryBand(band.cells, W, y, h)
+  if (first) return first
+  // 小物セルが多すぎてmin合計が溢れる場合はクラスタを結合して再試行する。結合できるペアがなければ次の結合へ進む
+  let cells = band.cells
+  const merges: [Cell['type'], Cell['type'], string, Cell['type']][] = [
+    ['entry', 'doma', '玄関・土間', 'doma'],
+    ['kitchen', 'pantry', 'キッチン・パントリー', 'kitchen'],
+  ]
+  for (const [t1, t2, label, keep] of merges) {
+    const merged = mergePair(cells, t1, t2, label, keep)
+    if (!merged) continue
+    cells = merged
     const res = tryBand(cells, W, y, h)
     if (res) return res
-    if (attempt === 0) cells = mergePair(cells, 'entry', 'doma', '玄関・土間', 'doma')
-    else if (attempt === 1) cells = mergePair(cells, 'kitchen', 'pantry', 'キッチン', 'kitchen')
-    if (!cells) return null
   }
   return null
 }
 
-/** 1フロア分: 帯の高さをwater-fillingで決めてから各帯を割り付ける */
-export function layoutFloor(W: number, H: number, bands: Band[]): Room[] | null {
+export interface LayoutFloorOpts {
+  /** 帯番号 → 高さの上限（余りを吸わせる拡張もこれを超えない） */
+  capH?: Record<number, number>
+}
+
+/** 1フロア分: 帯の高さをwater-fillingで決めてから各帯を割り付ける。帯の高さ（帯番号順）も返す */
+export function layoutFloor(
+  W: number,
+  H: number,
+  bands: Band[],
+  opts?: LayoutFloorOpts,
+): { rooms: Room[]; heights: number[] } | null {
+  const capH = opts?.capH
   const fixedH = bands.reduce((s, b) => s + (b.fixedH || 0), 0)
-  const flexBands = bands.filter((b) => !b.fixedH)
   const heights: Record<number, number> = {}
-  if (flexBands.length) {
-    const items: WaterfillItem[] = flexBands.map((b) => {
+  const flexIdx = bands.flatMap((b, i) => (b.fixedH ? [] : [i]))
+  if (flexIdx.length) {
+    const items: WaterfillItem[] = []
+    for (const i of flexIdx) {
+      const b = bands[i]
+      if (!b) return null
       const t = b.cells.reduce((s, c) => s + (c.fixedW ? c.fixedW * 7 : c.target), 0)
-      return { min: b.minH || 5, max: b.maxH || 14, w: Math.max(4, t / W) }
-    })
+      const cap = capH?.[i]
+      const min = b.minH || 5
+      let max = b.maxH || 14
+      if (cap !== undefined) {
+        if (cap < min) return null
+        max = Math.min(max, cap)
+      }
+      items.push({ min, max, w: Math.max(4, t / W) })
+    }
     const needH = H - fixedH
     if (items.reduce((s, i) => s + i.max, 0) < needH) {
       let widest: WaterfillItem | undefined
-      for (const it of items) {
-        if (!widest || it.w > widest.w) widest = it
+      let widestIdx = -1
+      for (const [k, it] of items.entries()) {
+        if (!widest || it.w > widest.w) {
+          widest = it
+          widestIdx = k
+        }
       }
-      if (widest) widest.max = needH
+      if (widest) {
+        const cap = capH?.[flexIdx[widestIdx] ?? -1]
+        widest.max = cap !== undefined ? Math.min(needH, cap) : needH
+      }
     }
     const alloc = waterfill(needH, items)
     if (!alloc) return null
-    for (const [i, b] of flexBands.entries()) {
-      const h = alloc[i]
+    for (const [k, i] of flexIdx.entries()) {
+      const h = alloc[k]
       if (h === undefined) return null
-      heights[bands.indexOf(b)] = h
+      heights[i] = h
     }
   }
   let y = 0
   const rooms: Room[] = []
+  const hs: number[] = []
   for (const [i, b] of bands.entries()) {
     const h = b.fixedH || heights[i]
     if (h === undefined) return null
     const rs = layoutBand(b, W, y, h)
     if (!rs) return null
     rs.forEach((r) => rooms.push(r))
+    hs.push(h)
     y += h
   }
   if (y !== H) return null
-  return rooms
+  return { rooms, heights: hs }
 }
 
-/** 外形候補（シャッフル前）: 目標面積に近く縦横比が極端でない (W,H) の上位6件。enumerate と共有する */
-export function footprintList(targetArea: number): Footprint[] {
+/** 外形候補（シャッフル前）: 目標面積に近く縦横比が極端でない (W,H) の上位 limit 件（既定10）。enumerate と共有する */
+export function footprintList(targetArea: number, limit = 10): Footprint[] {
   const list: Footprint[] = []
   for (let W = 12; W <= 30; W++) {
     const H = Math.round(targetArea / W)
@@ -205,10 +241,5 @@ export function footprintList(targetArea: number): Footprint[] {
     list.push({ W, H, diff: Math.abs(W * H - targetArea) })
   }
   list.sort((a, b) => a.diff - b.diff)
-  return list.slice(0, 6)
-}
-
-/** 外形候補: footprintList を seed 付き乱数でシャッフルしたもの */
-export function footprintCandidates(targetArea: number, rng: Rng): Footprint[] {
-  return shuffle(footprintList(targetArea), rng)
+  return list.slice(0, limit)
 }
