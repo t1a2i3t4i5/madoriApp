@@ -42,6 +42,20 @@ describe('doorOK', () => {
     }
   })
 
+  it('浴室のドアは洗面とだけ付く（ホール・階段・土間などとは付かない）', () => {
+    expect(doorOK(room('bath', 0), room('wash', 4))).toBe(true)
+    expect(doorOK(room('wash', 0), room('bath', 4))).toBe(true)
+    for (const t of ['hall', 'stair', 'doma', 'laundry', 'wic', 'study'] as RoomType[]) {
+      expect(doorOK(room('bath', 0), room(t, 4)), `bath-${t}`).toBe(false)
+      expect(doorOK(room(t, 0), room('bath', 4)), `${t}-bath`).toBe(false)
+    }
+  })
+
+  it('階段-トイレはドアを付けない（両順序）', () => {
+    expect(doorOK(room('stair', 0), room('wc', 4))).toBe(false)
+    expect(doorOK(room('wc', 0), room('stair', 4))).toBe(false)
+  })
+
   it('定義の全エントリが正規形（pairKey と一致する形）であること', () => {
     for (const [a, b] of [...NO_DOOR_PAIRS, ...PAIR_OK_PAIRS]) {
       expect(`${a}-${b}`, `${a}-${b} は正規形でない`).toBe(pairKey(a, b))

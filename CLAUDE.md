@@ -34,7 +34,7 @@ npm test      # vitest
   - `archetypes.ts`: アーキタイプ（`bandsFor` が帯ごとのクラスタ列を返す）、`applyVariant`（変種 `Variant` の適用。ユニット単位の並べ替え・階段の東西・2F個室の南北配分）、`buildPlan`（外形と変種に当てはめて1案を組み立てる。1F→2Fの順に組み、階段の1F/2F一致・吹抜がLDK直上（x・y とも。吹抜ありは2F南帯の高さを1F南帯以下に抑える）に収まるかをここで検査し、満たさなければ null）
   - `derive.ts`: 隣接グラフからのドア・窓の自動生成
     - ドア除外表 `NO_DOOR_PAIRS` / `PAIR_OK_PAIRS` は `[RoomType, RoomType]` のペア配列で、`pairKey`（アルファベット順に正規化）の Set で照合する。以前は文字列キーを手書きしており、`entry-bath` / `ldk-bath` / `master-bath` / `bed-bath` / `void-stair` が正規形（`bath-entry` 等）と一致せず、ドア除外が効いていなかった。このうち実際に `doorOK` の結果が変わるのは `bath-entry` と `bath-ldk` の2ペアだけ（entry・ldk が VIA のため、以前は true になっていた）で、固定3帯構成では hall 帯を挟むため隣接せず、生成結果は1件も変わらない潜在バグだった（修正前後で gen-v2 fixture 無変更）。残りの `bath-master` / `bath-bed` / `stair-void` は、VIA でも PAIR_OK でもない、または void を含むため、元々 false で結果は変わらない。将来スライシング木・L字外形を入れるとこれらのペアが隣接しうるので、その時点で表に出る。定義は `derive.test.ts` で正規形を検査している
-  - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積のみ（階段・吹抜の整合は buildPlan 側、水回り隣接は未実装）
+  - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積・水回りの隣接（`wetViolations`: 階ごとに辺共有2セル以上で、浴室→洗面、ランドリー→洗面、トイレ→同じ階の浴室/洗面/ランドリーのいずれか。キッチン・パントリーは対象外）。階段・吹抜の整合は buildPlan 側。GEN_VERSION 3 では水回りユニットを ランドリー→洗面→浴室 の順に並べるため、制約Cによる棄却は0件（実測）
   - `score.ts`: ソフトスコア
   - `diversity.ts`: 3案の多様性選抜
   - `describe.ts`: プランの名前・特徴タグ生成
@@ -51,13 +51,14 @@ npm test      # vitest
 
 ## 生成ロジックの不変条件（安易に変えないこと）
 
-設計はClaude（Sonnet/Opus）との技術相談で確定済み。生成アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げ、ゴールデンテスト（gen-v2 fixture）を更新すること（手順は「テスト方針」節）。現在は GEN_VERSION 2。
+設計はClaude（Sonnet/Opus）との技術相談で確定済み。生成アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げ、ゴールデンテスト（`__fixtures__/gen-v<GEN_VERSION>.json`）を更新すること（手順は「テスト方針」節）。現在は GEN_VERSION 3。
 
 - 単位: **1セル = 455mm（半間）**。1畳 = 8セル²、1坪 = 16セル²。座標はすべて整数セル
 - 骨格: **現状は固定3帯構成**（北帯 / ホール帯 / 南帯の3本の水平帯。1Fの階段は北帯、LDK等は南帯）。帯の高さ・帯内の幅の配分は clamp付き water-filling（二分探索）+ 最大剰余法。910mm寄せはスコアで扱う（座標のスナップはしない）。汎用スライシング木は将来の課題。アーキタイプ内の変種（クラスタ列の逆順・階段の東西・2F個室の南北配分）で幅を出す
 - パイプライン: 候補プール（seed と無関係に全部作る: 派生（ドア・窓）→ ハード制約で検証・棄却 → スコア → 左右反転の重複除去）→ seed による選抜（最良から8点以内の窓・温度2の Gumbel-top-k・多様性しきい値0.16）で3案。seed は選抜にだけ使う
 - ハード制約（実装済み）: 全室への到達可能性（通り抜け可否は部屋種別ごとの via 集合で判定）、居室の外壁接触（採光）、最低面積 — いずれも `validate.ts`。階段の1F/2F座標一致、吹抜がLDK直上（x・y とも）に収まること — こちらは `archetypes.ts` の `buildPlan` で検査
-- ハード制約（**未実装**）: 水回りの隣接（水回り集約はスコアで緩く評価するのみ）
+- ハード制約（GEN_VERSION 3 で実装）: 水回りの隣接（上記 `validate.ts`）。水回り集約のスコアは従来どおり緩い評価として残す
+- ドア: 浴室のドアは洗面とだけ付ける。階段-トイレのドアは付けない（`derive.ts` の `doorOK` / `NO_DOOR_PAIRS`）
 - スコアの重み初期値: 採光0.20 / 面積適合0.20 / 縦横比0.15 / 廊下率0.15 / ドア0.15 / 水回り集約0.10 / モジュール0.05
 - テンプレートは部屋単位ではなくクラスタ単位（玄関+土間、キッチン+パントリー、主寝室+WIC など）
 - seed で再現可能にする。入力 + seed + genVersion は URL ハッシュに保存する
@@ -68,7 +69,6 @@ npm test      # vitest
 ## 今後の課題・既知の問題（現状は挙動を変えない）
 
 - **階段の高さの食い違い**: 1F と 2F で階段の x・幅は一致させているが、y（帯の高さ）は階ごとに決まるため一致しない（GEN_VERSION 1 の案の約84%で発生）。揃えると0案が激増するため別課題
-- **水回り隣接のハード制約**（GEN_VERSION 3 の課題）。GEN_VERSION 2 ではクラスタの辺の共有（洗面-浴室、主寝室-WIC、LDK-キッチン、玄関-土間）をテストの独立検証で確かめるに留めた
 - 汎用スライシング木、3案が揃わない条件（0案になる境界条件が一定数ある。診断と代替案は `diagnoseEmpty`）の根本改善
 
 ### その他の見送り候補（v2 以降）
@@ -76,7 +76,6 @@ npm test      # vitest
 - アイソメ表示
 - 好みプリセット（家事動線重視、収納重視 など）
 - 北道路・東西道路、L字外形、中庭型
-- 水回り隣接のハード制約
 - 3案が揃わない境界条件（0〜2案）の改善
 - 検討事項: ギャラリーの最遠点選択（`galleryPlans`）はスコアの低い案が混じりうる。スコア下限や重み付けを入れるか検討する（今回は仕様変更しない）
 
@@ -90,8 +89,8 @@ npm test      # vitest
 
 ## テスト方針
 
-- golden は2本立て。**v1 の正解は `legacy/index.html`**（`src/core/golden.test.ts` が vm で実行し、`planName` / `planTags` / `feasibility` を比較する。`generatePlans` は GEN_VERSION 2 で生成方式が変わったため比較しない）。**v2 の出力は `src/core/__fixtures__/gen-v2.json`**（`golden-v2.test.ts`: 生成案65件・候補プールの件数/上位10件/ハッシュ・feasibility グリッド192条件の3案）
-- アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げたうえで `UPDATE_GOLDEN=1 npx vitest run src/core/golden-v2.test.ts` で fixture を書き出す。fixture の genVersion が現在の `GEN_VERSION` と同じまま中身だけ変わる更新は拒否される（`UPDATE_GOLDEN=force` のときだけ許可）
+- golden は2本立て。**v1 の正解は `legacy/index.html`**（`src/core/golden.test.ts` が vm で実行し、`planName` / `planTags` / `feasibility` を比較する。`generatePlans` は GEN_VERSION 2 で生成方式が変わったため比較しない）。**版別の出力は `src/core/__fixtures__/gen-v<GEN_VERSION>.json`**（現行は gen-v3.json。gen-v2.json は v2 からの移行検証用に残す。`golden-fixture.test.ts`: 生成案78件（13条件×6 seed）・候補プールの件数/上位10件/ハッシュ・feasibility グリッド192条件の3案）
+- アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げたうえで `UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts` で fixture を書き出す。fixture の genVersion が現在の `GEN_VERSION` と同じまま中身だけ変わる更新は拒否される（`UPDATE_GOLDEN=force` のときだけ許可）
 - core のテストを vitest で書く。最低限:
   - 人気条件（30坪/2階/個室3、30坪/平屋/個室3、35坪/2階/個室4）で複数 seed とも3案生成できる
   - 生成プランが validator のハード制約を満たす

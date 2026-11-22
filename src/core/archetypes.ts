@@ -133,6 +133,9 @@ const FOLLOWS: Partial<Record<RoomType, RoomType>> = {
   wic: 'master', bath: 'wash', laundry: 'wash', kitchen: 'ldk', pantry: 'ldk', doma: 'entry',
 }
 
+/** 水回りユニット内の並び順（小さいほど西側）: ランドリー → 洗面 → 浴室 */
+const WET_ORDER: Partial<Record<RoomType, number>> = { laundry: 0, wash: 1, bath: 2 }
+
 /**
  * 変種を帯に適用する。bands / cells は書き換えず新しく作る。floor は 1始まり。
  * - 帯のセルをユニット（ヘッド+従属: wic→master, bath/laundry→wash, kitchen/pantry→ldk, doma→entry）に
@@ -167,6 +170,10 @@ export function applyVariant(bands: Band[], floor: number, variant: Variant, has
     for (const c of followers) {
       const u = headUnit.get(FOLLOWS[c.type] as RoomType)
       if (u) u.push({ ...c })
+    }
+    // 水回りユニットは「ランドリー → 洗面 → 浴室」（洗面が中心）に並べる。洗面が浴室とランドリーの両方と辺を共有する
+    for (const u of units) {
+      if (u[0]?.type === 'wash') u.sort((p, q) => (WET_ORDER[p.type] ?? 1) - (WET_ORDER[q.type] ?? 1))
     }
     const isFixedWest = (u: Cell[]) => {
       const t = u[0]?.type
