@@ -20,15 +20,25 @@ export function sharedEdge(a: Room, b: Room): Edge | null {
   return null
 }
 
-const NO_DOOR = new Set([
-  'entry-bath', 'entry-wc', 'ldk-bath', 'ldk-wc', 'bath-wc', 'master-bath', 'master-wc',
-  'bed-bath', 'bed-wc', 'void-stair',
-])
-const PAIR_OK = new Set(['kitchen-pantry', 'master-wic', 'laundry-wash', 'bath-wash', 'doma-entry', 'bed-hall'])
+type RoomPair = readonly [RoomType, RoomType]
 
-function pairKey(a: RoomType, b: RoomType): string {
+/** ドアを付けないペア。照合は pairKey で正規化した Set で行うので順不同でも効くが、定義は正規形（アルファベット順）で書く（テストで検査） */
+export const NO_DOOR_PAIRS: readonly RoomPair[] = [
+  ['bath', 'entry'], ['entry', 'wc'], ['bath', 'ldk'], ['ldk', 'wc'], ['bath', 'wc'],
+  ['bath', 'master'], ['master', 'wc'], ['bath', 'bed'], ['bed', 'wc'], ['stair', 'void'],
+]
+/** VIA（通り抜け可）の部屋を含まないペアのうち、ドアを付けてよいもの */
+export const PAIR_OK_PAIRS: readonly RoomPair[] = [
+  ['kitchen', 'pantry'], ['master', 'wic'], ['laundry', 'wash'], ['bath', 'wash'], ['doma', 'entry'], ['bed', 'hall'],
+]
+
+/** 部屋タイプ2つを順不同で同じキーにする（アルファベット順） */
+export function pairKey(a: RoomType, b: RoomType): string {
   return [a, b].sort().join('-')
 }
+
+const NO_DOOR = new Set(NO_DOOR_PAIRS.map(([a, b]) => pairKey(a, b)))
+const PAIR_OK = new Set(PAIR_OK_PAIRS.map(([a, b]) => pairKey(a, b)))
 
 /** 隣接する2部屋にドアを付けてよいか。通り抜け可否は部屋種別ごとの via 集合で判定 */
 export function doorOK(a: Room, b: Room): boolean {

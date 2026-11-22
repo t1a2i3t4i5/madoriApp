@@ -33,6 +33,7 @@ npm test      # vitest
   - `program.ts`: 実現可能性判定（`feasibility`）と、生成0案時の診断（`diagnoseEmpty`: どの階が崩れたかの理由と、`generatePlans` が実際に3案を返すことを確かめた代替案を最大3件）。入力 → 部屋プログラムの変換は archetypes.ts の `bandsFor` が担う
   - `archetypes.ts`: アーキタイプ（`bandsFor` が帯ごとのクラスタ列を返す）、`applyVariant`（変種 `Variant` の適用。ユニット単位の並べ替え・階段の東西・2F個室の南北配分）、`buildPlan`（外形と変種に当てはめて1案を組み立てる。1F→2Fの順に組み、階段の1F/2F一致・吹抜がLDK直上（x・y とも。吹抜ありは2F南帯の高さを1F南帯以下に抑える）に収まるかをここで検査し、満たさなければ null）
   - `derive.ts`: 隣接グラフからのドア・窓の自動生成
+    - ドア除外表 `NO_DOOR_PAIRS` / `PAIR_OK_PAIRS` は `[RoomType, RoomType]` のペア配列で、`pairKey`（アルファベット順に正規化）の Set で照合する。以前は文字列キーを手書きしており、`entry-bath` / `ldk-bath` / `master-bath` / `bed-bath` / `void-stair` が正規形（`bath-entry` 等）と一致せず、ドア除外が効いていなかった。固定3帯構成では対象ペアが隣接しない、または元々ドアが付かないため生成結果は1件も変わらない潜在バグだった（修正前後で gen-v2 fixture 無変更）。将来スライシング木・L字外形を入れるとこれらのペアが隣接しうるので、その時点で表に出る。定義は `derive.test.ts` で正規形を検査している
   - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積のみ（階段・吹抜の整合は buildPlan 側、水回り隣接は未実装）
   - `score.ts`: ソフトスコア
   - `diversity.ts`: 3案の多様性選抜
