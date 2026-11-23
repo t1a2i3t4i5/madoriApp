@@ -43,6 +43,9 @@ export interface FloorSvgProps {
   scale?: { maxW: number; maxH: number }
 }
 
+/** 縦に積むとき、長音「ー」は横線のままだと読めないので「｜」にする */
+const vch = (ch: string) => (ch === 'ー' ? '｜' : ch)
+
 function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean }) {
   const cx = r.x + r.w / 2
   // 対面キッチンのカウンターがあるLDKはラベルを下へ逃がす
@@ -55,7 +58,8 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
   if (r.type === 'stair') {
     // 階段は矢印と重ならない上端に置く。矢印を逃がせない低い階段は名前を省く（段と矢印で階段と分かる）
     if (r.h < STAIR_LABEL_MIN_H || r.w < 2.2) return null
-    return <text x={cx} y={r.y + 1.7} fontSize={Math.min(LABEL_FS, (r.w - 0.5) / len)} {...common}>{r.name}</text>
+    // 段線の上でも読めるよう、白い縁取りを常に付ける
+    return <text x={cx} y={r.y + 1.7} fontSize={Math.min(LABEL_FS, (r.w - 0.5) / len)} {...common} {...outline}>{r.name}</text>
   }
   // 細長い部屋（玄関・トイレ等）はラベルを縦積みにして壁に触れさせない
   if (isVerticalLabel(r)) {
@@ -64,7 +68,7 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
     return (
       <text fontSize={fs} {...common}>
         {Array.from(r.name).map((ch, i) => (
-          <tspan key={i} x={cx} y={y0 + i * 1.08}>{ch}</tspan>
+          <tspan key={i} x={cx} y={y0 + i * 1.08}>{vch(ch)}</tspan>
         ))}
       </text>
     )
@@ -81,7 +85,7 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
       return (
         <text fontSize={fs} {...common}>
           {Array.from(r.name).map((ch, i) => (
-            <tspan key={i} x={cx} y={y0 + i * step}>{ch}</tspan>
+            <tspan key={i} x={cx} y={y0 + i * step}>{vch(ch)}</tspan>
           ))}
         </text>
       )
@@ -195,12 +199,13 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
           <circle cx={0.7} cy={0.7} r={0.16} fill="#b5b0a0" />
         </pattern>
       </defs>
-      {/* 方位: 小さな円形コンパス（図の中だけの色）。余白の右上に収める */}
-      <g transform={`translate(${W - 0.9} ${-PAD_TOP + 0.95})`}>
-        <circle r={0.82} fill="#fff" stroke="#E05A1E" strokeWidth={0.12} />
-        <path d="M 0 -0.7 L 0.32 0.15 L 0 -0.05 L -0.32 0.15 Z" fill="#E05A1E" />
-        <path d="M 0 0.7 L 0.32 -0.15 L 0 0.05 L -0.32 -0.15 Z" fill="#c9c6bd" />
-        <text y={-1.0} fontSize={0.95} fontWeight={700} fill="#E05A1E" textAnchor="middle">N</text>
+      {/* 方位: 小さな円形コンパス（図の中だけの色）。余白の左上に置く（右上はカードの☆ボタンに隠れる）。
+          N は円の右隣に置き、PAD_TOP の余白内（viewBox 内）に円・矢印・N がすべて収まる */}
+      <g transform={`translate(1 ${-PAD_TOP + 0.95})`}>
+        <circle r={0.75} fill="#fff" stroke="#E05A1E" strokeWidth={0.12} />
+        <path d="M 0 -0.62 L 0.29 0.13 L 0 -0.04 L -0.29 0.13 Z" fill="#E05A1E" />
+        <path d="M 0 0.62 L 0.29 -0.13 L 0 0.04 L -0.29 -0.13 Z" fill="#c9c6bd" />
+        <text x={1.0} y={0.33} fontSize={0.95} fontWeight={700} fill="#E05A1E" textAnchor="start">N</text>
       </g>
       {/* 下屋（部分二階の2階）: 1階の外形を破線で重ね、1階の板から2階の板を引いた部分に淡いハッチと「下屋」ラベル。
           2階の外壁・窓より下層に描く（後に描くと外壁が半分の太さに見え、窓の二重線が潰れる） */}

@@ -50,8 +50,10 @@ export function isVerticalLabel(r: Room): boolean {
 }
 
 /**
- * 部屋名ラベルが占める領域。FloorSvg の RoomLabel と同じ中心・同じ文字サイズ（大きい部屋は 1.55、それ以外は 1.25）で見積もる。
+ * 部屋名ラベルが占める領域の保守的な見積もり。FloorSvg の RoomLabel は現在、室名を全室 fontSize 1.2（幅に収まらないときだけ縮小）で描くが、
+ * ここでは中心を揃えたうえで大きい部屋 1.55・それ以外 1.25 の文字サイズで見積もるため、実際のラベルを内包する（やや広め）。
  * 縦積みラベル（幅の狭い部屋）は、1文字ずつ 1.08 間隔で積む描画に合わせて縦長の矩形にする。
+ * 見積もりは配置結果を変えないよう据え置いており、描画寸法を変えてもこの矩形が実際のラベルを覆っていれば回避は有効。
  * 畳数行は含めない（含めると標準的な主寝室にベッドが置けなくなるため）。畳数行は areaLabelRect で別に見積もり、furnish が2段階で避ける。
  */
 export function labelRect(r: Room, kitchenFace: boolean): Rect {
@@ -71,8 +73,9 @@ export function labelRect(r: Room, kitchenFace: boolean): Rect {
 }
 
 /**
- * 畳数行（「7畳」等の補助行）が占める領域。FloorSvg の RoomLabel と同じ条件（縦積みでなく、幅5以上かつ高さ4.5以上の部屋）でのみ描かれる。
- * 描画は fontSize 1.2、ベースライン cy+1.55、中央揃え。幅は 数字0.65・小数点0.35・「畳」1.2 で見積もる（余裕込み）。
+ * 帖数行（「7.9帖」等の補助行）が占める領域の保守的な見積もり。FloorSvg の RoomLabel と同じ条件（縦積みでなく、幅5以上かつ高さ4.5以上の部屋）でのみ描かれる。
+ * 実際の描画は fontSize 1.0（AREA_FS）、ベースライン cy+1.25、中央揃え。ここでは fontSize 1.2・ベースライン cy+1.55 相当の
+ * やや大きく下寄りの矩形（幅は 数字0.65・小数点0.35・「帖」1.2 で見積もる。余裕込み）にしてあり、実際の行を内包する。
  */
 export function areaLabelRect(r: Room, kitchenFace: boolean): Rect | null {
   if (isVerticalLabel(r) || !(r.w >= 5 && r.h >= 4.5)) return null
