@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { candidatePool } from './generate'
 import { computeDoors, doorSwing, entryDoor, sharedEdge } from './derive'
-import { VIA } from './rooms'
+import { VIA, findEntry } from './rooms'
 import { CONDITIONS } from './testing'
 import type { Room } from './types'
 
@@ -38,7 +38,7 @@ describe('ドアの開き形状（全条件・全候補・全階）', () => {
               expect(s.opens, `${d.a.type}-${d.b.type} 切替は重なり回避のときだけ`).not.toBe(doorSwing(d.a, d.b, d.edge).opens)
             }
           }
-          const entry = fl.rooms.find((r) => r.type === 'entry')
+          const entry = findEntry(fl.rooms)
           if (entry && entry.y + entry.h === p.H) {
             entries++
             const ed = entryDoor(entry, p.H)
@@ -51,8 +51,7 @@ describe('ドアの開き形状（全条件・全候補・全階）', () => {
       }
       expect(doors, '空振り防止').toBeGreaterThan(0)
       expect(flipped, '開き先の切替は例外的').toBeLessThan(doors * 0.05)
-      // GEN_VERSION 4: 33坪/2階/土間+パントリーは、玄関の短辺3と土間の短辺3で幅が溢れ、全案で「玄関・土間」の結合セル（type doma）になる
-      if (!(cfg.feats.includes('doma') && cfg.floors === 2)) expect(entries, '空振り防止').toBeGreaterThan(0)
+      expect(entries, '空振り防止（結合セル doma の案も玄関として数える）').toBeGreaterThan(0)
     })
   }
 

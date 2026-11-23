@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Plan, Room, RoomCategory } from '../core/types'
-import { ROOM } from '../core/rooms'
+import { ROOM, findEntry } from '../core/rooms'
 import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
@@ -160,7 +160,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
   // 存在しない階を指された場合は何も描かない（フックの後で判定する）
   if (!fl) return null
   const ldk = fl.rooms.find((r) => r.type === 'ldk')
-  const entry = fl.rooms.find((r) => r.type === 'entry')
+  const entry = findEntry(fl.rooms)
 
   let vbX = -PAD_X, vbW = W + PAD_X * 2
   const vbY = -PAD_TOP
