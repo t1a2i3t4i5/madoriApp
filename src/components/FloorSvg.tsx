@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { Plan, Room, RoomCategory } from '../core/types'
 import { ROOM } from '../core/rooms'
-import { DOOR_R, computeDoors, computeWindows } from '../core/derive'
+import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { Furniture } from './Furniture'
 import { Fixtures } from './Fixtures'
@@ -108,7 +108,6 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
   // 外形が狭くて凡例の文字が右にはみ出す場合は、右へ広げる
   vbW = Math.max(vbW, 1.2 + legendWidth(flows) + 0.6)
   vbH += legendHeight(flows.length)
-  const R = DOOR_R
   const counter = ldk && kitchenFace ? kitchenCounter(ldk) : null
 
   return (
@@ -164,14 +163,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       </g>
       {/* ドアの開き弧 */}
       <g stroke="#6d675c" strokeWidth={0.13} fill="rgba(109,103,92,0.10)">
-        {doors.map((d, i) => {
-          const e = d.edge
-          return e.dir === 'v' ? (
-            <path key={i} d={`M ${e.at} ${e.mid} L ${e.at} ${e.mid - R} A ${R} ${R} 0 0 1 ${e.at + R} ${e.mid} Z`} />
-          ) : (
-            <path key={i} d={`M ${e.mid} ${e.at} L ${e.mid - R} ${e.at} A ${R} ${R} 0 0 1 ${e.mid} ${e.at - R} Z`} />
-          )
-        })}
+        {doors.map((d, i) => <path key={i} d={doorPath(d)} />)}
       </g>
       {/* 壁（外壁は内壁の約2.5倍の太さ） */}
       <g fill="none" stroke="#3a382f">
@@ -183,8 +175,8 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} />)}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === H && (() => {
-        const ex = entry.x + entry.w / 2
-        return <path d={`M ${ex} ${H} L ${ex} ${H + 2.0} A 2.0 2.0 0 0 0 ${ex + 2.0} ${H} Z`} fill="rgba(109,103,92,0.10)" stroke="#6d675c" strokeWidth={0.13} />
+        const ed = entryDoor(entry, H)
+        return <path d={ed.path} fill="rgba(109,103,92,0.10)" stroke="#6d675c" strokeWidth={0.13} />
       })()}
       {siteStrip && (
         <>

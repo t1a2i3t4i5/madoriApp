@@ -64,7 +64,7 @@ function routeInFloor(rooms: Room[], from: Room, to: Room): { rooms: Room[]; poi
     for (const d of doors) {
       const other = d.a === here ? d.b : d.b === here ? d.a : null
       if (!other || !todo.has(other)) continue
-      const dp: FlowPoint = d.edge.dir === 'v' ? { x: d.edge.at, y: d.edge.mid } : { x: d.edge.mid, y: d.edge.at }
+      const dp: FlowPoint = d.swing.center
       const c1 = center(here), c2 = center(other)
       // 終点以外で VIA でない部屋に入る（＝そこを通り抜ける）のは最後の手段
       const through = other !== to && !VIA[other.type] ? NON_VIA_PENALTY : 0

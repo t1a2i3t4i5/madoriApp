@@ -152,7 +152,7 @@ export function blockedRects(r: Room, swings: readonly Rect[], kitchenFace: bool
  * 2段階: 第1優先は部屋名＋畳数行の両方を避ける位置。なければ部屋名だけを避ける従来の位置にフォールバックする（配置率を落とさない）。
  */
 export function furnish(rooms: readonly Room[], doors: readonly Door[], opts: FurnishOpts): FurnitureItem[] {
-  const swings = doors.map((d) => doorSwingRect(d.edge))
+  const swings = doors.map((d) => doorSwingRect(d))
   const items: FurnitureItem[] = []
   rooms.forEach((r, room) => {
     const kinds = PROGRAM[r.type]
