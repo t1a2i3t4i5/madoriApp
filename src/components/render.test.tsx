@@ -172,7 +172,7 @@ describe('コンポーネントの描画', () => {
   it('印刷: ボタンを含む文（全候補を見る・代替案）は文ごと no-print。途中で切れた文を残さない', () => {
     const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
     // 文の途中にボタンが入る段落
-    expect(app).toMatch(/<p role="status" className="no-print[^"]*">\s*この条件で出せる案はここまでです。/)
+    expect(app).toMatch(/<p role="status" className=\{?[`"]no-print[^>]*>\s*この条件で出せる案はここまでです。/)
     expect(app).toMatch(/<div className="no-print mt-4 text-center">\s*<button[\s\S]*?この条件の全候補/)
     expect(app).toMatch(/<div className="no-print mt-2 flex[^"]*">\s*\{diagnosis\.alts\.map/)
     expect(readFileSync(new URL('./Notice.tsx', import.meta.url), 'utf8')).toMatch(/<div className="no-print[^"]*">\s*\{alts\.map/)

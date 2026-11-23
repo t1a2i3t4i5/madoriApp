@@ -1,18 +1,20 @@
 @import "tailwindcss";
 
-/* 建築の図面集: 製図用紙の白・ヘアライン・朱の赤入れ。角丸と影は使わない */
+/* 静かな道具: 暖かいグレーの地に白いカード。アクセントは深い緑1色だけ */
 :root {
-  --bg: #f5f4f0; --surface: #ffffff; --surface2: #ebe9e2; --ink: #1d1c19; --ink2: #67645c;
-  --line: #d3d0c6; --accent: #c73e1d; --accent-ink: #ffffff; --warm: #c73e1d;
-  --warn-bg: transparent; --warn-line: #c73e1d; --warn-ink: #1d1c19;
-  --chip: #ffffff; --shadow: none; --plan-paper: #fdfcf8; --plan-line: #cfccc0;
+  --bg: #f6f5f2; --surface: #ffffff; --surface2: #efede8; --ink: #1f1f1f; --ink2: #6e6e73;
+  --line: #e4e2dd; --accent: #2f6b5a; --accent-ink: #ffffff; --btn: #2f6b5a; --btn-ink: #ffffff;
+  --warm: #b4541f; --warn-bg: #fbf1e6; --warn-line: #e3b98f; --warn-ink: #1f1f1f;
+  --chip: #f1efea; --shadow: 0 1px 2px rgba(0, 0, 0, .05); --plan-paper: #ffffff; --plan-line: #e4e2dd;
+  --scrim: rgba(0, 0, 0, .4);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101013; --surface: #17171b; --surface2: #202025; --ink: #ecebe6; --ink2: #9f9d96;
-    --line: #34343b; --accent: #e5583a; --accent-ink: #101013; --warm: #e5583a;
-    --warn-bg: transparent; --warn-line: #e5583a; --warn-ink: #ecebe6;
-    --chip: #17171b; --shadow: none; --plan-line: #34343b;
+    --bg: #1c1c1e; --surface: #2c2c2e; --surface2: #3a3a3c; --ink: #f2f2f0; --ink2: #a1a1a6;
+    --line: #3d3d40; --accent: #5fae96; --accent-ink: #1c1c1e; --btn: #2f6b5a; --btn-ink: #ffffff;
+    --warm: #e8935a; --warn-bg: #3a2f26; --warn-line: #7a5a3d; --warn-ink: #f2f2f0;
+    --chip: #3a3a3c; --shadow: none; --plan-paper: #f2f0ea; --plan-line: #3d3d40;
+    --scrim: rgba(0, 0, 0, .6);
   }
 }
 @theme {
@@ -24,6 +26,8 @@
   --color-line: var(--line);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-btn: var(--btn);
+  --color-btn-ink: var(--btn-ink);
   --color-warm: var(--warm);
   --color-warn-bg: var(--warn-bg);
   --color-warn-line: var(--warn-line);
@@ -31,34 +35,34 @@
   --color-chip: var(--chip);
   --color-paper: var(--plan-paper);
   --color-plan-line: var(--plan-line);
+  --color-scrim: var(--scrim);
   --shadow-panel: var(--shadow);
   --font-sans: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
-  --font-serif: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
 }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); line-height: 1.6; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-sans); line-height: 1.6; font-feature-settings: "palt", "tnum"; }
 input[type="range"] { accent-color: var(--accent); }
-input[type="checkbox"] { accent-color: var(--accent); border-radius: 0; }
+input[type="checkbox"] { accent-color: var(--accent); }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* 図面枠の四隅のトンボ（コーナーティック） */
-.crop { position: relative; }
-.crop::before, .crop::after { content: ""; position: absolute; width: 9px; height: 9px; pointer-events: none; border: 0 solid var(--ink); }
-.crop::before { top: -1px; left: -1px; border-top-width: 1px; border-left-width: 1px; }
-.crop::after { bottom: -1px; right: -1px; border-bottom-width: 1px; border-right-width: 1px; }
+
+/* モバイルのカルーセル（スクロールバーは隠す） */
+.snap-row { scrollbar-width: none; }
+.snap-row::-webkit-scrollbar { display: none; }
 
 /* 印刷: 結果の3案カードだけを読みやすく並べる（操作UI・拡大ダイアログ・ギャラリー・お気に入り棚は隠す） */
 @media print {
   :root {
-    --bg: #fff; --surface: #fff; --surface2: #ebe9e2; --ink: #1d1c19; --ink2: #47453f;
-    --line: #aaa; --accent: #c73e1d; --accent-ink: #fff; --warm: #c73e1d; --plan-paper: #fdfcf8; --plan-line: #bbb; --shadow: none;
-    --chip: #fff; --warn-bg: transparent; --warn-line: #c73e1d; --warn-ink: #1d1c19;
+    --bg: #fff; --surface: #fff; --surface2: #efede8; --ink: #1f1f1f; --ink2: #47453f;
+    --line: #aaa; --accent: #2f6b5a; --accent-ink: #fff; --btn: #2f6b5a; --btn-ink: #fff; --warm: #b4541f; --plan-paper: #fff; --plan-line: #bbb; --shadow: none;
+    --chip: #fff; --warn-bg: transparent; --warn-line: #b4541f; --warn-ink: #1f1f1f; --scrim: transparent;
   }
   @page { margin: 12mm; }
   body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print, button, [role="dialog"], input, label { display: none !important; }
   .app-grid { display: block !important; }
-  /* 1案に全階（1F/2F）を横に並べるので、案は1列に積む */
-  .plan-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 8mm !important; }
+  /* 1案に全階（1F/2F）を横に並べるので、案は1列に積む（モバイルのカルーセルも画面だけ） */
+  .plan-grid { display: grid !important; grid-template-columns: minmax(0, 1fr) !important; gap: 8mm !important; overflow: visible !important; }
+  .plan-grid > * { width: auto !important; flex: none !important; }
   .print-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; cursor: auto !important; }
   h2 { break-after: avoid; }
 }

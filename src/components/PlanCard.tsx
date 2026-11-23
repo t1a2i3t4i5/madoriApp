@@ -7,6 +7,7 @@ import { FloorTabs } from './FloorTabs'
 import { floorAreaLabel, meters } from '../lib/format'
 import { clampFloor } from '../lib/floor'
 import { StarButton } from './StarButton'
+import { CARD } from './ui'
 
 interface Props {
   cfg: PlanConfig
@@ -31,26 +32,10 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
     // role=button の中に☆ボタンやタブのボタンを入れ子にしない。
     <article
       onClick={open}
-      className="print-card relative w-full cursor-pointer border-t border-ink pt-3 text-left"
+      className={`print-card relative w-full cursor-pointer overflow-hidden text-left ${CARD}`}
     >
-      <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-0" />
-      <div className="flex items-baseline gap-3.5">
-        <span aria-hidden="true" className="font-serif text-[40px] leading-none font-light tracking-[-.02em] text-accent">{String(index + 1).padStart(2, '0')}</span>
-        <p className="mr-10 font-serif text-[20px] leading-[1.35] font-bold tracking-[.02em]">{name}</p>
-      </div>
-      <div className="mt-2 mb-2.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11.5px] tracking-[.06em] text-ink2">
-        <span>実測 <b className="font-bold text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
-        {floorAreaLabel(plan) && <span>{floorAreaLabel(plan)}</span>}
-        <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室</span>
-        <span>{meters(plan.W, 3).replace(/0+$/, '').replace(/\.$/, '')}m × {meters(plan.H, 3).replace(/0+$/, '').replace(/\.$/, '')}m</span>
-      </div>
-      <p className="mb-2.5 flex flex-wrap text-[11.5px] font-bold text-ink2">
-        {planTags(cfg, plan).map((t, i) => (
-          <span key={t} className={`${i === 0 ? 'text-accent' : ''} after:mx-1.5 after:font-normal after:text-line after:content-['・'] last:after:content-none`}>{t}</span>
-        ))}
-      </p>
-      <p className="mb-3 border-l border-line pl-3 text-[12px] leading-[1.8] text-ink2">{explainPlan(cfg, plan)}</p>
-      <div className="crop border border-plan-line bg-paper p-2 print:hidden">
+      <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-1.5 right-1.5 z-10" />
+      <div className="border-b border-line bg-paper p-1 print:hidden">
         <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
       </div>
       {/* 印刷専用: 画面は表示中の階だけなので、印刷時は全階を並べる（pattern id は画面用と分ける） */}
@@ -61,13 +46,29 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
           </div>
         ))}
       </div>
-      {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
-      <div className="mt-3 flex items-end justify-between gap-3 border-b border-line pb-1 text-[11px] tracking-[.14em] text-ink2">
-        <span>スコア</span>
-        <b className="font-serif text-[30px] leading-none font-light tracking-normal text-ink">{plan.score.total}</b>
+      <div className="p-4 pt-3">
+        {cfg.floors === 2 && <div className="mb-3 -mt-0.5"><FloorTabs value={floor} onChange={setFloor} /></div>}
+        <p className="text-[19px] leading-[1.35] font-bold">{name}</p>
+        <div className="mt-1.5 mb-2.5 flex flex-wrap gap-x-3.5 gap-y-0.5 text-[12px] text-ink2">
+          <span>実測 <b className="font-bold text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
+          {floorAreaLabel(plan) && <span>{floorAreaLabel(plan)}</span>}
+          <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室</span>
+          <span>{meters(plan.W, 3).replace(/0+$/, '').replace(/\.$/, '')}m × {meters(plan.H, 3).replace(/0+$/, '').replace(/\.$/, '')}m</span>
+        </div>
+        <p className="mb-2.5 flex flex-wrap gap-1.5">
+          {planTags(cfg, plan).map((t) => (
+            <span key={t} className="rounded-full border border-line bg-chip px-2.5 py-0.5 text-[11.5px] font-medium text-ink2">{t}</span>
+          ))}
+        </p>
+        <p className="mb-3 text-[12.5px] leading-[1.8] text-ink2">{explainPlan(cfg, plan)}</p>
+        <div className="flex items-center gap-3 text-[12px] text-ink2">
+          <span>スコア</span>
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface2"><i className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, plan.score.total))}%` }} /></span>
+          <b className="min-w-7 text-right text-[18px] leading-none font-bold text-ink tabular-nums">{plan.score.total}</b>
+        </div>
+        {/* クリックは article の onClick へ伝わって開く（ここに onClick を付けると二重に開く） */}
+        <button type="button" aria-label={`${name}を拡大表示`} className="mt-3 cursor-pointer border-0 bg-transparent p-0 text-xs font-bold text-accent">タップで拡大表示 →</button>
       </div>
-      {/* クリックは article の onClick へ伝わって開く（ここに onClick を付けると二重に開く） */}
-      <button type="button" aria-label={`${name}を拡大表示`} className="mt-2.5 cursor-pointer border-0 bg-transparent p-0 text-xs font-bold text-ink underline decoration-ink2 underline-offset-[3px]">タップで拡大表示 →</button>
     </article>
   )
 }
