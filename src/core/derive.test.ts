@@ -123,15 +123,21 @@ describe('付属収納（Room.of）', () => {
 
 describe('生成は付属収納を作らない（GEN_VERSION 5 PR-A）', () => {
   it('候補プールに closet も of も存在しない（総二階・平屋・部分二階）', () => {
+    // 全プール走査は重いので、違反を集めて最後に1回だけ照合する（既定の制限時間も延長）
+    let total = 0
+    const examples: string[] = []
     for (const { name, cfg } of [...CONDITIONS, ...PARTIAL_CONDITIONS]) {
       for (const p of candidatePool(cfg)) {
-        for (const fl of p.floors) {
+        p.floors.forEach((fl, fi) => {
           for (const r of fl.rooms) {
-            expect(r.type, name).not.toBe('closet')
-            expect(r.of, name).toBeUndefined()
+            if (r.type === 'closet' || r.of !== undefined) {
+              total++
+              if (examples.length < 10) examples.push(`${name} F${fi + 1} ${r.id}: type=${r.type} of=${JSON.stringify(r.of)}`)
+            }
           }
-        }
+        })
       }
     }
-  })
+    expect({ total, examples }).toEqual({ total: 0, examples: [] })
+  }, 30_000)
 })
