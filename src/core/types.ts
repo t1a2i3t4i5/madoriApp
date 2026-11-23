@@ -24,6 +24,8 @@ export interface PlanConfig {
   parking: number // 0..2
   garden: number // 0..2
   feats: FeatureKey[]
+  /** 2階の形。省略 = 'full'（総二階）。平屋では無視される（実効 full）。URLハッシュ・お気に入りへの保存は PR3 */
+  story?: 'full' | 'partial'
 }
 
 export interface RoomDef {
@@ -100,6 +102,16 @@ export function floorRect(plan: { W: number; H: number; floors: Floor[] }, i: nu
   return plan.floors[i]?.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
 }
 
+/** 実効の story が部分二階か（2階建てで story が 'partial' のときだけ true。平屋では無視） */
+export function isPartial(cfg: Pick<PlanConfig, 'floors' | 'story'>): boolean {
+  return cfg.floors === 2 && cfg.story === 'partial'
+}
+
+/** 生成結果が依存する条件の識別子。総二階のキーは従来のまま（実効 story が partial のときだけ '|p' を足す） */
+export function cfgId(cfg: PlanConfig): string {
+  return `${cfg.area}|${cfg.floors}|${cfg.rooms}|${[...cfg.feats].sort().join(',')}${isPartial(cfg) ? '|p' : ''}`
+}
+
 /** 正規形（v1 と同じ並び） */
 export const CANONICAL: Variant = { stairEnd: 'E', rev: [false, false, false, false], bedShift: 0 }
 
@@ -129,6 +141,7 @@ export interface ScoredPlan extends Plan {
  * v2: 末尾に変種 "-" + stairEnd + rev4桁 + shift（例: "1-16x14-E01000"）。同じ条件なら1つの案に対応する
  */
 export type PlanKey = `${ArchId}-${number}x${number}` | `${ArchId}-${number}x${number}-${string}`
+// 部分二階は末尾に -p<W2>x<H2>（例: "1-18x14-E01000-p12x14"）
 
 export interface Edge {
   dir: 'v' | 'h'
@@ -172,6 +185,17 @@ export interface Door {
 export interface Footprint {
   W: number
   H: number
+  diff: number
+}
+
+/** 部分二階の外形の組。1F の板 W×H と 2F の板 W2×H2（一辺共有: east-west は H2=H、south は W2=W） */
+export interface FootprintPair {
+  shape: 'ew' | 'south'
+  W: number
+  H: number
+  W2: number
+  H2: number
+  /** |総面積 − 目標| */
   diff: number
 }
 

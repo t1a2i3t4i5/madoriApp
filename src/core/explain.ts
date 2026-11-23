@@ -20,6 +20,19 @@ export const EXPLAIN_TH = {
 /** 割合の表示。しきい値（7%・11% など）と食い違って見えないよう、小数1桁へ切り捨てる（6.96% を「7%」と書かない） */
 const pct = (v: number) => `${(Math.floor(v * 1000 + 1e-9) / 10).toFixed(1)}%`
 
+/** 部分二階の文: 2階が1階の約何割か、下屋がかかる方角。部分二階でなければ null（総二階の解説は変えない） */
+function partialSentence(plan: Plan): string | null {
+  const fp = plan.floors[1]?.fp
+  if (!fp) return null
+  const tenths = Math.round(((fp.W * fp.H) / (plan.W * plan.H)) * 10)
+  const sides: string[] = []
+  if (fp.x > 0) sides.push('西')
+  if (fp.x + fp.W < plan.W) sides.push('東')
+  if (fp.y + fp.H < plan.H) sides.push('南')
+  const where = sides.length ? `${sides.join('・')}側に下屋がかかります` : '下屋があります'
+  return `2階は1階の約${tenths}割の部分二階で、${where}。`
+}
+
 /** 1つの事実。つなぐとき用の「〜て」形と、文末用の「〜です。」形を持つ */
 interface Clause { te: string; end: string }
 const clause = (te: string, end: string): Clause => ({ te, end })
@@ -64,6 +77,7 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   // --- 1文目: 配置 ---
   const s1: Clause[] = []
   if (ldk) {
+    // LDK は1F前提のため、南判定は plan.H（1Fの板）のまま。部分二階でも 1F は plan.W × plan.H
     const south = ldk.y + ldk.h === plan.H
     // キッチンが独立している案は、LDK の畳数にキッチンを含める（LDK として使う広さ）
     const kitchen = plan.floors[ldkFloor]?.rooms.find((r) => r.type === 'kitchen')
@@ -119,5 +133,7 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
     if (parts.採光 >= 1) sentences.push('すべての居室が外壁に面しており、採光は確保されています。')
     else sentences.push(`${cfg.floors === 2 ? '2階建て' : '平屋'}・個室${cfg.rooms}室の構成です。`)
   }
-  return sentences.slice(0, 3).join('')
+  // 部分二階は、割合と下屋の文を先頭に足す（本体の2〜3文は総二階と同じ判定。弱点の文が押し出されないよう別枠）
+  const head = partialSentence(plan)
+  return (head ? [head, ...sentences.slice(0, 3)] : sentences.slice(0, 3)).join('')
 }

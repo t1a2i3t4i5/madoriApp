@@ -28,7 +28,8 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 function isCfg(v: unknown): v is PlanConfig {
   return (
     isObj(v) && isNum(v.area) && (v.floors === 1 || v.floors === 2) && isNum(v.rooms) && isNum(v.parking) && isNum(v.garden) &&
-    Array.isArray(v.feats) && v.feats.every((f) => (ALL_FEATURE_KEYS as readonly unknown[]).includes(f))
+    Array.isArray(v.feats) && v.feats.every((f) => (ALL_FEATURE_KEYS as readonly unknown[]).includes(f)) &&
+    (v.story === undefined || v.story === 'full' || v.story === 'partial')
   )
 }
 
@@ -52,6 +53,7 @@ function isPlan(v: unknown): v is ScoredPlan {
   return v.floors.every(
     (fl: unknown) =>
       isObj(fl) && typeof fl.label === 'string' && Array.isArray(fl.rooms) &&
+      (fl.fp === undefined || (isObj(fl.fp) && isNum(fl.fp.x) && isNum(fl.fp.y) && isNum(fl.fp.W) && isNum(fl.fp.H))) &&
       fl.rooms.every(
         (r: unknown) =>
           isObj(r) && typeof r.type === 'string' && Object.hasOwn(ROOM, r.type) && typeof r.name === 'string' &&

@@ -1,4 +1,4 @@
-import type { Band, Cell, Footprint, Room } from './types'
+import type { Band, Cell, Footprint, FootprintPair, Room } from './types'
 import { clamp } from './rng'
 
 export interface WaterfillItem {
@@ -242,4 +242,47 @@ export function footprintList(targetArea: number, limit = 10): Footprint[] {
   }
   list.sort((a, b) => a.diff - b.diff)
   return list.slice(0, limit)
+}
+
+/** 部分二階: 2F割合 W2*H2 / 合計 の許容範囲と中心 */
+export const PARTIAL_RATIO = { min: 0.35, max: 0.45, center: 0.4 } as const
+/** 部分二階: 形ごとの外形の組の件数 */
+export const PAIR_LIMIT = 6
+/** 部分二階: 下屋の出の最小（セル） */
+export const MIN_OVERHANG = 3
+
+/**
+ * 部分二階の外形の組（決定的）。1F の板は footprintList と同じ範囲（W,H は 12〜30、縦横比 0.62〜1.62）。
+ * 2F は1Fと一辺を共有する2形のみ: 東西下屋（H2=H、W2=W−k、W2≥9）／南下屋（W2=W、H2=H−k、H2≥13）、k≥3。
+ * 2F割合が [0.35, 0.45] のものを、|総面積−目標| → |割合−0.4| → W → H → W2 → H2 の順に並べ、形ごとに上位 limit 件。
+ * 順序は東西下屋 → 南下屋。targetTotal は延床（セル）。
+ */
+export function footprintPairs(targetTotal: number, limit = PAIR_LIMIT): FootprintPair[] {
+  const lists: Record<FootprintPair['shape'], FootprintPair[]> = { ew: [], south: [] }
+  const push = (shape: FootprintPair['shape'], W: number, H: number, W2: number, H2: number) => {
+    const total = W * H + W2 * H2
+    const ratio = (W2 * H2) / total
+    if (ratio < PARTIAL_RATIO.min || ratio > PARTIAL_RATIO.max) return
+    lists[shape].push({ shape, W, H, W2, H2, diff: Math.abs(total - targetTotal) })
+  }
+  for (let W = 12; W <= 30; W++) {
+    for (let H = 12; H <= 30; H++) {
+      const r = W / H
+      if (r < 0.62 || r > 1.62) continue
+      for (let W2 = 9; W2 <= W - MIN_OVERHANG; W2++) push('ew', W, H, W2, H)
+      for (let H2 = 13; H2 <= H - MIN_OVERHANG; H2++) push('south', W, H, W, H2)
+    }
+  }
+  const ratioOf = (p: FootprintPair) => (p.W2 * p.H2) / (p.W * p.H + p.W2 * p.H2)
+  const out: FootprintPair[] = []
+  for (const shape of ['ew', 'south'] as const) {
+    lists[shape].sort(
+      (a, b) =>
+        a.diff - b.diff ||
+        Math.abs(ratioOf(a) - PARTIAL_RATIO.center) - Math.abs(ratioOf(b) - PARTIAL_RATIO.center) ||
+        a.W - b.W || a.H - b.H || a.W2 - b.W2 || a.H2 - b.H2,
+    )
+    out.push(...lists[shape].slice(0, limit))
+  }
+  return out
 }

@@ -18,7 +18,9 @@ export function planName(cfg: PlanConfig, plan: Plan): string {
 
 export function planTags(cfg: PlanConfig, plan: Plan): string[] {
   const tags: string[] = []
+  // LDK は1F にある前提なので、南判定は1Fの板（plan.H）のままでよい（部分二階でも 1F は plan.W × plan.H）
   const ldk = plan.floors[0]?.rooms.find((r) => r.type === 'ldk')
+  if (plan.floors[1]?.fp) tags.push('部分二階')
   if (ldk && ldk.y + ldk.h === plan.H) tags.push('南LDK')
   if (cfg.feats.includes('kitchenFace')) tags.push('対面キッチン')
   if (cfg.feats.includes('doma')) tags.push('土間あり')

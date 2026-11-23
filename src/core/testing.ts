@@ -16,6 +16,16 @@ export const CONDITIONS: { name: string; cfg: PlanConfig }[] = [
   { name: '34坪/平屋/ランドリー+書斎', cfg: { ...base, area: 34, floors: 1, rooms: 4, feats: ['laundry', 'study', 'kitchenFace'] } },
 ]
 
+/** 部分二階の条件セット（gen-v3-partial fixture・不変条件テストで共有）。先頭3件が人気条件 */
+export const PARTIAL_CONDITIONS: { name: string; cfg: PlanConfig }[] = [
+  { name: '部分二階: 30坪/個室3', cfg: { ...base, area: 30, floors: 2, rooms: 3, feats: ['kitchenFace', 'wic'], story: 'partial' } },
+  { name: '部分二階: 35坪/個室4', cfg: { ...base, area: 35, floors: 2, rooms: 4, feats: ['kitchenFace', 'wic'], story: 'partial' } },
+  { name: '部分二階: 32坪/個室2', cfg: { ...base, area: 32, floors: 2, rooms: 2, feats: [], story: 'partial' } },
+  { name: '部分二階: 34坪/個室3/吹抜', cfg: { ...base, area: 34, floors: 2, rooms: 3, feats: ['void'], story: 'partial' } },
+  { name: '部分二階: 36坪/個室3/土間+パントリー+書斎', cfg: { ...base, area: 36, floors: 2, rooms: 3, feats: ['doma', 'pantry', 'study'], story: 'partial' } },
+  { name: '部分二階: 38坪/個室4/ランドリー+和室', cfg: { ...base, area: 38, floors: 2, rooms: 4, feats: ['laundry', 'washitsu', 'kitchenFace'], story: 'partial' } },
+]
+
 /** 実現可能性が不可になる条件 */
 export const INFEASIBLE: { name: string; cfg: PlanConfig }[] = [
   { name: '20坪/個室5', cfg: { ...base, area: 20, floors: 2, rooms: 5, feats: [] } },
@@ -35,6 +45,16 @@ export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全
 
 /** 末尾の 2**40+5 は 2^32 以上の seed（seed32 の上位ビット経路を通す）。golden.test.ts は先頭2件だけ使う */
 export const SEEDS = [1, 2, 3, 20261121, 99999, 2 ** 40 + 5]
+
+/** キー順の違いで落ちないよう、キーをソートして正規化した JSON にする（golden の比較用） */
+export function canon(v: unknown): string {
+  return JSON.stringify(v, (_k, val: unknown) => {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      return Object.fromEntries(Object.entries(val).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+    }
+    return val
+  })
+}
 
 /** 配列の添字アクセスなどで undefined を除く（非nullアサーション `!` の代わり。テスト用） */
 export function defined<T>(v: T | null | undefined, what = '値'): T {
@@ -81,6 +101,39 @@ const CLUSTER_PAIRS: [Room['type'], Room['type'], string][] = [
 ]
 
 /**
+ * 階の板（fp）の独立検証（types.ts の floorRect・footprintPairs とは別に素朴に書く）:
+ * 1F には fp がない／fp は建物に内包される／北寄せ（y=0）／一辺共有の2形のどちらか
+ * （東西下屋: H2=H・k=W−W2≥3・W2≥9・階段側の端に寄る、南下屋: W2=W・x=0・k=H−H2≥3・H2≥13）／
+ * 階段が 2F の板の stairEnd 側の端にある。総二階（fp なし）は何も言わない
+ */
+export function footprintViolations(plan: Plan): string[] {
+  const out: string[] = []
+  if (plan.floors[0]?.fp) out.push('1F に fp がある')
+  const fp = plan.floors[1]?.fp
+  if (!fp) return out
+  const { W, H } = plan
+  if (fp.x < 0 || fp.y < 0 || fp.x + fp.W > W || fp.y + fp.H > H) out.push(`2F の板(${fp.x},${fp.y},${fp.W}x${fp.H})が建物(${W}x${H})に内包されていない`)
+  if (fp.y !== 0) out.push('2F の板が北寄せ（y=0）でない')
+  const ew = fp.H === H && fp.W < W
+  const south = fp.W === W && fp.H < H
+  if (ew === south) out.push('2F の板が一辺共有の2形（東西下屋・南下屋）のどちらでもない')
+  if (ew && (W - fp.W < 3 || fp.W < 9)) out.push(`東西下屋の出(${W - fp.W})か W2(${fp.W}) が下限未満`)
+  if (south && (H - fp.H < 3 || fp.H < 13 || fp.x !== 0)) out.push(`南下屋の出(${H - fp.H})か H2(${fp.H}) が下限未満、または x≠0`)
+  const ratio = (fp.W * fp.H) / (W * H + fp.W * fp.H)
+  if (ratio < 0.35 - 1e-9 || ratio > 0.45 + 1e-9) out.push(`2F 割合 ${ratio.toFixed(3)} が 0.35〜0.45 の外`)
+  if (plan.totalArea !== W * H + fp.W * fp.H) out.push('totalArea が各階の板面積の合計と一致しない')
+  const stair = plan.floors[1]?.rooms.find((r) => r.type === 'stair')
+  if (stair && ew) {
+    const e = plan.variant?.stairEnd
+    if (e === 'E' && stair.x + stair.w !== W) out.push('階段が東端でない（stairEnd=E）')
+    if (e === 'W' && stair.x !== 0) out.push('階段が西端でない（stairEnd=W）')
+    if (e === 'E' && fp.x + fp.W !== W) out.push('stairEnd=E なのに 2F の板が東寄せでない')
+    if (e === 'W' && fp.x !== 0) out.push('stairEnd=W なのに 2F の板が西寄せでない')
+  }
+  return out
+}
+
+/**
  * 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する／
  * クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
  */
@@ -105,6 +158,7 @@ export function independentViolations(plan: Plan): string[] {
       if (LIVING.has(r.type) && !(r.x === fp.x || r.y === fp.y || r.x + r.w === fp.x + fp.W || r.y + r.h === fp.y + fp.H)) out.push(`${fl.label} ${r.name}: 居室が外壁に接していない`)
     }
   })
+  out.push(...footprintViolations(plan))
   plan.floors.forEach((fl) => {
     for (const [ta, tb, label] of CLUSTER_PAIRS) {
       const a = fl.rooms.find((r) => r.type === ta)

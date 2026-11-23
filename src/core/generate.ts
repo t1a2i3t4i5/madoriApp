@@ -1,8 +1,10 @@
+import { cfgId, isPartial } from './types'
 import type { ArchId, PlanConfig, Plan, ScoredPlan, Variant } from './types'
 import { mulberry32 } from './rng'
-import { applyVariant, bandsFor, buildPlan } from './archetypes'
-import { footprintList } from './slicing'
-import { validatePlan } from './validate'
+import { applyVariant, bandsFor, buildPlan, f1MemoKey } from './archetypes'
+import type { F1Memo } from './archetypes'
+import { footprintList, footprintPairs } from './slicing'
+import { validateFloor, validatePlan } from './validate'
 import { scorePlan } from './score'
 import { planDistance, planSignature } from './diversity'
 
@@ -62,9 +64,6 @@ function distinctVariants(cfg: PlanConfig, arch: ArchId, variants: Variant[]): V
   return out
 }
 
-const cfgId = (cfg: PlanConfig) =>
-  `${cfg.area}|${cfg.floors}|${cfg.rooms}|${[...cfg.feats].sort().join(',')}`
-
 const POOL_CACHE_MAX = 8
 const poolCache = new Map<string, readonly ScoredPlan[]>()
 
@@ -85,27 +84,62 @@ export function dedupeBySig(plans: readonly ScoredPlan[]): ScoredPlan[] {
   return out
 }
 
+/** プール構築の作業量（テスト用。時間でなく回数で性能の退行を見る） */
+export interface PoolStats {
+  /** buildPlan の呼び出し回数 */
+  assembled: number
+  /** 1F の割り付けを実際に行った回数（メモのミスの数。部分二階のみ） */
+  f1Layouts: number
+  /** 1F の検証を実際に行った回数（部分二階のみ） */
+  f1Validations: number
+}
+
 /** 候補の組み立て（キャッシュを介さない）。candidatePool と診断（キャッシュを汚さない用途）が使う */
-function buildPool(cfg: PlanConfig): readonly ScoredPlan[] {
-  const targetPerFloor = (cfg.area * 16) / cfg.floors
+function buildPool(cfg: PlanConfig, stats?: PoolStats): readonly ScoredPlan[] {
   const archs: ArchId[] = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
   const allVariants = variantsFor(cfg)
   const built: ScoredPlan[] = []
+  const partial = isPartial(cfg)
+  // 部分二階: 1F は (arch, 1Fの板, stairEnd, rev[0], rev[1]) で決まるので、割り付けと検証を使い回す
+  const memo: F1Memo = new Map()
+  const f1Valid = new Map<string, boolean>()
+  const shapes: { W: number; H: number; W2?: number; H2?: number }[] = partial
+    ? footprintPairs(cfg.area * 16)
+    : footprintList((cfg.area * 16) / cfg.floors, FOOTPRINT_LIMIT)
   for (const arch of archs) {
     const variants = distinctVariants(cfg, arch, allVariants)
-    for (const fp of footprintList(targetPerFloor, FOOTPRINT_LIMIT)) {
+    for (const fp of shapes) {
       for (const variant of variants) {
-        const plan = buildPlan(cfg, arch, fp, variant)
-        if (!plan || !validatePlan(plan)) continue
+        if (stats) stats.assembled++
+        const plan = buildPlan(cfg, arch, fp, variant, partial ? memo : undefined)
+        if (!plan) continue
+        if (partial) {
+          const key = f1MemoKey(cfg, arch, fp.W, fp.H, variant)
+          let ok = f1Valid.get(key)
+          if (ok === undefined) {
+            if (stats) stats.f1Validations++
+            ok = validateFloor(plan, 0)
+            f1Valid.set(key, ok)
+          }
+          if (!ok || !validateFloor(plan, 1)) continue
+        } else if (!validatePlan(plan)) continue
         built.push(scored(plan))
       }
     }
   }
+  if (stats) stats.f1Layouts = memo.size
   return dedupeBySig(built).sort((a, b) => b.score.total - a.score.total)
 }
 
+/** プール構築を（キャッシュを介さず）1回行い、作業量を返す。テスト用 */
+export function poolBuildStats(cfg: PlanConfig): PoolStats & { poolSize: number } {
+  const stats: PoolStats = { assembled: 0, f1Layouts: 0, f1Validations: 0 }
+  const pool = buildPool(cfg, stats)
+  return { ...stats, poolSize: pool.length }
+}
+
 /**
- * 候補プール: seed と無関係に、アーキタイプ × 外形（上位10件）× 変種を決まった順に全部組み立て、
+ * 候補プール: seed と無関係に、アーキタイプ × 外形（総二階・平屋は上位10件、部分二階は footprintPairs の12組）× 変種を決まった順に全部組み立て、
  * 検証・スコアして、左右反転を含む重複（sig / sigM）は先着を残し、スコア降順（安定ソート）で返す。
  * cfg ごとにメモ化する（最大8件）。
  *
