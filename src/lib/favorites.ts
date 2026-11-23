@@ -1,9 +1,10 @@
 import { GEN_VERSION } from '../core/generate'
 import { isPlanKey, planKey } from '../core/enumerate'
+import { sharedEdge } from '../core/derive'
 import { ROOM } from '../core/rooms'
 import { SCORE_WEIGHTS } from '../core/score'
 import { ALL_FEATURE_KEYS } from './features'
-import { isPartial, type PlanConfig, type PlanKey, type ScoredPlan } from '../core/types'
+import { isPartial, type PlanConfig, type PlanKey, type Room, type ScoredPlan } from '../core/types'
 
 export interface Favorite {
   key: PlanKey
@@ -67,8 +68,33 @@ function isPlan(v: unknown): v is ScoredPlan {
         (r: unknown) =>
           isObj(r) && typeof r.type === 'string' && Object.hasOwn(ROOM, r.type) && typeof r.name === 'string' &&
           isNum(r.x) && isNum(r.y) && isNum(r.w) && isNum(r.h) && isNum(r.area) && isNum(r.target) && isNum(r.minArea),
-      ),
+      ) &&
+      hasValidOwners(fl.rooms as Record<string, unknown>[]),
   )
+}
+
+/** of を付けられる種別（付属収納） */
+const OWNED_TYPES: ReadonlySet<string> = new Set(['closet', 'store'])
+/** 付属収納の持ち主になれる種別（個室: 主寝室・洋室・書斎・和室） */
+const OWNER_TYPES: ReadonlySet<string> = new Set(['master', 'bed', 'study', 'washitsu'])
+
+/**
+ * 付属収納の持ち主: of が整数で、自分が closet / store 系、同じ階にその位置（左上）の部屋がちょうど1つあり、
+ * 自分自身ではなく、種別が個室で、辺を共有している
+ */
+function hasValidOwners(rooms: readonly Record<string, unknown>[]): boolean {
+  return rooms.every((r) => {
+    if (r.of === undefined) return true
+    const o = r.of
+    if (!isObj(o) || !Number.isInteger(o.dx) || !Number.isInteger(o.dy)) return false
+    if (typeof r.type !== 'string' || !OWNED_TYPES.has(r.type)) return false
+    const ox = (r.x as number) + (o.dx as number)
+    const oy = (r.y as number) + (o.dy as number)
+    const owners = rooms.filter((q) => q !== r && q.x === ox && q.y === oy)
+    const owner = owners[0]
+    if (owners.length !== 1 || !owner || typeof owner.type !== 'string' || !OWNER_TYPES.has(owner.type)) return false
+    return sharedEdge(r as unknown as Room, owner as unknown as Room) !== null
+  })
 }
 
 function isFavorite(v: unknown): v is Favorite {

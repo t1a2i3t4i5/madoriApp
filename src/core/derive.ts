@@ -40,8 +40,22 @@ export function pairKey(a: RoomType, b: RoomType): string {
 const NO_DOOR = new Set(NO_DOOR_PAIRS.map(([a, b]) => pairKey(a, b)))
 const PAIR_OK = new Set(PAIR_OK_PAIRS.map(([a, b]) => pairKey(a, b)))
 
-/** 隣接する2部屋にドアを付けてよいか。通り抜け可否は部屋種別ごとの via 集合で判定 */
+/** owned の持ち主（Room.of が指す位置）が other か */
+function isOwnerOf(other: Room, owned: Room): boolean {
+  return !!owned.of && other.x === owned.x + owned.of.dx && other.y === owned.y + owned.of.dy
+}
+
+/** 付属収納（Room.of を持つ部屋）か */
+const isOwned = (r: Room) => r.of !== undefined
+
+/**
+ * 隣接する2部屋にドアを付けてよいか。通り抜け可否は部屋種別ごとの via 集合で判定。
+ * 付属収納（Room.of）は、他のすべての規則より先に「相手が持ち主のときだけ」で判定する
+ */
 export function doorOK(a: Room, b: Room): boolean {
+  if (isOwned(a) || isOwned(b)) {
+    return (!isOwned(a) || isOwnerOf(b, a)) && (!isOwned(b) || isOwnerOf(a, b))
+  }
   if (a.type === 'void' || b.type === 'void') return false
   const key = pairKey(a.type, b.type)
   if (NO_DOOR.has(key)) return false
@@ -104,6 +118,24 @@ export function doorSwing(a: Room, b: Room, e: Edge, opt: SwingOpt = {}): DoorSw
   const px = Math.min(e.at, e.at + dirSign * r)
   const rect: Rect = isV ? { x: px, y: s, w: r, h: r } : { x: s, y: px, w: r, h: r }
   return { opens, r, hinge, closed, open, center, rect }
+}
+
+/** 折れ戸の開き先側の厚み（セル）。弧を描かないので薄い矩形で表す */
+const FOLD_DEPTH = 0.3
+
+/**
+ * 付属収納の折れ戸／引戸。開き先は付属収納側で、swing.rect は共有辺に沿った薄い矩形（個室側には出ない）。
+ * 葉の位置は開き戸と同じ（34% 地点中心）
+ */
+function foldSwing(a: Room, b: Room, e: Edge): DoorSwing {
+  const base = doorSwing(a, b, e, { opens: isOwned(a) ? 'a' : 'b' })
+  const q = base.rect
+  // 開く向き（付属収納側が共有辺の + 側か − 側か）で、薄い矩形を共有辺に沿わせる。
+  // 開き先が − 側（西・北に収納があるとき）は、辺の手前 FOLD_DEPTH から辺までの帯にする
+  const rect: Rect = e.dir === 'v'
+    ? { x: base.open.x >= e.at ? e.at : e.at - FOLD_DEPTH, y: q.y, w: FOLD_DEPTH, h: q.h }
+    : { x: q.x, y: base.open.y >= e.at ? e.at : e.at - FOLD_DEPTH, w: q.w, h: FOLD_DEPTH }
+  return { ...base, rect }
 }
 
 /** 弧の外接矩形。FloorSvg の描画と一致する */
@@ -177,10 +209,17 @@ export function computeDoors(rooms: Room[]): Door[] {
   for (const [i, a] of rooms.entries()) {
     for (const b of rooms.slice(i + 1)) {
       const e = sharedEdge(a, b)
-      if (e && doorOK(a, b)) doors.push({ a, b, edge: e, swing: doorSwing(a, b, e) })
+      if (!e || !doorOK(a, b)) continue
+      doors.push(
+        isOwned(a) || isOwned(b)
+          ? { a, b, edge: e, swing: foldSwing(a, b, e), kind: 'fold' }
+          : { a, b, edge: e, swing: doorSwing(a, b, e) },
+      )
     }
   }
-  return separateSwings(doors)
+  // 折れ戸は弧を出さないので、開き戸どうしの弧の分離の対象外（先頭に並べず、後ろへ回して開き戸の順序を保つ）
+  const folds = doors.filter((d) => d.kind === 'fold')
+  return [...separateSwings(doors.filter((d) => d.kind !== 'fold')), ...folds]
 }
 
 export interface WindowSeg {

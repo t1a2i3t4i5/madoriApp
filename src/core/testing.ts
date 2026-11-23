@@ -73,7 +73,7 @@ export const LIVING = new Set(['ldk', 'master', 'bed', 'study', 'washitsu']) // 
 /** 最小の短辺の閾値（rooms.ts の MIN_SHORT とは別に持つ独立実装。R-VERIFY-09） */
 const SHORT_MIN: Record<string, number> = {
   master: 6, bed: 5, study: 5, washitsu: 5, bath: 3, wash: 3, wc: 2, laundry: 3,
-  kitchen: 3, pantry: 2, wic: 3, entry: 3, doma: 3,
+  kitchen: 3, pantry: 2, wic: 3, closet: 2, entry: 3, doma: 3,
 }
 
 export function paint(plan: Plan, floorIdx: number): number[][] {

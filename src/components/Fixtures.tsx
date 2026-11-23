@@ -68,6 +68,14 @@ export function Fixtures({ r }: { r: Room }) {
         </>
       )
     }
+    case 'closet': {
+      // ハンガーパイプ: 長辺に沿った一点鎖線
+      const vertical = h >= w
+      const pipe = vertical
+        ? { x1: x + w / 2, y1: y + 0.5, x2: x + w / 2, y2: y + h - 0.5 }
+        : { x1: x + 0.5, y1: y + h / 2, x2: x + w - 0.5, y2: y + h / 2 }
+      return <line {...pipe} stroke="#b3a077" strokeWidth={0.12} strokeDasharray="1.2 0.3 0.2 0.3" />
+    }
     case 'wic':
     case 'store':
     case 'pantry':

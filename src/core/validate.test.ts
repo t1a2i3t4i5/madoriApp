@@ -92,7 +92,7 @@ describe('制約C: 水回りの隣接は buildPlan の出力で棄却0件', () =
 const EXPECTED_MIN_SHORT: Partial<Record<RoomType, number>> = {
   master: 6, bed: 5, study: 5, washitsu: 5,
   bath: 3, wash: 3, wc: 2, laundry: 3,
-  kitchen: 3, pantry: 2, wic: 3,
+  kitchen: 3, pantry: 2, wic: 3, closet: 2,
   entry: 3, doma: 3,
 }
 
