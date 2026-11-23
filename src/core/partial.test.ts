@@ -43,6 +43,20 @@ describe('footprintPairs（部分二階の外形の組）', () => {
 })
 
 describe('部分二階の生成', () => {
+  // 仕様 2.6-4: 部分二階の候補プール全件（seed で選ばれた3案だけでなく全部）を、testing.ts の独立した閾値表で短辺を検証する
+  for (const { name, cfg } of PARTIAL_CONDITIONS) {
+    it(`${name}: 候補プール全件で、全階の短辺が最小以上（独立検証）`, () => {
+      const pool = candidatePool(cfg)
+      expect(pool.length, '空振り防止').toBeGreaterThan(0)
+      let rooms = 0
+      for (const p of pool) {
+        for (const fl of p.floors) rooms += fl.rooms.length
+        expect(independentViolations(p).filter((v) => v.includes('短辺')), planKey(p)).toEqual([])
+      }
+      expect(rooms).toBeGreaterThan(pool.length * 10)
+    })
+  }
+
   for (const { name, cfg } of PARTIAL_CONDITIONS) {
     it(`${name}: 実効 story は partial で、生成案が不変条件を満たす`, () => {
       expect(isPartial(cfg)).toBe(true)
@@ -200,6 +214,29 @@ describe('部分二階の feasibility / 診断', () => {
       expect(generatePlans({ ...cfg, ...drop.patch }, 1)).toHaveLength(3)
       // 総二階が3案を出せる条件では、総二階が先頭、吹抜を外すが2番目
       if (d.alts[0]?.label === '総二階にする') expect(d.alts[1]?.label).toBe('吹抜を外す')
+    }
+  })
+
+  // 30坪/個室4/吹抜/部分二階は、1つの変更（総二階・吹抜を外す・延床+2/+4・個室-1）ではどれも0案で、以前は代替が0件だった。
+  // 1つで足りないときに限り、2つの変更の組み合わせを試して、3案が出ると確かめたものだけを出す
+  it('部分二階＋吹抜で、1つの変更では3案にならない条件は、2つの変更の組み合わせを代替にする（以前は0件）', () => {
+    const expected: Record<string, string[]> = {
+      '30/4': ['総二階にする＋吹抜を外す', '総二階にする＋延床を32坪にする', '総二階にする＋延床を34坪にする'],
+      // 次の2条件は、1つの変更で足りるので組み合わせは使わない（出力は従来どおり）
+      '34/5': ['吹抜を外す'],
+      '26/3': ['吹抜を外す', '個室を2室にする'],
+    }
+    for (const [area, rooms] of [[30, 4], [34, 5], [26, 3]] as const) {
+      const cfg = cfgOf(area, rooms, ['void'], 'partial')
+      expect(candidatePool(cfg), `${area}/${rooms}`).toHaveLength(0)
+      const d = diagnoseEmpty(cfg)
+      expect(d.alts.map((a) => a.label), `${area}/${rooms}`).toEqual(expected[`${area}/${rooms}`])
+      for (const a of d.alts) expect(generatePlans({ ...cfg, feats: [...cfg.feats], ...a.patch }, 1), `${area}/${rooms} ${a.label}`).toHaveLength(3)
+    }
+    // 組み合わせの前提: 30/4 は単独の変更ではどれも0案
+    const cfg = cfgOf(30, 4, ['void'], 'partial')
+    for (const patch of [{ story: 'full' as const }, { feats: [] }, { area: 32 }, { area: 34 }, { rooms: 3 }]) {
+      expect(generatePlans({ ...cfg, ...patch }, 1), JSON.stringify(patch)).toHaveLength(0)
     }
   })
 

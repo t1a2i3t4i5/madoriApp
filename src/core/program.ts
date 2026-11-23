@@ -91,8 +91,9 @@ function emptyReason(cfg: PlanConfig): string {
   const shortCause =
     (counts.f1 > 0 || counts.f2 > 0) &&
     archs.some((arch) => shapes.some((fp) => buildPlanStage(cfg, arch, fp, CANONICAL, undefined, { ignoreMinShort: true }).plan !== null))
-  const shortMsg =
-    '部屋の幅（短辺）の最低限 — 個室 2.3m・主寝室 2.7m・浴室と洗面 1.4m など — を確保すると、帯に部屋が収まりません。個室を減らすか、延床を広げてください。'
+  // どの階で崩れたか（平屋 / 1階 / 2階 / 両方）。2階は1階が組めたときだけ試すので、1階が崩れた形が1つでもあれば 1F も挙げる
+  const where = cfg.floors === 1 ? '平屋では' : counts.f1 > 0 && counts.f2 > 0 ? '1階・2階とも' : counts.f2 > 0 ? '2階では' : '1階では'
+  const shortMsg = `${where}、部屋の幅（短辺）の最低限 — 個室 2.3m・主寝室 2.7m・浴室と洗面 1.4m など — を確保すると、帯に部屋が収まりません。個室を減らすか、延床を広げてください。`
   if (shortCause) return partial ? `${shortMsg}総二階にするか、条件を調整してください。` : shortMsg
   if (partial) {
     const tail = '総二階にするか、条件を調整してください。'
@@ -163,10 +164,31 @@ export function diagnoseEmpty(cfg: PlanConfig): Diagnosis {
   for (const [k, label] of drop) if (has(k) && !(voidFirst && k === 'void')) candidates.push({ label, patch: { feats: without(k) } })
   if (!has('kitchenFace')) candidates.push({ label: '対面キッチンにする', patch: { feats: [...cfg.feats, 'kitchenFace'] } })
   const alts: Alt[] = []
+  const works = (patch: Partial<PlanConfig>) => {
+    const patched: PlanConfig = { ...cfg, feats: [...cfg.feats], ...patch }
+    return feasibility(patched).ok && generatePlansUncached(patched, 1).length === 3
+  }
   for (const a of candidates) {
     if (alts.length >= 3) break
-    const patched: PlanConfig = { ...cfg, feats: [...cfg.feats], ...a.patch }
-    if (feasibility(patched).ok && generatePlansUncached(patched, 1).length === 3) alts.push(a)
+    if (works(a.patch)) alts.push(a)
+  }
+  // 1つの変更では3案にならないとき（例: 部分二階+吹抜+個室4 は、吹抜だけ・総二階だけ・個室を減らすだけのどれでも0案）に限り、
+  // 2つの変更の組み合わせを試す。組み合わせは候補の順（総二階 → 吹抜 → …）に並べ、同じ項目（延床どうし）の組は除く
+  if (alts.length === 0) {
+    const pairs: Alt[] = []
+    for (const [i, a] of candidates.entries()) {
+      for (const b of candidates.slice(i + 1)) {
+        if (a.patch.area !== undefined && b.patch.area !== undefined) continue
+        if (a.patch.rooms !== undefined && b.patch.rooms !== undefined) continue
+        // feats は後の変更が前の結果から外す（吹抜を外す＋土間を外す など）。両方を外した集合にする
+        const feats = a.patch.feats && b.patch.feats ? a.patch.feats.filter((f) => b.patch.feats?.includes(f)) : (b.patch.feats ?? a.patch.feats)
+        pairs.push({ label: `${a.label}＋${b.label}`, patch: { ...a.patch, ...b.patch, ...(feats ? { feats } : {}) } })
+      }
+    }
+    for (const a of pairs) {
+      if (alts.length >= 3) break
+      if (works(a.patch)) alts.push(a)
+    }
   }
   const count = candidatePool(cfg).length
   return { reason: count > 0 ? fewReason(count) : emptyReason(cfg), alts }

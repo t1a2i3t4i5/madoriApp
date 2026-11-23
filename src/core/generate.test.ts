@@ -136,9 +136,25 @@ describe('0案の診断 diagnoseEmpty', () => {
     expect(candidatePool(cfg)).toHaveLength(0)
     const d = diagnoseEmpty(cfg)
     expect(d.reason).toContain('短辺')
+    expect(d.reason.startsWith('平屋では、'), d.reason).toBe(true)
     expect(d.reason).not.toContain('最低面積を満たせません')
     const alt = defined(d.alts.find((a) => a.label === '個室を4室にする'))
     expect(generatePlans({ ...cfg, feats: [...cfg.feats], ...alt.patch }, 1)).toHaveLength(3)
+  })
+
+  it('短辺の理由文は階の出し分けがある（平屋 / 2階 / 1階・2階とも）', () => {
+    const base = { parking: 1, garden: 1, floors: 2 as const }
+    const at = (area: number, rooms: number, feats: PlanConfig['feats']): PlanConfig => ({ ...base, area, rooms, feats })
+    const cases: [PlanConfig, string][] = [
+      [at(30, 5, ['wic']), '2階では、'],
+      [at(26, 3, ['void']), '1階・2階とも、'],
+    ]
+    for (const [cfg, head] of cases) {
+      expect(candidatePool(cfg), head).toHaveLength(0)
+      const reason = diagnoseEmpty(cfg).reason
+      expect(reason.startsWith(head), reason).toBe(true)
+      expect(reason).toContain('短辺')
+    }
   })
 
   const zeros = [
