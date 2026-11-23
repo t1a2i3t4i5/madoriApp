@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { GEN_VERSION, candidatePool, generatePlans } from './generate'
-import { feasibility } from './program'
+import { diagnoseEmpty, feasibility } from './program'
 import { planName, planTags } from './describe'
 import { explainPlan } from './explain'
 import { planKey } from './enumerate'
@@ -34,6 +34,8 @@ interface Fixture {
   cases: { name: string; seed: number; plans: { key: string; score: number; name: string; tags: string[]; explain: string; floors: ReturnType<typeof rooms> }[] }[]
   pools: { name: string; count: number; top: string[]; sha256: string }[]
   grid: Record<string, string[]>
+  /** 0案の境界条件の診断（理由と代替案のラベル）。生成結果には影響しない */
+  diagnoses: { name: string; reason: string; alts: string[] }[]
 }
 
 function build(): Fixture {
@@ -61,7 +63,11 @@ function build(): Fixture {
       }
     }
   }
-  return { genVersion: GEN_VERSION, cases, pools, grid }
+  const diagnoses = ALL.filter(({ cfg }) => candidatePool(copy(cfg)).length === 0).map(({ name, cfg }) => {
+    const d = diagnoseEmpty(copy(cfg))
+    return { name, reason: d.reason, alts: d.alts.map((a) => a.label) }
+  })
+  return { genVersion: GEN_VERSION, cases, pools, grid, diagnoses }
 }
 
 const update = process.env.UPDATE_GOLDEN
@@ -103,5 +109,9 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
   it('feasibility グリッドの seed 1 の3案が一致する', () => {
     expect(Object.keys(fixture.grid).length).toBeGreaterThan(20)
     expect(now.grid).toEqual(fixture.grid)
+  })
+  it('0案の境界条件の診断（reason と alts）が一致する', () => {
+    expect(fixture.diagnoses.length).toBeGreaterThan(0)
+    expect(now.diagnoses).toEqual(fixture.diagnoses)
   })
 })

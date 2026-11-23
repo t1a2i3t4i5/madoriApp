@@ -13,7 +13,9 @@ function variantSuffix(v: Variant): string {
 
 /**
  * 案の key。variant なし（GEN_VERSION 1 の案）は従来の "a-WxH"、v2 は "a-WxH-" + 変種。
- * 部分二階（2F に fp がある案）は末尾に "-p<W2>x<H2>"（2Fの板の寸法。オフセットは配置ルールから復元できるので入れない）
+ * 部分二階（2F に fp がある案）は末尾に "-p<W2>x<H2>"（2Fの板の寸法。オフセットは配置ルールから復元できるので入れない）。
+ * 注意: 変種なしの案は部分二階でも -p を付けない（変種なし = GEN_VERSION 1 の案で、部分二階は v3 以降にしか存在しないため
+ * 実際には起きない。parsePlanKey も変種なしの -p は不正として弾く）。変種なしの部分二階案を作るなら、ここと KEY_RE を両方直すこと。
  */
 export function planKey(plan: Pick<Plan, 'arch' | 'W' | 'H' | 'variant'> & { floors?: readonly { fp?: FloorRect }[] }): PlanKey {
   const base = `${plan.arch}-${plan.W}x${plan.H}` as const

@@ -1,4 +1,4 @@
-import { CANONICAL, isPartial } from './types'
+import { CANONICAL, cfgId, isPartial } from './types'
 import type { ArchId, Band, Cell, FeatureKey, Plan, PlanConfig, Room, RoomType, Variant } from './types'
 import type { Rng } from './rng'
 import { cell } from './rooms'
@@ -233,9 +233,9 @@ export interface BuildFootprint {
 export type F1Layout = { rooms: Room[]; heights: number[] } | 'variant' | 'f1'
 export type F1Memo = Map<string, F1Layout>
 
-/** 1F の割り付けが依存するもの: (arch, 1Fの板, stairEnd, rev[0], rev[1])。cfg は呼び出し側で固定 */
-export function f1MemoKey(arch: ArchId, W: number, H: number, v: Variant): string {
-  return `${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}`
+/** 1F の割り付けが依存するもの: (cfg, arch, 1Fの板, stairEnd, rev[0], rev[1])。cfg が違う memo の使い回しで取り違えないよう cfgId を先頭に含める */
+export function f1MemoKey(cfg: PlanConfig, arch: ArchId, W: number, H: number, v: Variant): string {
+  return `${cfgId(cfg)}|${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}`
 }
 
 /** 外形にアーキタイプを当てはめて1案を組み立てる。構造検査に落ちたら null。variant 省略は正規形（plan.variant は付けない） */
@@ -269,7 +269,7 @@ export function buildPlanStage(
   // 平屋では2F・階段・個室配分に関係する項目は正規形のみ
   if (cfg.floors === 1 && (v.stairEnd !== 'E' || v.bedShift !== 0 || v.rev[2] || v.rev[3])) return fail('variant')
   // 1F → 2F の順に組む（吹抜ありなら2F南帯の高さを1F南帯（LDK）の高さ以下に抑える）
-  const memoKey = f1MemoKey(arch, W, H, v)
+  const memoKey = f1MemoKey(cfg, arch, W, H, v)
   let f1: F1Layout | undefined = memo?.get(memoKey)
   if (f1 === undefined) {
     const b1 = bandsFor(cfg, arch, 1, W)

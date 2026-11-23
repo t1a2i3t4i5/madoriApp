@@ -187,6 +187,22 @@ describe('部分二階の feasibility / 診断', () => {
     for (const a of d.alts) expect(generatePlans({ ...cfg, feats: [...cfg.feats], ...a.patch }, 1)).toHaveLength(3)
   })
 
+  it('部分二階＋吹抜で0案のとき、代替に「吹抜を外す」が入り、理由は吹抜を挙げる（上限3件でも押し出されない）', () => {
+    for (const [area, rooms] of [[26, 3], [30, 4], [34, 5], [40, 5]] as const) {
+      const cfg = cfgOf(area, rooms, ['void'], 'partial')
+      expect(feasibility(cfg).ok, `${area}/${rooms}`).toBe(true)
+      expect(candidatePool(cfg)).toHaveLength(0)
+      const d = diagnoseEmpty(cfg)
+      expect(d.alts.length).toBeLessThanOrEqual(3)
+      const drop = defined(d.alts.find((a) => a.label === '吹抜を外す'))
+      expect(drop.patch.feats).toEqual([])
+      expect(d.reason, `${area}/${rooms}`).toContain('吹抜')
+      expect(generatePlans({ ...cfg, ...drop.patch }, 1)).toHaveLength(3)
+      // 総二階が3案を出せる条件では、総二階が先頭、吹抜を外すが2番目
+      if (d.alts[0]?.label === '総二階にする') expect(d.alts[1]?.label).toBe('吹抜を外す')
+    }
+  })
+
   it('総二階の診断の文言・代替には部分二階が出ない', () => {
     const d = diagnoseEmpty(cfgOf(26, 3, ['void']))
     expect(d.reason).not.toContain('部分二階')

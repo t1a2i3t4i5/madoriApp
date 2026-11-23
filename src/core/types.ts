@@ -107,6 +107,11 @@ export function isPartial(cfg: Pick<PlanConfig, 'floors' | 'story'>): boolean {
   return cfg.floors === 2 && cfg.story === 'partial'
 }
 
+/** 生成結果が依存する条件の識別子。総二階のキーは従来のまま（実効 story が partial のときだけ '|p' を足す） */
+export function cfgId(cfg: PlanConfig): string {
+  return `${cfg.area}|${cfg.floors}|${cfg.rooms}|${[...cfg.feats].sort().join(',')}${isPartial(cfg) ? '|p' : ''}`
+}
+
 /** 正規形（v1 と同じ並び） */
 export const CANONICAL: Variant = { stairEnd: 'E', rev: [false, false, false, false], bedShift: 0 }
 

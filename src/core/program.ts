@@ -89,6 +89,14 @@ function emptyReason(cfg: PlanConfig): string {
   const has = (k: PlanConfig['feats'][number]) => cfg.feats.includes(k)
   if (partial) {
     const tail = '総二階にするか、条件を調整してください。'
+    // 吹抜ありで f2/void が崩れたとき、吹抜を除いても組めるなら原因は吹抜（fixedW のセルが狭い2階の南帯を占める）
+    if (has('void') && (counts.f2 > 0 || counts.void > 0)) {
+      const noVoid: PlanConfig = { ...cfg, feats: cfg.feats.filter((f) => f !== 'void') }
+      const fits = archs.some((arch) => shapes.some((fp) => buildPlanStage(noVoid, arch, fp, CANONICAL).plan !== null))
+      if (fits) {
+        return `部分二階では吹抜が2階に収まりませんでした（2階の板が狭く、吹抜の幅が2階の南帯を占めて他の部屋が最低面積を満たせません）。吹抜を外すか、総二階にしてください。`
+      }
+    }
     if (counts.f2 > 0 && counts.f1 === 0) {
       return `部分二階では2階に個室が乗り切りません（2階の板が1階の外形より小さく、個室・主寝室・階段が最低面積を満たせません）。${tail}`
     }
@@ -135,6 +143,9 @@ export function diagnoseEmpty(cfg: PlanConfig): Diagnosis {
   const candidates: Alt[] = []
   // 部分二階で足りないときは、総二階を最初の代替にする（3案出ると確かめられたときだけ採用される）
   if (isPartial(cfg)) candidates.push({ label: '総二階にする', patch: { story: 'full' } })
+  // 部分二階＋吹抜は、吹抜が2階の狭い南帯を占めて崩れるのが主因。上限3件から押し出されないよう2番目に置く
+  const voidFirst = isPartial(cfg) && has('void')
+  if (voidFirst) candidates.push({ label: '吹抜を外す', patch: { feats: without('void') } })
   for (const d of [2, 4]) {
     if (cfg.area + d <= 40) candidates.push({ label: `延床を${cfg.area + d}坪にする`, patch: { area: cfg.area + d } })
   }
@@ -142,7 +153,7 @@ export function diagnoseEmpty(cfg: PlanConfig): Diagnosis {
   const drop: [PlanConfig['feats'][number], string][] = [
     ['void', '吹抜を外す'], ['doma', '土間を外す'], ['washitsu', '和室を外す'], ['pantry', 'パントリーを外す'], ['laundry', 'ランドリーを外す'],
   ]
-  for (const [k, label] of drop) if (has(k)) candidates.push({ label, patch: { feats: without(k) } })
+  for (const [k, label] of drop) if (has(k) && !(voidFirst && k === 'void')) candidates.push({ label, patch: { feats: without(k) } })
   if (!has('kitchenFace')) candidates.push({ label: '対面キッチンにする', patch: { feats: [...cfg.feats, 'kitchenFace'] } })
   const alts: Alt[] = []
   for (const a of candidates) {

@@ -1,4 +1,4 @@
-import { isPartial } from './types'
+import { cfgId, isPartial } from './types'
 import type { ArchId, PlanConfig, Plan, ScoredPlan, Variant } from './types'
 import { mulberry32 } from './rng'
 import { applyVariant, bandsFor, buildPlan, f1MemoKey } from './archetypes'
@@ -64,10 +64,6 @@ function distinctVariants(cfg: PlanConfig, arch: ArchId, variants: Variant[]): V
   return out
 }
 
-/** 総二階のキーは従来のまま（実効 story が partial のときだけ 'p' を足す） */
-const cfgId = (cfg: PlanConfig) =>
-  `${cfg.area}|${cfg.floors}|${cfg.rooms}|${[...cfg.feats].sort().join(',')}${isPartial(cfg) ? '|p' : ''}`
-
 const POOL_CACHE_MAX = 8
 const poolCache = new Map<string, readonly ScoredPlan[]>()
 
@@ -118,7 +114,7 @@ function buildPool(cfg: PlanConfig, stats?: PoolStats): readonly ScoredPlan[] {
         const plan = buildPlan(cfg, arch, fp, variant, partial ? memo : undefined)
         if (!plan) continue
         if (partial) {
-          const key = f1MemoKey(arch, fp.W, fp.H, variant)
+          const key = f1MemoKey(cfg, arch, fp.W, fp.H, variant)
           let ok = f1Valid.get(key)
           if (ok === undefined) {
             if (stats) stats.f1Validations++
@@ -143,7 +139,7 @@ export function poolBuildStats(cfg: PlanConfig): PoolStats & { poolSize: number 
 }
 
 /**
- * 候補プール: seed と無関係に、アーキタイプ × 外形（上位10件）× 変種を決まった順に全部組み立て、
+ * 候補プール: seed と無関係に、アーキタイプ × 外形（総二階・平屋は上位10件、部分二階は footprintPairs の12組）× 変種を決まった順に全部組み立て、
  * 検証・スコアして、左右反転を含む重複（sig / sigM）は先着を残し、スコア降順（安定ソート）で返す。
  * cfg ごとにメモ化する（最大8件）。
  *
