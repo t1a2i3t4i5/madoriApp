@@ -6,7 +6,7 @@ import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
-import { hasCloset } from '../lib/metrics'
+import { storageMark } from '../lib/metrics'
 import { floorAreaLabel, meters, tatami } from '../lib/format'
 import { clampFloor } from '../lib/floor'
 import { StarButton } from './StarButton'
@@ -115,7 +115,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
                 <tbody>
                   {fl.rooms.map((r, i) => (
                     <tr key={i}>
-                      <td className="border-b border-line px-1.5 py-[5px]">{r.name}{hasCloset(fl.rooms, r) ? '＋CL' : ''}</td>
+                      <td className="border-b border-line px-1.5 py-[5px]">{r.name}{storageMark(fl.rooms, r)}</td>
                       <td className="border-b border-line px-1.5 py-[5px] text-right whitespace-nowrap tabular-nums">{meters(r.w)}×{meters(r.h)}m</td>
                       <td className="border-b border-line px-1.5 py-[5px] text-right whitespace-nowrap tabular-nums">{tatami(r.w, r.h)}帖</td>
                     </tr>

@@ -1,5 +1,5 @@
 import type { Plan, Room } from '../core/types'
-import { isOwnedBy, isPrivateRoom, storageRatio } from '../core/closets'
+import { isPrivateRoom, privateStorageCount, storageOf, storageRatio } from '../core/closets'
 
 export interface PlanMetrics {
   /** LDK の畳数（1畳=8セル²）。LDK がなければ null */
@@ -12,24 +12,16 @@ export interface PlanMetrics {
   storageRatio: number
 }
 
-/** 個室 p にクローゼット（closet）が付いているか（持ち主が p の closet が同じ階にある） */
-export function hasCloset(rooms: readonly Room[], p: Room): boolean {
-  return isPrivateRoom(p) && rooms.some((s) => s.type === 'closet' && isOwnedBy(s, p))
+/** 個室 p に付属する収納の印（＋CL／＋WIC／＋収納）。core の storageOf と同じ定義で、なければ空文字 */
+export function storageMark(rooms: readonly Room[], p: Room): string {
+  if (!isPrivateRoom(p)) return ''
+  const s = storageOf(rooms, p)
+  if (!s) return ''
+  return s.type === 'closet' ? '＋CL' : s.type === 'wic' ? '＋WIC' : '＋収納'
 }
 
-/** クローゼット付きの個室数と個室数（主寝室・洋室） */
-export function closetCount(plan: Plan): { with: number; total: number } {
-  let w = 0
-  let total = 0
-  for (const fl of plan.floors) {
-    for (const r of fl.rooms) {
-      if (!isPrivateRoom(r)) continue
-      total++
-      if (hasCloset(fl.rooms, r)) w++
-    }
-  }
-  return { with: w, total }
-}
+/** 付属収納のある個室数と個室数（core の privateStorageCount と同じ定義） */
+export const storageCount = privateStorageCount
 
 const TATAMI = 8
 

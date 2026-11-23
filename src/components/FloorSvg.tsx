@@ -48,14 +48,14 @@ const vch = (ch: string) => (ch === 'ー' ? '｜' : ch)
 
 /**
  * 折れ戸／引戸の記号。共有辺に沿った葉の区間の壁を背景色で抜き（壁より後に描く）、
- * 開き先（付属収納側）へ折れる斜め2本線を描く
+ * 開き先（付属収納側）へ折れる M 字のジグザグ線を描く
  */
 function FoldDoor({ d }: { d: Door }) {
   const { hinge, closed, open } = d.swing
   const horiz = d.edge.dir === 'h'
-  // 折れの向きは開き先の符号（辺に垂直な方向で、open が hinge のどちらか側か）に合わせる
+  // 折れの向きは開き先の符号（辺に垂直な方向で、open が hinge のどちら側か）に合わせる
   const sign = (horiz ? open.y - hinge.y : open.x - hinge.x) < 0 ? -1 : 1
-  // 2枚折れ: 開口を4等分し、折れ点を交互に収納側へ振ったジグザグ（M 字）。弧がないので開き戸と混同しない
+  // M 字の折れ戸: 開口を4等分し、折れ点を交互に収納側へ振ったジグザグ（M 字）。弧がないので開き戸と混同しない
   const pt = (k: number) => {
     const t = k / 4
     const off = k % 2 === 1 ? 0.3 * sign : 0
@@ -80,7 +80,7 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
     const fs = Math.min(0.8, lo - 0.9)
     // ハンガーパイプの線・折れ戸の記号の上でも読めるよう、部屋色の縁取りを常に付ける（動線表示中は白）
     return (
-      <text x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} fontSize={fs} fontWeight={700} fill={LABEL_FILL} textAnchor="middle" stroke={halo ? '#fff' : '#F1F0EC'} strokeWidth={0.3} strokeLinejoin="round" paintOrder="stroke">CL</text>
+      <text x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} fontSize={fs} fontWeight={700} fill={LABEL_FILL} textAnchor="middle" stroke={halo ? '#fff' : FILL.store} strokeWidth={0.35} strokeLinejoin="round" paintOrder="stroke">CL</text>
     )
   }
   const cx = r.x + r.w / 2
