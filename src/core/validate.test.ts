@@ -88,10 +88,21 @@ describe('制約C: 水回りの隣接は buildPlan の出力で棄却0件', () =
   })
 })
 
+/** 期待する閾値（種別ごとのリテラル。MIN_SHORT から導出せず、表そのものの変更を検出する） */
+const EXPECTED_MIN_SHORT: Partial<Record<RoomType, number>> = {
+  master: 6, bed: 5, study: 5, washitsu: 5,
+  bath: 3, wash: 3, wc: 2, laundry: 3,
+  kitchen: 3, pantry: 2, wic: 3,
+  entry: 3, doma: 3,
+}
+
 describe('shortSideViolations（最小の短辺）', () => {
   const at = (type: RoomType, w: number, h: number) => room(type, 0, 0, w, h)
+  it('MIN_SHORT は期待する閾値表と一致する（種別ごとのリテラル）', () => {
+    expect(MIN_SHORT).toEqual(EXPECTED_MIN_SHORT)
+  })
   it('閾値ちょうどは通り、1 小さいと落ちる（縦横どちらの向きでも）', () => {
-    for (const [type, need] of Object.entries(MIN_SHORT) as [RoomType, number][]) {
+    for (const [type, need] of Object.entries(EXPECTED_MIN_SHORT) as [RoomType, number][]) {
       expect(shortSideViolations([at(type, need, 12)]), `${type} ちょうど`).toEqual([])
       expect(shortSideViolations([at(type, 12, need)]), `${type} ちょうど(縦)`).toEqual([])
       expect(shortSideViolations([at(type, need - 1, 12)]), `${type} -1`).toHaveLength(1)
@@ -104,9 +115,13 @@ describe('shortSideViolations（最小の短辺）', () => {
   it('hall・void・stair・ldk・store は対象外', () => {
     for (const t of ['hall', 'void', 'stair', 'ldk', 'store'] as RoomType[]) expect(shortSideViolations([at(t, 1, 1)]), t).toEqual([])
   })
-  it('結合セルの閾値は結合元以上（doma ≥ entry・doma、kitchen ≥ kitchen・pantry）', () => {
-    expect(MIN_SHORT.doma ?? 0).toBeGreaterThanOrEqual(Math.max(MIN_SHORT.entry ?? 0, MIN_SHORT.doma ?? 0))
-    expect(MIN_SHORT.kitchen ?? 0).toBeGreaterThanOrEqual(MIN_SHORT.pantry ?? 0)
-    expect(MIN_SHORT.doma ?? 0).toBeGreaterThanOrEqual(MIN_SHORT.entry ?? 0)
+  // 結合セルは残る種別（玄関+土間→doma、キッチン+パントリー→kitchen）の閾値で判定する。
+  // パントリー（2）だけを満たす幅 2 のキッチン結合セルも、玄関と同じ 3 を満たさない土間結合セルも落ちる
+  it('結合セルは残る種別の閾値で判定する（doma は 3、kitchen は pantry より厳しい 3）', () => {
+    expect(shortSideViolations([at('doma', 2, 12)])).toHaveLength(1)
+    expect(shortSideViolations([at('doma', 3, 12)])).toEqual([])
+    expect(shortSideViolations([at('kitchen', 2, 12)])).toHaveLength(1)
+    expect(shortSideViolations([at('kitchen', 3, 12)])).toEqual([])
+    expect(shortSideViolations([at('pantry', 2, 12)])).toEqual([])
   })
 })

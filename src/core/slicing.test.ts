@@ -131,27 +131,32 @@ describe('layoutFloor', () => {
   it('帯の高さを返し、合計が H になる', () => {
     const r = layoutFloor(16, 16, bands())
     expect(r).not.toBeNull()
-    expect(r?.heights.reduce((s, h) => s + h, 0)).toBe(16)
-    expect(r?.heights[1]).toBe(2)
+    if (!r) return
+    expect(r.heights.reduce((s, h) => s + h, 0)).toBe(16)
+    expect(r.heights[1]).toBe(2)
   })
   it('capH を超えない。cap が min 未満なら null', () => {
     const free = layoutFloor(16, 16, bands())
+    expect(free).not.toBeNull()
     const south = free?.heights[2] ?? 0
     expect(south).toBeGreaterThan(7)
     const capped = layoutFloor(16, 16, bands(), { capH: { 2: south - 1 } })
     expect(capped).not.toBeNull()
-    expect(capped?.heights[2]).toBeLessThanOrEqual(south - 1)
-    expect(capped?.heights.reduce((s, h) => s + h, 0)).toBe(16)
+    if (!capped) return
+    expect(capped.heights[2]).toBeLessThanOrEqual(south - 1)
+    expect(capped.heights.reduce((s, h) => s + h, 0)).toBe(16)
     expect(layoutFloor(16, 16, bands(), { capH: { 2: 6 } })).toBeNull()
   })
   it('上限の拡張（maxH 合計が H に満たない）でも cap を守る', () => {
     // 16x24: maxH 合計 8+12 < 22 なので、通常は幅の大きい南帯を 15 まで広げる
     const free = layoutFloor(16, 24, bands())
+    expect(free).not.toBeNull()
     expect(free?.heights[2]).toBe(15)
     const capped = layoutFloor(16, 24, bands(), { capH: { 2: 14 } })
     expect(capped).not.toBeNull()
-    expect(capped?.heights[2]).toBe(14)
-    expect(capped?.heights.reduce((s, h) => s + h, 0)).toBe(24)
+    if (!capped) return
+    expect(capped.heights[2]).toBe(14)
+    expect(capped.heights.reduce((s, h) => s + h, 0)).toBe(24)
     // cap が小さすぎて合計が H に届かなければ null
     expect(layoutFloor(16, 24, bands(), { capH: { 2: 12 } })).toBeNull()
   })
@@ -167,15 +172,18 @@ describe('layoutFloor', () => {
       { cells: [cell('hall')], fixedH: 2 },
       { cells: [cell('master'), cell('bed'), cell('bed')], minH: 6, maxH: 12 },
     ]
-    const south1 = layoutFloor(16, 16, f1)?.heights[2]
+    const floor1 = layoutFloor(16, 16, f1)
+    expect(floor1).not.toBeNull()
+    const south1 = floor1?.heights[2]
     expect(south1).toBe(8)
     const uncapped = layoutFloor(16, 16, f2())
     expect(uncapped).not.toBeNull()
     expect(uncapped?.heights[2]).toBeGreaterThan(south1 ?? 0) // cap がなければ違反になる
     const capped = layoutFloor(16, 16, f2(), { capH: { 2: south1 ?? 0 } })
     expect(capped).not.toBeNull()
-    expect(capped?.heights[2]).toBeLessThanOrEqual(south1 ?? 0)
-    expect(capped?.heights).toEqual([6, 2, 8])
+    if (!capped) return
+    expect(capped.heights[2]).toBeLessThanOrEqual(south1 ?? 0)
+    expect(capped.heights).toEqual([6, 2, 8])
   })
   it('入力の bands を書き換えない', () => {
     const b = bands()

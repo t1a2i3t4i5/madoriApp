@@ -36,7 +36,7 @@ export const INFEASIBLE: { name: string; cfg: PlanConfig }[] = [
 /** 実現可能と判定されるのに、検証を通る案が0になる条件（diagnoseEmpty の経路） */
 export const ZERO_PLAN: PlanConfig = { ...base, area: 26, floors: 2, rooms: 2, feats: ['doma'] }
 
-/** 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 4 の実測。短辺の制約を入れても件数は変わらない） */
+/** 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 4 の実測。先頭3件は短辺の制約を入れても件数が変わらず、末尾の「30坪/平屋/個室5」は短辺の制約で0案になる） */
 export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全 SEEDS で返す件数（0案なら候補プールも空） */ expected: number }[] = [
   { name: '境界: 36坪/2階/吹抜+個室4+WIC+書斎（0案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'study', 'kitchenFace'] }, expected: 0 },
   { name: '境界: 36坪/2階/吹抜+個室4+WIC（3案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'kitchenFace'] }, expected: 3 },

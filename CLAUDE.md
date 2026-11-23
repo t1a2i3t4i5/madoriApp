@@ -32,14 +32,14 @@ npm test      # vitest
 - `src/core/`: 生成ロジックの中核。**フレームワーク非依存の純TypeScript**。React・DOM・ブラウザAPIに依存しないこと（Node/vitest でそのまま動く状態を保つ）
   - `types.ts`: 部屋・プラン・入力などの型定義
   - `rng.ts`: seed付き乱数（mulberry32系）。再現性の要
-  - `rooms.ts`: 部屋種別の定義（目標/最小/最大面積）、居室（HABITABLE）・通り抜け可否（VIA）、cell ヘルパ
+  - `rooms.ts`: 部屋種別の定義（目標/最小/最大面積）、居室（HABITABLE）・通り抜け可否（VIA）、cell ヘルパ、`findEntry`（玄関として扱う部屋。結合セル doma は玄関を兼ねる。FloorSvg の外開きドアと flow の来客動線の起点が共有）
   - `slicing.ts`: 固定3帯構成の割り付け。`waterfill`（clamp付き二分探索 + 最大剰余法）、`layoutBand`（帯内の幅配分。余りは吸収セルへ、溢れたら結合できるクラスタ（玄関+土間 → キッチン+パントリー）を順に結合して再試行）、`layoutFloor`（帯の高さ配分。`{ rooms, heights }` を返し、`capH` で帯の高さの上限を指定できる）、`footprintList`（外形候補。既定は上位10件）。GEN_VERSION 4 から帯内の幅の下限と帯の高さの下限に `minShort`（最小の短辺）を使う。`ignoreMinShort` は診断専用で、生成では使わない。汎用のスライシング木（H/V再帰分割・measure/allocate/solve）は**未実装**
-  - `program.ts`: 実現可能性判定（`feasibility`）と、生成0案時の診断（`diagnoseEmpty`: どの階が崩れたかの理由（`ignoreMinShort` で組み直せるなら原因は短辺とし、短辺の理由文を出す）と、`generatePlans` が実際に3案を返すことを確かめた代替案を最大3件）。入力 → 部屋プログラムの変換は archetypes.ts の `bandsFor` が担う
+  - `program.ts`: 実現可能性判定（`feasibility`）と、生成0案時の診断（`diagnoseEmpty`: どの階が崩れたかの理由（`ignoreMinShort` で組み直せるなら原因は短辺とし、短辺の理由文を出す）と、`generatePlans` が実際に3案を返すことを確かめた代替案を最大3件。1つの変更で1件も出ないときに限り、2つの変更の組み合わせ（例: 総二階にする＋吹抜を外す）を試す。短辺の理由文は階で出し分ける: 平屋・1階・2階・1階2階とも）。入力 → 部屋プログラムの変換は archetypes.ts の `bandsFor` が担う
   - `archetypes.ts`: アーキタイプ（`bandsFor` が帯ごとのクラスタ列を返す）、`applyVariant`（変種 `Variant` の適用。ユニット単位の並べ替え・階段の東西・2F個室の南北配分）、`buildPlan`（外形と変種に当てはめて1案を組み立てる。1F→2Fの順に組み、階段の1F/2F一致・吹抜がLDK直上（x・y とも。吹抜ありは2F南帯の高さを1F南帯以下に抑える）に収まるかをここで検査し、満たさなければ null）
   - `derive.ts`: 隣接グラフからのドア・窓の自動生成
     - ドアの形状は `doorSwing`（`Door.swing`）に集約。`computeDoors` は後処理 `separateSwings` で、同じ部屋に開く弧の矩形が重なるドアを、葉を共有区間の端へ寄せる → 開き先を反対の部屋に切り替える、の順で避ける（避けられなければ既定の形のまま）。開き先は片方だけ非VIAならその部屋、同条件なら面積の小さい方。葉は共有区間内（最大1.8セル、34%地点中心でクランプ）、半径は葉の長さと開き先の深さの小さい方で、弧の矩形は開き先に収まる。FloorSvg・furnish（`doorSwingRect`）・flow（`swing.center`）が共有。玄関の外開きは `entryDoor`（半径は玄関の幅以下）
     - ドア除外表 `NO_DOOR_PAIRS` / `PAIR_OK_PAIRS` は `[RoomType, RoomType]` のペア配列で、`pairKey`（アルファベット順に正規化）の Set で照合する。以前は文字列キーを手書きしており、`entry-bath` / `ldk-bath` / `master-bath` / `bed-bath` / `void-stair` が正規形（`bath-entry` 等）と一致せず、ドア除外が効いていなかった。このうち実際に `doorOK` の結果が変わるのは `bath-entry` と `bath-ldk` の2ペアだけ（entry・ldk が VIA のため、以前は true になっていた）で、固定3帯構成では hall 帯を挟むため隣接せず、生成結果は1件も変わらない潜在バグだった（修正前後で gen-v2 fixture 無変更）。残りの `bath-master` / `bath-bed` / `stair-void` は、VIA でも PAIR_OK でもない、または void を含むため、元々 false で結果は変わらない。将来スライシング木・L字外形を入れるとこれらのペアが隣接しうるので、その時点で表に出る。定義は `derive.test.ts` で正規形を検査している
-  - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積・水回りの隣接（`wetViolations`: 階ごとに辺共有2セル以上で、浴室→洗面、ランドリー→洗面、トイレ→同じ階の浴室/洗面/ランドリーのいずれか。キッチン・パントリーは対象外）。階段・吹抜の整合は buildPlan 側。GEN_VERSION 3 では水回りユニットを ランドリー→洗面→浴室 の順に並べるため、制約Cによる棄却は0件（実測）
+  - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積・最小の短辺（`shortSideViolations`: `MIN_SHORT` の閾値未満の短辺を棄却する安全網。割り付けが下限として満たすので実測0件）・水回りの隣接（`wetViolations`: 階ごとに辺共有2セル以上で、浴室→洗面、ランドリー→洗面、トイレ→同じ階の浴室/洗面/ランドリーのいずれか。キッチン・パントリーは対象外）。階段・吹抜の整合は buildPlan 側。GEN_VERSION 3 では水回りユニットを ランドリー→洗面→浴室 の順に並べるため、制約Cによる棄却は0件（実測）
   - `score.ts`: ソフトスコア
   - `diversity.ts`: 3案の多様性選抜
   - `describe.ts`: プランの名前・特徴タグ生成
@@ -48,7 +48,7 @@ npm test      # vitest
   - `explain.ts`: 間取りの解説文 `explainPlan`（純関数）。スコア内訳・配置・入力だけから2〜3文を作り（部分二階は先頭に1文足す。最大4文）、当てはまらない特徴は書かない。階段と個室の関係は階ごとに `ROOM[type].cat === 'bed'`（書斎・和室を含む）で判定。弱点（廊下が長い・縦横比・面積適合）がある案は必ず触れる（枠が足りなければ階段の文と1文にまとめる）。LDK の畳数はキッチン独立案ではキッチンを含む。割合は小数1桁に切り捨て。しきい値は `EXPLAIN_TH`
   - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドアの弧は `Door.swing`（`doorSwing` が算出。葉の最大長 `DOOR_LEAF` = 1.8）の `rect` を避ける。FloorSvg・flow と共有する
 - `src/components/`: React UI（入力フォーム、PlanCard、SVG図面、拡大モーダル）
-- `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セットと独立検証（クラスタの辺共有・階段x一致・吹抜⊂LDK を含む）
+- `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セットと独立検証（クラスタの辺共有・階段x一致・吹抜⊂LDK・最小の短辺を含む。短辺の閾値表 `SHORT_MIN` は `rooms.ts` の `MIN_SHORT` とは別に持つ）。`BOUNDARY` は0案・3案の境界条件で、先頭3件は短辺を入れても件数が変わらず、30坪/平屋/個室5だけが短辺で0案になる
   - `flow.ts`: 動線（来客: 玄関→LDK、生活: LDK→洗面・浴室）の計算 `computeFlows`（純関数、`src/core/` ではなく `src/lib/`）。ドアでつながる部屋の最短経路。中継は VIA 室だけを優先し、VIA だけで届かないときに限り `NON_VIA_PENALTY` を課して VIA 以外を通す。階をまたぐ区間は階段までを描く
   - `exportPng.ts`: SVG → PNG 書き出し。文字列処理（`buildExportSvg` など。置換は関数 replacer／slice 連結で `$` を壊さない）とブラウザ API（`svgElementToPng`・`downloadBlob`）を分けている。ObjectURL の解放は `REVOKE_DELAY_MS`（60秒）後
   - 追加UI: `Gallery`（候補。上位24案／全N案）、`FavoritesShelf`（お気に入り棚＋比較）、`StarButton`、`Furniture`（拡大表示のみ・「家具を表示」トグル）、`FlowOverlay`（動線の重ね表示。拡大表示のみ。部屋ラベルより下に描き、凡例は FloorSvg が viewBox 下端に足す専用の帯に置く）。印刷は PlanCard の print 専用ブロックが全階を並べ、ボタンを含む文は no-print で文ごと隠す
@@ -105,6 +105,7 @@ npm test      # vitest
 **階段室に扉が付いている現状の記録**: `stair` は VIA で、hall–stair のドアが常時付く（`derive.ts`。`NO_DOOR_PAIRS` に入っているのは stair–wc、stair–void だけ）。設計書は、階段を VIA としたうえで、出入りを扉のない開口とする（R-DOOR-14、R-DOOR-04）。VIA のタイブレークで hall が階段側へ開く組が出るのも同じ原因。直すと生成結果が変わるので GEN_VERSION を上げる。
 
 - **階段の高さの食い違い**: 1F と 2F で階段の x・幅は一致させているが、y（帯の高さ）は階ごとに決まるため一致しない（GEN_VERSION 1 の案の約84%で発生）。揃えると0案が激増するため別課題
+- **家具配置の見積もり（R-EXT-10 の前提課題）**: GEN_VERSION 4 で洋室（ベッド+机）を置ける率は 15%（79/522）、主寝室は 62.5%（160/256）まで下がった（v3 まで: 洋室 25% 超・主寝室 70% 超）。主因は部屋の形ではなく、(1) `labelRect`（部屋名ラベルの占有）の見積もりが大きめで置き場所を削ること、(2) 内開きのドア弧（開き先の部屋側に描く）が室内を塞ぐこと。以前の指標は細長い部屋ほど壁沿いに並べやすく有利だった。4.4帖以下の洋室は標本の 23%（121/522）で、1件も置けない。R-EXT-10（家具の見積もり）に取りかかる前に、`labelRect` の見積もりとドア弧の扱い（家具側の避け方）を見直す。`furnish.test.ts` は下限を実測近く（洋室 0.14・主寝室 0.6）に置き、短辺を満たす洋室に限った率と4.4帖以下の割合を別に固定している
 - **ドア弧の残課題**: (1) wc・キッチンで、器具と弧の重なりが増えた（wc は外開き特例の検討。R-DOOR-16）。(2) VIA どうしのタイブレーク（面積 → y → x。R-DOOR-15）で、hall-stair が階段側に開くなど不自然な組がある（上の階段室の扉と同じ原因）
 - 汎用スライシング木、3案が揃わない条件（0案になる境界条件が一定数ある。診断と代替案は `diagnoseEmpty`）の根本改善
 
