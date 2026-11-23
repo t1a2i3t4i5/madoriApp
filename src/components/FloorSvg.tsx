@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { Plan, Room, RoomCategory } from '../core/types'
 import { ROOM } from '../core/rooms'
-import { floorRect } from '../core/types'
+import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { Furniture } from './Furniture'
@@ -72,6 +72,35 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
   return null
 }
 
+/** 1階の板から2階の板を引いた領域（東西下屋 or 南下屋の一辺共有の形なので高々2矩形） */
+export function shimoyaRects(outer: FloorRect, fp: FloorRect): FloorRect[] {
+  const out: FloorRect[] = []
+  // 西（x 小さい側）・東の帯
+  if (fp.x > outer.x) out.push({ x: outer.x, y: outer.y, W: fp.x - outer.x, H: outer.H })
+  if (fp.x + fp.W < outer.x + outer.W) out.push({ x: fp.x + fp.W, y: outer.y, W: outer.x + outer.W - (fp.x + fp.W), H: outer.H })
+  // 北・南の帯（東西の帯と重ならない、2階の板の幅の範囲）
+  if (fp.y > outer.y) out.push({ x: fp.x, y: outer.y, W: fp.W, H: fp.y - outer.y })
+  if (fp.y + fp.H < outer.y + outer.H) out.push({ x: fp.x, y: fp.y + fp.H, W: fp.W, H: outer.y + outer.H - (fp.y + fp.H) })
+  return out
+}
+
+function Shimoya({ outer, fp, uid }: { outer: FloorRect; fp: FloorRect; uid: string }) {
+  const rects = shimoyaRects(outer, fp)
+  return (
+    <g>
+      {rects.map((r, i) => (
+        <g key={i}>
+          <rect x={r.x} y={r.y} width={r.W} height={r.H} fill={`url(#shimoya${uid})`} />
+          {r.W >= 2.4 && r.H >= 2.4 && (
+            <text x={r.x + r.W / 2} y={r.y + r.H / 2 + 0.4} fontSize={Math.min(1.2, r.W - 0.4)} fill="#7a7568" textAnchor="middle" fontWeight={700}>下屋</text>
+          )}
+        </g>
+      ))}
+      <rect x={outer.x} y={outer.y} width={outer.W} height={outer.H} fill="none" stroke="#8a8578" strokeWidth={0.12} strokeDasharray="0.6 0.4" />
+    </g>
+  )
+}
+
 const NO_ROOMS: Room[] = []
 
 export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, showFlow, scale }: FloorSvgProps) {
@@ -120,6 +149,10 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
           <rect width={1.6} height={1.6} fill="#f4f1e6" />
           <line x1={0} y1={0} x2={0} y2={1.6} stroke="#c9c2ab" strokeWidth={0.35} />
         </pattern>
+        <pattern id={`shimoya${uid}`} width={1.2} height={1.2} patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+          <rect width={1.2} height={1.2} fill="#f7f4ea" />
+          <line x1={0} y1={0} x2={0} y2={1.2} stroke="#d6cfb8" strokeWidth={0.2} />
+        </pattern>
         <pattern id={`dots${uid}`} width={1.4} height={1.4} patternUnits="userSpaceOnUse">
           <rect width={1.4} height={1.4} fill="#d9cbae" />
           <circle cx={0.7} cy={0.7} r={0.16} fill="#b7a67f" />
@@ -128,6 +161,9 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {/* 方位 */}
       <text x={W - 1.2} y={-PAD - 0.1} fontSize={1.7} fill="#8a8578" textAnchor="middle" fontWeight={700}>N</text>
       <path d={`M ${W - 1.2} ${-PAD + 0.6} l 0.45 0.9 h -0.9 z`} fill="#8a8578" />
+      {/* 下屋（部分二階の2階）: 1階の外形を破線で重ね、1階の板から2階の板を引いた部分に淡いハッチと「下屋」ラベル。
+          2階の外壁・窓より下層に描く（後に描くと外壁が半分の太さに見え、窓の二重線が潰れる） */}
+      {fl.fp && floorIdx > 0 && <Shimoya outer={floorRect(plan, 0)} fp={fp} uid={uid} />}
       {/* 部屋の塗り */}
       {fl.rooms.map((r, i) => {
         let fill = FILL[ROOM[r.type].cat]

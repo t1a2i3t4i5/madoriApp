@@ -55,10 +55,12 @@ export default function App() {
   })
   const [favMessage, setFavMessage] = useState<string | null>(null)
 
+  // 仕様: 平屋に切り替えても state.story（2階の形）は残す。toConfig・encodeHash は平屋では story を無視／出力しないので、
+  // 2階建てに戻せば元の選択に戻る。ただしハッシュには残らないため、平屋のままリロードすると総二階に戻る（許容）。
   // seed だけが変わるときは cfg の同一性を保ちたいので、条件の各フィールドを依存にする
   const cfg: PlanConfig = useMemo(
     () => toConfig(state),
-    [state.area, state.floors, state.rooms, state.parking, state.garden, state.feats],
+    [state.area, state.floors, state.rooms, state.parking, state.garden, state.feats, state.story],
   )
   const feas = useMemo(() => feasibility(cfg), [cfg])
   const plans = useMemo(() => (feas.ok ? generatePlans(cfg, state.seed) : []), [feas, cfg, state.seed])
@@ -117,7 +119,7 @@ export default function App() {
   const random = () => {
     const seed = state.seed + 1 // patch 後に実際に使う seed で3案が出る条件を選ぶ
     const c = randomConfig(mulberry32((Math.random() * 2 ** 31) >>> 0), 200, seed)
-    if (c) patch({ ...c, seed })
+    if (c) patch({ ...c, story: 'full', seed })
   }
 
   const persist = (list: Favorite[]) => {

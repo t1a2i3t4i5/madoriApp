@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { enumeratePlans, galleryPlans } from '../core/enumerate'
-import { CONDITIONS, defined } from '../core/testing'
+import { CONDITIONS, PARTIAL_CONDITIONS, defined } from '../core/testing'
 import { addFavorite } from '../lib/favorites'
 import { FavoritesShelf } from './FavoritesShelf'
-import { FloorSvg } from './FloorSvg'
+import { FloorSvg, shimoyaRects } from './FloorSvg'
 import { Gallery } from './Gallery'
 import { PlanCard } from './PlanCard'
 import { PlanDialog } from './PlanDialog'
@@ -25,6 +25,43 @@ describe('コンポーネントの描画', () => {
     expect(on.indexOf('aria-hidden="true"')).toBeLessThan(on.indexOf('LDK</text>'))
     // 家具なしの描画は従来と同じ（家具の g を含まない）
     expect(off).not.toContain('aria-hidden="true"')
+  })
+
+  it('FloorSvg: 下屋は2Fに fp があるときだけ描かれ、総二階・1Fでは描かれない', () => {
+    const pc = defined(PARTIAL_CONDITIONS[0]).cfg
+    const pp = defined(enumeratePlans(pc)[0])
+    const f2 = renderToStaticMarkup(<FloorSvg plan={pp} floorIdx={1} uid="t" />)
+    expect(f2).toContain('下屋</text>')
+    expect(f2).toContain('stroke-dasharray')
+    expect(renderToStaticMarkup(<FloorSvg plan={pp} floorIdx={0} uid="t" />)).not.toContain('下屋</text>')
+    const full = renderToStaticMarkup(<FloorSvg plan={defined(plans[0])} floorIdx={1} uid="t" />)
+    expect(full).not.toContain('下屋</text>')
+    expect(full).not.toContain('stroke-dasharray')
+    // カード・拡大表示で階別の坪数が出る
+    const card = renderToStaticMarkup(<PlanCard cfg={pc} plan={pp} index={0} scale={{ maxW: pp.W, maxH: pp.H }} onOpen={noop} starred={false} onToggleStar={noop} />)
+    expect(card).toMatch(/1F 約[\d.]+坪・2F 約[\d.]+坪/)
+  })
+
+  it('shimoyaRects: 東西・南の下屋領域が1Fの板から2Fの板を引いた面積になる', () => {
+    const outer = { x: 0, y: 0, W: 20, H: 16 }
+    const area = (rs: { W: number; H: number }[]) => rs.reduce((s, r) => s + r.W * r.H, 0)
+    const ew = shimoyaRects(outer, { x: 0, y: 0, W: 14, H: 16 })
+    expect(ew).toEqual([{ x: 14, y: 0, W: 6, H: 16 }])
+    const s = shimoyaRects(outer, { x: 0, y: 0, W: 20, H: 11 })
+    expect(s).toEqual([{ x: 0, y: 11, W: 20, H: 5 }])
+    expect(area(ew)).toBe(20 * 16 - 14 * 16)
+    expect(shimoyaRects(outer, outer)).toEqual([])
+    // 西側に下屋が出る（2階の板が東寄り）
+    expect(shimoyaRects(outer, { x: 6, y: 0, W: 14, H: 16 })).toEqual([{ x: 0, y: 0, W: 6, H: 16 }])
+  })
+
+  it('FloorSvg: 下屋は窓・外壁より先（下層）に描かれる', () => {
+    const pp = defined(enumeratePlans(defined(PARTIAL_CONDITIONS[0]).cfg)[0])
+    const html = renderToStaticMarkup(<FloorSvg plan={pp} floorIdx={1} uid="t" />)
+    const shimoya = html.indexOf('下屋</text>')
+    expect(shimoya).toBeGreaterThanOrEqual(0)
+    expect(shimoya).toBeLessThan(html.indexOf('stroke="#fdfcf8"')) // 窓（壁抜きの白線）
+    expect(shimoya).toBeLessThan(html.indexOf('stroke-width="0.42"')) // 外壁
   })
 
   it('FloorSvg: 動線は showFlow のときだけ描かれ、部屋ラベルより下（先）。ラベルには白縁取り', () => {

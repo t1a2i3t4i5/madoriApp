@@ -1,6 +1,6 @@
 import { GEN_VERSION } from '../core/generate'
 import { isPlanKey } from '../core/enumerate'
-import type { PlanConfig, PlanKey } from '../core/types'
+import { isPartial, type PlanConfig, type PlanKey } from '../core/types'
 import { FEATURES } from './features'
 
 export { FEATURES } from './features'
@@ -14,12 +14,19 @@ export const DEFAULT_STATE: AppState = {
 }
 
 export function toConfig(s: PlanConfig): PlanConfig {
-  return { area: s.area, floors: s.floors, rooms: s.rooms, parking: s.parking, garden: s.garden, feats: s.feats }
+  const cfg: PlanConfig = { area: s.area, floors: s.floors, rooms: s.rooms, parking: s.parking, garden: s.garden, feats: s.feats }
+  // 総二階（既定）では story を付けない。平屋では無視される値なので付けない
+  if (isPartial(s)) cfg.story = 'partial'
+  return cfg
 }
 
 /** 入力 + seed + genVersion を URL ハッシュへ保存する形式。p（planKey）があれば、その案の拡大表示が開いた状態で開く */
 export function encodeHash(s: AppState, p?: PlanKey): string {
-  const o = { area: s.area, floors: s.floors, rooms: s.rooms, parking: s.parking, garden: s.garden, feats: s.feats, seed: s.seed, v: GEN_VERSION }
+  // story は部分二階かつ2階建てのときだけ書く（総二階・平屋の文字列は従来と同一）
+  const o = {
+    area: s.area, floors: s.floors, rooms: s.rooms, parking: s.parking, garden: s.garden, feats: s.feats,
+    ...(isPartial(s) ? { story: 'partial' } : {}), seed: s.seed, v: GEN_VERSION,
+  }
   return '#c=' + encodeURIComponent(JSON.stringify(o)) + (p ? '&p=' + encodeURIComponent(p) : '')
 }
 
@@ -67,6 +74,7 @@ export function parseHash(hash: string): ParsedHash {
     if (typeof o.rooms === 'number') out.rooms = Math.min(5, Math.max(2, Math.round(o.rooms)))
     if (typeof o.parking === 'number') out.parking = Math.min(2, Math.max(0, Math.round(o.parking)))
     if (typeof o.garden === 'number') out.garden = Math.min(2, Math.max(0, Math.round(o.garden)))
+    if (o.story === 'partial') out.story = 'partial'
     if (isValidSeed(o.seed)) out.seed = o.seed
     if (Array.isArray(o.feats)) out.feats = FEATURES.map((f) => f.key).filter((k) => (o.feats as unknown[]).includes(k))
   } catch {

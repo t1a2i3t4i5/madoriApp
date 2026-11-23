@@ -100,4 +100,25 @@ describe('URLハッシュ', () => {
       }
     })
   })
+
+  it('総二階・平屋の encodeHash は従来と同一の文字列（story を書かない）', () => {
+    const legacy = '#c=' + encodeURIComponent('{"area":30,"floors":2,"rooms":3,"parking":2,"garden":1,"feats":["kitchenFace","wic"],"seed":20261121,"v":' + GEN_VERSION + '}')
+    expect(encodeHash(DEFAULT_STATE)).toBe(legacy)
+    expect(encodeHash({ ...DEFAULT_STATE, story: 'full' })).toBe(legacy)
+    // 平屋では partial でも書かない
+    const one = encodeHash({ ...DEFAULT_STATE, floors: 1 })
+    expect(encodeHash({ ...DEFAULT_STATE, floors: 1, story: 'partial' })).toBe(one)
+    expect(one).not.toContain('story')
+  })
+  it('部分二階: story=partial が往復し、2階建てのときだけ書く', () => {
+    const s = { ...DEFAULT_STATE, story: 'partial' as const }
+    expect(decodeURIComponent(encodeHash(s))).toContain('"story":"partial"')
+    expect(decodeHash(encodeHash(s)).story).toBe('partial')
+    expect(decodeHash(encodeHash(DEFAULT_STATE)).story).toBeUndefined()
+  })
+  it('story は partial のときだけ採用（それ以外は無視）', () => {
+    const h = (story: unknown) => '#c=' + encodeURIComponent(JSON.stringify({ ...DEFAULT_STATE, story, v: GEN_VERSION }))
+    expect(decodeHash(h('partial')).story).toBe('partial')
+    for (const bad of ['full', 'x', 1, null, true]) expect(decodeHash(h(bad)).story, String(bad)).toBeUndefined()
+  })
 })

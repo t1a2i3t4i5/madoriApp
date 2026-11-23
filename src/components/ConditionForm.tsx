@@ -2,17 +2,20 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { FeatureKey } from '../core/types'
 import { FEATURES, type AppState } from '../lib/hash'
 
-interface SegProps<T extends number> {
+interface SegProps<T extends number | string> {
   label: string
   value: T
   options: { v: T; text: string }[]
   onChange: (v: T) => void
+  /** 選べない状態（グレーアウト）。補足文 note と併用する */
+  disabled?: boolean
+  note?: string
 }
 
-function Seg<T extends number>({ label, value, options, onChange }: SegProps<T>) {
+function Seg<T extends number | string>({ label, value, options, onChange, disabled, note }: SegProps<T>) {
   const id = useId()
   return (
-    <div className="mb-[18px]">
+    <div className={`mb-[18px] ${disabled ? 'opacity-50' : ''}`}>
       <div className="mb-2 text-[14.5px] font-bold" id={id}>{label}</div>
       <div className="flex gap-1 rounded-[10px] bg-surface2 p-1" role="group" aria-labelledby={id}>
         {options.map((o) => (
@@ -20,8 +23,9 @@ function Seg<T extends number>({ label, value, options, onChange }: SegProps<T>)
             key={o.v}
             type="button"
             aria-pressed={o.v === value}
+            disabled={disabled}
             onClick={() => onChange(o.v)}
-            className={`min-h-10 flex-1 cursor-pointer rounded-[7px] border-0 px-1 py-2 text-sm font-bold ${
+            className={`min-h-10 flex-1 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-[7px] border-0 px-1 py-2 text-sm font-bold ${
               o.v === value ? 'bg-surface text-ink shadow-[0_1px_4px_rgba(0,0,0,.14)]' : 'bg-transparent text-ink2'
             }`}
           >
@@ -29,6 +33,7 @@ function Seg<T extends number>({ label, value, options, onChange }: SegProps<T>)
           </button>
         ))}
       </div>
+      {note && <p className="mt-1.5 text-[11.5px] leading-[1.55] text-ink2">{note}</p>}
     </div>
   )
 }
@@ -87,6 +92,14 @@ export function ConditionForm({ state, onChange, onGenerate, onRandom }: Props) 
         <div className="-mt-1 flex justify-between text-[11px] text-ink2"><span>20坪</span><span>30坪</span><span>40坪</span></div>
       </div>
       <Seg label="階数" value={state.floors} options={[{ v: 1, text: '平屋' }, { v: 2, text: '2階建て' }]} onChange={(floors) => onChange({ floors })} />
+      <Seg
+        label="2階の形"
+        value={state.floors === 2 && state.story === 'partial' ? 'partial' : 'full'}
+        options={[{ v: 'full', text: '総二階' }, { v: 'partial', text: '部分二階' }]}
+        onChange={(story) => onChange({ story })}
+        disabled={state.floors === 1}
+        note={state.floors === 1 ? '平屋では選べません' : '部分二階は2階を1階より小さくし、1階の屋根（下屋）が出る形です。'}
+      />
       <Seg label="個室数（主寝室ふくむ）" value={state.rooms} options={[2, 3, 4, 5].map((v) => ({ v, text: `${v}室` }))} onChange={(rooms) => onChange({ rooms })} />
       <Seg label="駐車場" value={state.parking} options={[{ v: 0, text: 'なし' }, { v: 1, text: '1台' }, { v: 2, text: '2台' }]} onChange={(parking) => onChange({ parking })} />
       <Seg label="庭" value={state.garden} options={[{ v: 0, text: 'なし' }, { v: 1, text: '小さめ' }, { v: 2, text: '広め' }]} onChange={(garden) => onChange({ garden })} />
