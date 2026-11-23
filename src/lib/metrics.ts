@@ -1,4 +1,5 @@
-import type { Plan } from '../core/types'
+import type { Plan, Room } from '../core/types'
+import { isOwnedBy, isPrivateRoom, storageRatio } from '../core/closets'
 
 export interface PlanMetrics {
   /** LDK の畳数（1畳=8セル²）。LDK がなければ null */
@@ -7,6 +8,27 @@ export interface PlanMetrics {
   roomAvgTatami: number | null
   /** 廊下（ホール）面積 ÷ 延床 */
   hallRatio: number
+  /** 収納率（R-IDX-02。cat store のうち最小の短辺を満たすものの面積 ÷ 延床） */
+  storageRatio: number
+}
+
+/** 個室 p にクローゼット（closet）が付いているか（持ち主が p の closet が同じ階にある） */
+export function hasCloset(rooms: readonly Room[], p: Room): boolean {
+  return isPrivateRoom(p) && rooms.some((s) => s.type === 'closet' && isOwnedBy(s, p))
+}
+
+/** クローゼット付きの個室数と個室数（主寝室・洋室） */
+export function closetCount(plan: Plan): { with: number; total: number } {
+  let w = 0
+  let total = 0
+  for (const fl of plan.floors) {
+    for (const r of fl.rooms) {
+      if (!isPrivateRoom(r)) continue
+      total++
+      if (hasCloset(fl.rooms, r)) w++
+    }
+  }
+  return { with: w, total }
 }
 
 const TATAMI = 8
@@ -21,5 +43,6 @@ export function planMetrics(plan: Plan): PlanMetrics {
     ldkTatami: ldk ? ldk.area / TATAMI : null,
     roomAvgTatami: beds.length ? beds.reduce((s, r) => s + r.area, 0) / beds.length / TATAMI : null,
     hallRatio: plan.totalArea ? hall / plan.totalArea : 0,
+    storageRatio: storageRatio(plan),
   }
 }

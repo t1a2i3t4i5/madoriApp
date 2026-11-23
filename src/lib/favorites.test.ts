@@ -7,7 +7,8 @@ import {
   FAVORITES_STORAGE_KEY, MAX_FAVORITES, addFavorite, isFavorited, isOldVersion, loadFavorites, removeFavorite, saveFavorites,
   type Favorite, type KeyValueStorage,
 } from './favorites'
-import { planMetrics } from './metrics'
+import { closetCount, planMetrics } from './metrics'
+import { storageRatio } from '../core/closets'
 
 function memory(initial?: string): KeyValueStorage & { data: Map<string, string> } {
   const data = new Map<string, string>()
@@ -217,5 +218,15 @@ describe('planMetrics', () => {
     const hall = all.filter((r) => r.type === 'hall').reduce((s, r) => s + r.area, 0)
     expect(m.hallRatio).toBeCloseTo(hall / p0.totalArea)
     expect(m.hallRatio).toBeGreaterThan(0)
+  })
+
+  it('収納率は R-IDX-02 の数え方（storageRatio）と一致し、クローゼット付き個室を数える', () => {
+    const withCl = defined(enumeratePlans(defined(CONDITIONS[2]).cfg).find((q) => q.floors.some((f) => f.rooms.some((r) => r.type === 'closet'))))
+    expect(planMetrics(withCl).storageRatio).toBe(storageRatio(withCl))
+    expect(planMetrics(withCl).storageRatio).toBeGreaterThan(0)
+    const c = closetCount(withCl)
+    const closets = withCl.floors.flatMap((f) => f.rooms).filter((r) => r.type === 'closet').length
+    expect(c.with).toBeGreaterThan(0)
+    expect(c.with).toBeLessThanOrEqual(Math.min(c.total, closets))
   })
 })
