@@ -116,14 +116,40 @@ export type PlanKey = `${ArchId}-${number}x${number}` | `${ArchId}-${number}x${n
 export interface Edge {
   dir: 'v' | 'h'
   at: number
+  /** 共有区間の 34% 地点（ドアの葉の位置の目安）。実際の通行点は Door.swing.center */
   mid: number
   len: number
+  /** 共有区間（辺に沿った座標）の始点・終点 */
+  lo: number
+  hi: number
+}
+
+export interface Pt {
+  x: number
+  y: number
+}
+
+/** ドア1枚の開き形状。葉の区間は共有区間内、弧の矩形は開き先の部屋内に収まる */
+export interface DoorSwing {
+  /** 開き先の部屋（Door.a / Door.b のどちらか） */
+  opens: 'a' | 'b'
+  r: number
+  hinge: Pt
+  /** 閉じた葉の先端（壁に沿う） */
+  closed: Pt
+  /** 開いた葉の先端（壁に垂直） */
+  open: Pt
+  /** 葉の区間の中心（通行点。動線が通る） */
+  center: Pt
+  /** 弧の外接矩形 */
+  rect: { x: number; y: number; w: number; h: number }
 }
 
 export interface Door {
   a: Room
   b: Room
   edge: Edge
+  swing: DoorSwing
 }
 
 export interface Footprint {

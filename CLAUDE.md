@@ -33,6 +33,7 @@ npm test      # vitest
   - `program.ts`: 実現可能性判定（`feasibility`）と、生成0案時の診断（`diagnoseEmpty`: どの階が崩れたかの理由と、`generatePlans` が実際に3案を返すことを確かめた代替案を最大3件）。入力 → 部屋プログラムの変換は archetypes.ts の `bandsFor` が担う
   - `archetypes.ts`: アーキタイプ（`bandsFor` が帯ごとのクラスタ列を返す）、`applyVariant`（変種 `Variant` の適用。ユニット単位の並べ替え・階段の東西・2F個室の南北配分）、`buildPlan`（外形と変種に当てはめて1案を組み立てる。1F→2Fの順に組み、階段の1F/2F一致・吹抜がLDK直上（x・y とも。吹抜ありは2F南帯の高さを1F南帯以下に抑える）に収まるかをここで検査し、満たさなければ null）
   - `derive.ts`: 隣接グラフからのドア・窓の自動生成
+    - ドアの形状は `doorSwing`（`Door.swing`）に集約。`computeDoors` は後処理 `separateSwings` で、同じ部屋に開く弧の矩形が重なるドアを、葉を共有区間の端へ寄せる → 開き先を反対の部屋に切り替える、の順で避ける（避けられなければ既定の形のまま）。開き先は片方だけ非VIAならその部屋、同条件なら面積の小さい方。葉は共有区間内（最大1.8セル、34%地点中心でクランプ）、半径は葉の長さと開き先の深さの小さい方で、弧の矩形は開き先に収まる。FloorSvg・furnish（`doorSwingRect`）・flow（`swing.center`）が共有。玄関の外開きは `entryDoor`（半径は玄関の幅以下）
     - ドア除外表 `NO_DOOR_PAIRS` / `PAIR_OK_PAIRS` は `[RoomType, RoomType]` のペア配列で、`pairKey`（アルファベット順に正規化）の Set で照合する。以前は文字列キーを手書きしており、`entry-bath` / `ldk-bath` / `master-bath` / `bed-bath` / `void-stair` が正規形（`bath-entry` 等）と一致せず、ドア除外が効いていなかった。このうち実際に `doorOK` の結果が変わるのは `bath-entry` と `bath-ldk` の2ペアだけ（entry・ldk が VIA のため、以前は true になっていた）で、固定3帯構成では hall 帯を挟むため隣接せず、生成結果は1件も変わらない潜在バグだった（修正前後で gen-v2 fixture 無変更）。残りの `bath-master` / `bath-bed` / `stair-void` は、VIA でも PAIR_OK でもない、または void を含むため、元々 false で結果は変わらない。将来スライシング木・L字外形を入れるとこれらのペアが隣接しうるので、その時点で表に出る。定義は `derive.test.ts` で正規形を検査している
   - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積・水回りの隣接（`wetViolations`: 階ごとに辺共有2セル以上で、浴室→洗面、ランドリー→洗面、トイレ→同じ階の浴室/洗面/ランドリーのいずれか。キッチン・パントリーは対象外）。階段・吹抜の整合は buildPlan 側。GEN_VERSION 3 では水回りユニットを ランドリー→洗面→浴室 の順に並べるため、制約Cによる棄却は0件（実測）
   - `score.ts`: ソフトスコア
@@ -41,7 +42,7 @@ npm test      # vitest
   - `generate.ts`: パイプライン全体の統括。`candidatePool`（seed 非依存の全候補。メモ化。変種は適用後の帯構成が同一のものを列挙前に省く。readonly は配列レベルのみ）、`dedupeBySig`（反転込みの重複除去）、`selectPlans`（seed による選抜）、`generatePlansUncached`（診断用。キャッシュに入れない）。`GEN_VERSION` もここ
   - `enumerate.ts`: 候補ギャラリー用。`enumeratePlans`（候補プールのコピー）、`galleryPlans`（多様性優先で上位24案）。`planKey`（v2 は `arch-WxH-<変種>`、変種なしは v1 の `arch-WxH`）の生成・解析と、key からの再構築（`planFromKey`。v1 の key は null）もここ
   - `explain.ts`: 間取りの解説文 `explainPlan`（純関数）。スコア内訳・配置・入力だけから2〜3文を作り、当てはまらない特徴は書かない。階段と個室の関係は階ごとに `ROOM[type].cat === 'bed'`（書斎・和室を含む）で判定。弱点（廊下が長い・縦横比・面積適合）がある案は必ず触れる（枠が足りなければ階段の文と1文にまとめる）。LDK の畳数はキッチン独立案ではキッチンを含む。割合は小数1桁に切り捨て。しきい値は `EXPLAIN_TH`
-  - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドア開き半径 `DOOR_R` は `derive.ts` にあり、FloorSvg と共有する
+  - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドアの弧は `Door.swing`（`doorSwing` が算出。葉の最大長 `DOOR_LEAF` = 1.8）の `rect` を避ける。FloorSvg・flow と共有する
 - `src/components/`: React UI（入力フォーム、PlanCard、SVG図面、拡大モーダル）
 - `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セットと独立検証（クラスタの辺共有・階段x一致・吹抜⊂LDK を含む）
   - `flow.ts`: 動線（来客: 玄関→LDK、生活: LDK→洗面・浴室）の計算 `computeFlows`（純関数、`src/core/` ではなく `src/lib/`）。ドアでつながる部屋の最短経路。中継は VIA 室だけを優先し、VIA だけで届かないときに限り `NON_VIA_PENALTY` を課して VIA 以外を通す。階をまたぐ区間は階段までを描く
@@ -69,6 +70,7 @@ npm test      # vitest
 ## 今後の課題・既知の問題（現状は挙動を変えない）
 
 - **階段の高さの食い違い**: 1F と 2F で階段の x・幅は一致させているが、y（帯の高さ）は階ごとに決まるため一致しない（GEN_VERSION 1 の案の約84%で発生）。揃えると0案が激増するため別課題
+- **ドア弧の残課題**: (1) wc・キッチンで、器具と弧の重なりが増えた（wc は外開き特例の検討）。(2) VIA どうしのタイブレーク（面積 → y → x）で、hall-stair が階段側に開くなど不自然な組がある
 - 汎用スライシング木、3案が揃わない条件（0案になる境界条件が一定数ある。診断と代替案は `diagnoseEmpty`）の根本改善
 
 ### その他の見送り候補（v2 以降）
