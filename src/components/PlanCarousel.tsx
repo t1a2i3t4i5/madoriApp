@@ -32,9 +32,18 @@ export function PlanCarousel({ children }: { children: ReactNode }) {
         ))}
       </div>
       {items.length > 1 && (
-        <div className="no-print mt-3 flex justify-center gap-2 min-[861px]:hidden" aria-hidden="true">
+        <div className="no-print mt-3 flex justify-center min-[861px]:hidden">
           {items.map((_, i) => (
-            <span key={i} onClick={() => go(i)} className={`size-2 rounded-full ${i === active ? 'bg-accent' : 'bg-line'}`} />
+            <button
+              key={i}
+              type="button"
+              onClick={() => go(i)}
+              aria-label={`${i + 1}枚目の案を表示`}
+              aria-current={i === active ? 'true' : undefined}
+              className="cursor-pointer border-0 bg-transparent p-2.5"
+            >
+              <span className={`block size-2 rounded-full ${i === active ? 'bg-accent' : 'bg-line'}`} />
+            </button>
           ))}
         </div>
       )}

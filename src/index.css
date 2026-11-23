@@ -2,7 +2,7 @@
 
 /* 静かな道具: 暖かいグレーの地に白いカード。アクセントは深い緑1色だけ */
 :root {
-  --bg: #f6f5f2; --surface: #ffffff; --surface2: #efede8; --ink: #1f1f1f; --ink2: #6e6e73;
+  --bg: #f6f5f2; --surface: #ffffff; --surface2: #efede8; --ink: #1f1f1f; --ink2: #5f5f64;
   --line: #e4e2dd; --accent: #2f6b5a; --accent-ink: #ffffff; --btn: #2f6b5a; --btn-ink: #ffffff;
   --warm: #b4541f; --warn-bg: #fbf1e6; --warn-line: #e3b98f; --warn-ink: #1f1f1f;
   --chip: #f1efea; --shadow: 0 1px 2px rgba(0, 0, 0, .05); --plan-paper: #ffffff; --plan-line: #e4e2dd;
