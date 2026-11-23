@@ -11,7 +11,7 @@ import { computeFlows } from '../lib/flow'
 import { FlowOverlay, legendHeight, legendWidth } from './FlowOverlay'
 
 const FILL: Record<RoomCategory, string> = {
-  living: '#f3ecdc', bed: '#e9ede4', water: '#e2e8ea', store: '#e9e4d8', circ: '#efece4', void: '#f4f1e8',
+  living: '#f1e2c6', bed: '#dfe9d8', water: '#d3e4ee', store: '#d9d4c6', circ: '#ece8de', void: '#f4f1e8',
 }
 const PAD = 2.2
 
@@ -169,8 +169,8 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         let fill = FILL[ROOM[r.type].cat]
         if (r.type === 'doma') fill = `url(#dots${uid})`
         if (r.type === 'void') fill = `url(#hatch${uid})`
-        if (r.type === 'hall') fill = '#efece4'
-        if (r.type === 'stair') fill = '#e6e1d3'
+        if (r.type === 'hall') fill = '#fcfaf3'
+        if (r.type === 'stair') fill = '#cdc6b0'
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} />
       })}
       {/* 対面キッチンカウンター */}
@@ -189,7 +189,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
           return <line key={i} x1={wd.cx - wd.len / 2} y1={yy} x2={wd.cx + wd.len / 2} y2={yy} />
         })}
       </g>
-      <g stroke="#7592a3" strokeWidth={0.13}>
+      <g stroke="#5f7f93" strokeWidth={0.14}>
         {windows.map((wd, i) => {
           const yy = wd.side === 'S' ? fpBottom : fp.y
           return (

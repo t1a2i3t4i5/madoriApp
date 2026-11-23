@@ -188,7 +188,7 @@ export default function App() {
             か、条件を少し変えてみてください。
           </p>
         )}
-        <div className="plan-grid grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-7 gap-y-9">
+        <div className="plan-grid grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-x-7 gap-y-9">
           {plans.map((p, i) => (
             <PlanCard
               key={`${state.seed}-${i}`}

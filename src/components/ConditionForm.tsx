@@ -28,7 +28,7 @@ function Seg<T extends number | string>({ label, value, options, onChange, disab
             aria-pressed={o.v === value}
             disabled={disabled}
             onClick={() => onChange(o.v)}
-            className={`min-h-10 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-none border-0 border-b-2 bg-transparent px-0.5 py-1.5 text-sm ${
+            className={`min-h-10 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-none border-0 border-b-2 bg-transparent min-w-10 px-2 py-1.5 text-sm ${
               o.v === value ? 'border-accent font-bold text-ink' : 'border-transparent font-medium text-ink2'
             }`}
           >

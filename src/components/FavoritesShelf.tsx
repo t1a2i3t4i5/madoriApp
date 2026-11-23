@@ -39,7 +39,7 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
       {favorites.length === 0 ? (
         <p className="text-sm text-ink2">まだありません。気に入った案の☆を押すと、ここに並びます。</p>
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-x-5 gap-y-6">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(210px,100%),1fr))] gap-x-5 gap-y-6">
           {favorites.map((f, i) => {
             const checked = picked.includes(idOf(f))
             const name = planName(f.cfg, f.plan)
