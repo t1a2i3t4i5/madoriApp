@@ -1,8 +1,8 @@
-import { CANONICAL } from './types'
+import { CANONICAL, isPartial } from './types'
 import type { Alt, ArchId, Feasibility, PlanConfig } from './types'
 import { bandsFor, buildPlanStage } from './archetypes'
 import { FOOTPRINT_LIMIT, candidatePool, generatePlansUncached } from './generate'
-import { footprintList } from './slicing'
+import { footprintList, footprintPairs, PARTIAL_RATIO } from './slicing'
 import { validatePlan } from './validate'
 
 /** 実現可能性: 最低限必要な延床を見積もり、無理なら理由と代替案を返す */
@@ -29,13 +29,29 @@ export function feasibility(cfg: PlanConfig): Feasibility {
   if (has('kitchenFace')) min += 0.3
   // 面積合計ベースの下限（各部屋の最低面積の合計×詰め込みロス）も併用する
   let minSum = 0
+  let minSum2 = 0
   for (let f = 1; f <= cfg.floors; f++) {
+    let sum = 26 // ホール帯の最低面積
     const bs = bandsFor(cfg, 0, f, 16)
-    if (bs) for (const b of bs) for (const c of b.cells) minSum += c.minArea
-    minSum += 26 // ホール帯の最低面積
+    if (bs) for (const b of bs) for (const c of b.cells) sum += c.minArea
+    minSum += sum
+    if (f === 2) minSum2 = sum
   }
   min = Math.max(min, (minSum * 1.18) / 16)
-  if (cfg.area >= min) return { ok: true }
+  if (cfg.area >= min) {
+    // 部分二階: 2階の板は延床の 0.45 以下。2階の最低面積合計（×詰め込みロス）がそこに収まること
+    const minPartial = isPartial(cfg) ? (minSum2 * 1.18) / 16 / PARTIAL_RATIO.max : 0
+    if (cfg.area >= minPartial) return { ok: true }
+    const needP = Math.ceil(minPartial)
+    const alts: Alt[] = [{ label: '総二階にする', patch: { story: 'full' } }]
+    if (needP <= 40) alts.push({ label: `延床を約${needP}坪にする`, patch: { area: needP } })
+    if (cfg.rooms > 2) alts.push({ label: `個室を${cfg.rooms - 1}室にする`, patch: { rooms: cfg.rooms - 1 } })
+    return {
+      ok: false,
+      reason: `部分二階では2階の板が延床の${Math.round(PARTIAL_RATIO.max * 100)}%以下に限られ、2階に個室が乗り切りません。計算上は最低でも約${needP}坪必要です（指定は${cfg.area}坪）。総二階にするか、条件を調整してください。`,
+      alts,
+    }
+  }
   const need = Math.ceil(min)
   const alts: Alt[] = []
   if (need <= 40) alts.push({ label: `延床を約${need}坪にする`, patch: { area: need } })
@@ -60,8 +76,10 @@ export interface Diagnosis {
 function emptyReason(cfg: PlanConfig): string {
   const counts = { f1: 0, f2: 0, stair: 0, void: 0, variant: 0, validate: 0 }
   const archs: ArchId[] = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
+  const partial = isPartial(cfg)
+  const shapes = partial ? footprintPairs(cfg.area * 16) : footprintList((cfg.area * 16) / cfg.floors, FOOTPRINT_LIMIT)
   for (const arch of archs) {
-    for (const fp of footprintList((cfg.area * 16) / cfg.floors, FOOTPRINT_LIMIT)) {
+    for (const fp of shapes) {
       const r = buildPlanStage(cfg, arch, fp, CANONICAL)
       if (r.plan) {
         if (!validatePlan(r.plan)) counts.validate++
@@ -69,6 +87,22 @@ function emptyReason(cfg: PlanConfig): string {
     }
   }
   const has = (k: PlanConfig['feats'][number]) => cfg.feats.includes(k)
+  if (partial) {
+    const tail = '総二階にするか、条件を調整してください。'
+    if (counts.f2 > 0 && counts.f1 === 0) {
+      return `部分二階では2階に個室が乗り切りません（2階の板が1階の外形より小さく、個室・主寝室・階段が最低面積を満たせません）。${tail}`
+    }
+    if (has('void') && counts.void > 0 && counts.f1 === 0 && counts.f2 === 0) {
+      return `部分二階では吹抜を1階のLDK直上に収められませんでした（2階の板が小さく、吹抜の位置と高さが合いません）。吹抜を外すか、総二階にしてください。`
+    }
+    if (counts.f1 > 0 && counts.f2 === 0 && counts.stair === 0 && counts.void === 0 && counts.validate === 0) {
+      return `1階の部屋が外形に収まりませんでした（水回り・玄関・LDK などが帯の幅と高さの範囲で最低面積を満たせません）。${tail}`
+    }
+    if (counts.validate > 0) {
+      return `部分二階では、部屋は収まりますが、全室への動線・居室の採光・水回りの隣接の検証を通過できませんでした。${tail}`
+    }
+    return `部分二階では、1階・2階とも部屋が外形に収まる組み合わせがほとんどありませんでした（2階の板が1階より小さくなる分、各階の帯に最低面積が収まりません）。${tail}`
+  }
   if (counts.f1 > 0 && counts.f2 === 0 && counts.stair === 0 && counts.void === 0 && counts.validate === 0) {
     return cfg.floors === 1
       ? '部屋が外形に収まりませんでした（帯の幅と高さの範囲で、各部屋の最低面積を満たせません）。'
@@ -99,6 +133,8 @@ export function diagnoseEmpty(cfg: PlanConfig): Diagnosis {
   const has = (k: PlanConfig['feats'][number]) => cfg.feats.includes(k)
   const without = (k: PlanConfig['feats'][number]) => cfg.feats.filter((f) => f !== k)
   const candidates: Alt[] = []
+  // 部分二階で足りないときは、総二階を最初の代替にする（3案出ると確かめられたときだけ採用される）
+  if (isPartial(cfg)) candidates.push({ label: '総二階にする', patch: { story: 'full' } })
   for (const d of [2, 4]) {
     if (cfg.area + d <= 40) candidates.push({ label: `延床を${cfg.area + d}坪にする`, patch: { area: cfg.area + d } })
   }

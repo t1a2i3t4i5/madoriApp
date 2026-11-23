@@ -69,12 +69,13 @@ npm test      # vitest
 
 ## 部分二階の設計方針（実装は段階的。詳細仕様は設計相談の確定事項）
 
-- 座標は1F基準の共通座標。`Floor.fp?: Rect`（`types.ts`）でその階の板を持つ。`fp` は**総二階では付けない**（付けると canon のハッシュと gen-v3 golden が壊れる）。階ごとの矩形は `floorRect(plan, i)`（`fp ?? {x:0,y:0,W:plan.W,H:plan.H}`）で取る。外壁判定（`touchesOuterWall`・`computeWindows`・FloorSvg の外壁/窓・explain の階段側・testing.ts の独立検証）はこの rect を使う
+- 座標は1F基準の共通座標。`Floor.fp?: Rect`（`types.ts`）でその階の板を持つ。`fp` は**総二階では付けない**（付けると canon のハッシュと gen-v3 golden が壊れる）。階ごとの矩形は `floorRect(plan, i)`（`fp ?? {x:0,y:0,W:plan.W,H:plan.H}`）で取る。外壁判定（`touchesOuterWall`・`computeWindows`・FloorSvg の外壁/窓・explain の階段側・testing.ts の独立検証）はこの rect を使う。ただし LDK は1F前提のため、describe（南LDK）/explain（LDK の南判定）は `plan.H`（1Fの板）のまま
 - `Plan.W/H` は1Fの板のまま。`totalArea` は各階の板面積の合計（総二階では従来と同値）
 - 2Fの板は1Fに内包され、**北寄せ**（oy=0）＋**階段側寄せ**（階段が東端なら ox=W1−W2、西端なら ox=0。階段が北帯 y=0 にあるための構造上の必然）
 - 1Fとの関係は**一辺共有の2形のみ**（直積は禁止）: 東西下屋（H2=H1、W2=W1−k、k≥3、W2≥9。下屋は階段と反対側）／南下屋（W2=W1、H2=H1−k、k≥3、H2≥13）
 - 2F面積割合 W2*H2 / 合計 は **0.35〜0.45**（下屋の出は3セル以上）
 - 新しいスコア項目は入れない（総二階の total が変わるため）。壁の直下率（2Fの壁が1Fの壁の上に載っているか）は課題として残す
+- **PR2（core）実装済み**: `PlanConfig.story?: 'full'|'partial'`（`isPartial(cfg)` が実効値。平屋では無視）。`footprintPairs`（slicing.ts。東西下屋・南下屋を形ごとに上位6件、決定的順）、`buildPlanStage` が `fp2`（`W2`/`H2`）・北寄せ＋階段側寄せ・吹抜 capH（`southH − (H1−H2)`）に対応し、1F の割り付けは `F1Memo`（キー `f1MemoKey`）で使い回す。`validateFloor` で階ごとの検証。`cfgId` は部分二階のときだけ `|p` を足す。planKey は部分二階のみ末尾 `-p<W2>x<H2>`。feasibility は部分二階の下限（2F最低面積×1.18 ≤ 延床×0.45）、診断の代替先頭は「総二階にする」。部分二階の golden は `__fixtures__/gen-v3-partial.json`（`golden-partial.test.ts`、更新手順は総二階と同じ）。テスト共有の条件は `PARTIAL_CONDITIONS`、プール構築の作業量は `poolBuildStats`（回数で性能の退行を見る）
 - 段階: PR1 土台リファクタ（fp?・floorRect・rect化。挙動不変）→ PR2 core の部分二階（`PlanConfig.story`・生成・feasibility・診断）→ PR3 UI・URL・お気に入り・下屋描画。PR1 では `PlanConfig` に story を足さない
 
 ## 今後の課題・既知の問題（現状は挙動を変えない）

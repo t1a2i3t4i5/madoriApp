@@ -1,4 +1,4 @@
-import { CANONICAL } from './types'
+import { CANONICAL, isPartial } from './types'
 import type { ArchId, Band, Cell, FeatureKey, Plan, PlanConfig, Room, RoomType, Variant } from './types'
 import type { Rng } from './rng'
 import { cell } from './rooms'
@@ -221,46 +221,87 @@ function relabelBeds(rooms: Room[]): Room[] {
   return rooms.map((r) => ({ ...r, name: names.get(r) ?? r.name }))
 }
 
-/** 外形(W,H)にアーキタイプを当てはめて1案を組み立てる。構造検査に落ちたら null。variant 省略は正規形（plan.variant は付けない） */
-export function buildPlan(cfg: PlanConfig, arch: ArchId, fp: { W: number; H: number }, variant?: Variant): Plan | null {
-  return buildPlanStage(cfg, arch, fp, variant).plan
+/** 外形。部分二階は 2F の板の W2×H2 も持つ（1F の板は W×H。一辺共有の組は footprintPairs が作る） */
+export interface BuildFootprint {
+  W: number
+  H: number
+  W2?: number
+  H2?: number
+}
+
+/** 1F の割り付け結果（部分二階のプール構築で、同じ (arch, W, H, stairEnd, rev[0], rev[1]) を使い回すためのメモ） */
+export type F1Layout = { rooms: Room[]; heights: number[] } | 'variant' | 'f1'
+export type F1Memo = Map<string, F1Layout>
+
+/** 1F の割り付けが依存するもの: (arch, 1Fの板, stairEnd, rev[0], rev[1])。cfg は呼び出し側で固定 */
+export function f1MemoKey(arch: ArchId, W: number, H: number, v: Variant): string {
+  return `${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}`
+}
+
+/** 外形にアーキタイプを当てはめて1案を組み立てる。構造検査に落ちたら null。variant 省略は正規形（plan.variant は付けない） */
+export function buildPlan(cfg: PlanConfig, arch: ArchId, fp: BuildFootprint, variant?: Variant, memo?: F1Memo): Plan | null {
+  return buildPlanStage(cfg, arch, fp, variant, memo).plan
 }
 
 /** 組み立てが崩れた段階（0案の理由づけ用）: 1F/2F の割り付け、階段の一致、吹抜の位置、その他（変種が作れない） */
 export type BuildFailure = 'f1' | 'f2' | 'stair' | 'void' | 'variant'
 
-/** buildPlan の本体。失敗した段階も返す */
+/**
+ * buildPlan の本体。失敗した段階も返す。
+ * 部分二階（実効 story が partial で fp に W2・H2 がある）: 2F の板は北寄せ（oy=0）＋階段側寄せ
+ * （stairEnd=E なら ox=W−W2、W なら ox=0）。2F の部屋は 1F 基準の共通座標（オフセット適用済み）で持ち、
+ * 2F の Floor にだけ fp を付ける。吹抜の高さは 2F 南帯 ≤ 1F 南帯 −（H−H2）に抑える（y の包含）。
+ * memo を渡すと 1F の割り付けを使い回す（結果は同じ。呼び出し側が同じ cfg でだけ使うこと）
+ */
 export function buildPlanStage(
   cfg: PlanConfig,
   arch: ArchId,
-  fp: { W: number; H: number },
+  fp: BuildFootprint,
   variant?: Variant,
+  memo?: F1Memo,
 ): { plan: Plan | null; failed?: BuildFailure } {
   const fail = (failed: BuildFailure) => ({ plan: null, failed })
   const { W, H } = fp
   const v = variant ?? CANONICAL
   const hasVoid = cfg.feats.indexOf('void') >= 0
+  const partial = isPartial(cfg)
+  if (partial && (fp.W2 === undefined || fp.H2 === undefined)) return fail('variant')
   // 平屋では2F・階段・個室配分に関係する項目は正規形のみ
   if (cfg.floors === 1 && (v.stairEnd !== 'E' || v.bedShift !== 0 || v.rev[2] || v.rev[3])) return fail('variant')
   // 1F → 2F の順に組む（吹抜ありなら2F南帯の高さを1F南帯（LDK）の高さ以下に抑える）
-  const b1 = bandsFor(cfg, arch, 1, W)
-  const f1bands = b1 && applyVariant(b1, 1, v, hasVoid)
-  if (!f1bands) return fail('variant')
-  const f1 = layoutFloor(W, H, f1bands)
-  if (!f1) return fail('f1')
-  const floors = [{ label: '1F', rooms: relabelBeds(f1.rooms) }]
+  const memoKey = f1MemoKey(arch, W, H, v)
+  let f1: F1Layout | undefined = memo?.get(memoKey)
+  if (f1 === undefined) {
+    const b1 = bandsFor(cfg, arch, 1, W)
+    const f1bands = b1 && applyVariant(b1, 1, v, hasVoid)
+    f1 = !f1bands ? 'variant' : (layoutFloor(W, H, f1bands) ?? 'f1')
+    memo?.set(memoKey, f1)
+  }
+  if (typeof f1 === 'string') return fail(f1)
+  const floors: Plan['floors'] = [{ label: '1F', rooms: relabelBeds(f1.rooms) }]
+  let area = W * H * cfg.floors
   if (cfg.floors === 2) {
-    const b2 = bandsFor(cfg, arch, 2, W)
+    const W2 = partial ? (fp.W2 as number) : W
+    const H2 = partial ? (fp.H2 as number) : H
+    const ox = partial && v.stairEnd === 'E' ? W - W2 : 0
+    const b2 = bandsFor(cfg, arch, 2, W2)
     const f2bands = b2 && applyVariant(b2, 2, v, hasVoid)
     if (!f2bands) return fail('variant')
     const southH = f1.heights[2]
     if (southH === undefined) return fail('f1')
-    const f2 = layoutFloor(W, H, f2bands, hasVoid ? { capH: { 2: southH } } : undefined)
+    const capSouth = southH - (H - H2)
+    const f2 = layoutFloor(W2, H2, f2bands, hasVoid ? { capH: { 2: capSouth } } : undefined)
     if (!f2) return fail('f2')
-    floors.push({ label: '2F', rooms: relabelBeds(f2.rooms) })
+    const f2rooms = ox === 0 ? f2.rooms : f2.rooms.map((r) => ({ ...r, x: r.x + ox }))
+    const floor2: Plan['floors'][number] = { label: '2F', rooms: relabelBeds(f2rooms) }
+    if (partial) {
+      floor2.fp = { x: ox, y: 0, W: W2, H: H2 }
+      area = W * H + W2 * H2
+    }
+    floors.push(floor2)
     // 階段の両階一致を検証（構造的には同じ帯・同じ端だが念のためアサーション）
     const s1 = f1.rooms.find((r) => r.type === 'stair')
-    const s2 = f2.rooms.find((r) => r.type === 'stair')
+    const s2 = f2rooms.find((r) => r.type === 'stair')
     if (!s1 || !s2 || s1.x !== s2.x || s1.y !== s2.y || s1.w !== s2.w) return fail('stair')
     // 吹抜はLDK直上（x・y の両方）にあること。
     // y の検査は、現状の帯の高さ範囲では capH（上の layoutFloor）が効くため構造上は違反が出ない。
@@ -268,13 +309,13 @@ export function buildPlanStage(
     // （capH の効きは slicing.test.ts の合成構成で固定してある）
     if (hasVoid) {
       const ldk = f1.rooms.find((r) => r.type === 'ldk')
-      const vd = f2.rooms.find((r) => r.type === 'void')
+      const vd = f2rooms.find((r) => r.type === 'void')
       if (!ldk || !vd) return fail('void')
       if (vd.x < ldk.x || vd.x + vd.w > ldk.x + ldk.w) return fail('void')
       if (vd.y < ldk.y || vd.y + vd.h > ldk.y + ldk.h) return fail('void')
     }
   }
-  const plan: Plan = { W, H, floors, arch, totalArea: W * H * cfg.floors }
+  const plan: Plan = { W, H, floors, arch, totalArea: area }
   if (variant) plan.variant = { stairEnd: variant.stairEnd, rev: [...variant.rev], bedShift: variant.bedShift }
   return { plan }
 }

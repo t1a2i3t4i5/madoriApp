@@ -32,37 +32,42 @@ export function wetViolations(rooms: readonly Room[]): string[] {
   return out
 }
 
-/** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接。違反は棄却 */
-export function validatePlan(plan: Plan): boolean {
-  for (const [fi, fl] of plan.floors.entries()) {
-    const rooms = fl.rooms
-    if (wetViolations(rooms).length > 0) return false
-    const doors = computeDoors(rooms)
-    const adj = new Map(rooms.map((r) => [r, [] as typeof rooms]))
-    for (const d of doors) {
-      adj.get(d.a)!.push(d.b)
-      adj.get(d.b)!.push(d.a)
-    }
-    const start = rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'stair')
-    if (!start) return false
-    const seen = new Set([start])
-    const stack = [start]
-    while (stack.length) {
-      const cur = stack.pop()!
-      for (const n of adj.get(cur) ?? []) {
-        if (!seen.has(n)) {
-          seen.add(n)
-          stack.push(n)
-        }
+/** 1フロア分のハード制約の検証（validatePlan の階ごとの部分。階の板の矩形は floorRect） */
+export function validateFloor(plan: Plan, fi: number): boolean {
+  const fl = plan.floors[fi]
+  if (!fl) return false
+  const rooms = fl.rooms
+  if (wetViolations(rooms).length > 0) return false
+  const doors = computeDoors(rooms)
+  const adj = new Map(rooms.map((r) => [r, [] as typeof rooms]))
+  for (const d of doors) {
+    adj.get(d.a)!.push(d.b)
+    adj.get(d.b)!.push(d.a)
+  }
+  const start = rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'stair')
+  if (!start) return false
+  const seen = new Set([start])
+  const stack = [start]
+  while (stack.length) {
+    const cur = stack.pop()!
+    for (const n of adj.get(cur) ?? []) {
+      if (!seen.has(n)) {
+        seen.add(n)
+        stack.push(n)
       }
     }
-    for (const r of rooms) {
-      if (r.type !== 'void' && !seen.has(r)) return false
-    }
-    for (const r of rooms) {
-      if (HABITABLE[r.type] && !touchesOuterWall(r, floorRect(plan, fi))) return false
-      if (r.type !== 'hall' && r.type !== 'void' && r.area < (r.minArea || 0) - 1) return false
-    }
+  }
+  for (const r of rooms) {
+    if (r.type !== 'void' && !seen.has(r)) return false
+  }
+  for (const r of rooms) {
+    if (HABITABLE[r.type] && !touchesOuterWall(r, floorRect(plan, fi))) return false
+    if (r.type !== 'hall' && r.type !== 'void' && r.area < (r.minArea || 0) - 1) return false
   }
   return true
+}
+
+/** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接。違反は棄却 */
+export function validatePlan(plan: Plan): boolean {
+  return plan.floors.every((_, fi) => validateFloor(plan, fi))
 }

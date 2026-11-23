@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { enumeratePlans, planKey } from '../core/enumerate'
 import { GEN_VERSION } from '../core/generate'
 import type { ScoredPlan } from '../core/types'
-import { CONDITIONS, defined } from '../core/testing'
+import { CONDITIONS, PARTIAL_CONDITIONS, defined } from '../core/testing'
 import {
   FAVORITES_STORAGE_KEY, MAX_FAVORITES, addFavorite, isFavorited, isOldVersion, loadFavorites, removeFavorite, saveFavorites,
   type Favorite, type KeyValueStorage,
@@ -81,6 +81,19 @@ describe('お気に入り', () => {
     const badCfg = { ...good, cfg: { ...good.cfg, feats: ['nope'] } }
     const st = memory(JSON.stringify([brokenPlan, good, badKey, mismatch, badCfg, null]))
     expect(loadFavorites(st)).toEqual([good])
+  })
+
+  it('部分二階の案（story と 2F の fp）は保存・読込で残り、story や fp の形が壊れたものは捨てる', () => {
+    const pc = defined(PARTIAL_CONDITIONS[0]).cfg
+    const pp = defined(enumeratePlans(pc)[0])
+    const good = defined(must(addFavorite([], pc, pp, 1))[0])
+    expect(good.plan.floors[1]?.fp).toBeDefined()
+    expect(loadFavorites(memory(JSON.stringify([good])))).toEqual([good])
+    const badStory = { ...good, cfg: { ...good.cfg, story: 'half' } }
+    const badFp = { ...good, plan: { ...good.plan, floors: [good.plan.floors[0], { ...good.plan.floors[1], fp: { x: 0, y: 0, W: 'a', H: 3 } }] } }
+    expect(loadFavorites(memory(JSON.stringify([badStory, good, badFp])))).toEqual([good])
+    // 総二階（story 省略）の保存データは従来どおり読める
+    expect(loadFavorites(memory(JSON.stringify([defined(must(addFavorite([], cfg, p0, 1))[0])])))).toHaveLength(1)
   })
 
   it('保存データに重複・上限超えがあっても読込時に整える', () => {
