@@ -209,7 +209,7 @@ export function storageRatioIndependent(plan: Plan): number {
 
 /**
  * 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する／
- * 付属収納の持ち主の関係（ownerViolations）／クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
+ * 付属収納の持ち主の関係（ownerViolations）／階段とホールの辺の共有／クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
  */
 export function independentViolations(plan: Plan): string[] {
   const out: string[] = []
@@ -236,6 +236,12 @@ export function independentViolations(plan: Plan): string[] {
   })
   out.push(...footprintViolations(plan))
   out.push(...ownerViolations(plan))
+  // 階段はホールと辺を共有する（階段の前を塞がれていない）。carve の到達可能性は VIA を見ないので、ここで補う
+  plan.floors.forEach((fl) => {
+    const stair = fl.rooms.find((r) => r.type === 'stair')
+    const hall = fl.rooms.find((r) => r.type === 'hall')
+    if (stair && hall && !sharesEdge(stair, hall)) out.push(`${fl.label} 階段がホールと辺を共有していない`)
+  })
   plan.floors.forEach((fl) => {
     for (const [ta, tb, label] of CLUSTER_PAIRS) {
       const a = fl.rooms.find((r) => r.type === ta)

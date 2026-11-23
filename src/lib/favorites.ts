@@ -49,6 +49,9 @@ function isFpInside(fp: unknown, W: number, H: number): boolean {
   )
 }
 
+/** 後の GEN_VERSION で足されたスコア項目（旧版のお気に入りには無い。無くても壊れたデータとしない。R-COMPAT-12） */
+const ADDED_PARTS: ReadonlySet<string> = new Set(['個室収納'])
+
 /** 描画で落ちない程度に、案データの形を確かめる（variant は GEN_VERSION 1 の旧データでは無い） */
 function isPlan(v: unknown): v is ScoredPlan {
   if (!isObj(v) || !isNum(v.W) || !isNum(v.H) || !isNum(v.totalArea) || !(v.arch === 0 || v.arch === 1 || v.arch === 2)) return false
@@ -57,7 +60,8 @@ function isPlan(v: unknown): v is ScoredPlan {
   const sc = v.score
   if (!isObj(sc) || !isNum(sc.total) || !isObj(sc.parts)) return false
   const parts = sc.parts
-  if (!Object.keys(SCORE_WEIGHTS).every((k) => isNum(parts[k]))) return false
+  // 版で足された項目（個室収納 など）は旧データにないので、無くてもよい。あるなら数値。それ以外の項目は必須
+  if (!Object.keys(SCORE_WEIGHTS).every((k) => (ADDED_PARTS.has(k) && parts[k] === undefined) || isNum(parts[k]))) return false
   const { W, H } = v
   if (!Array.isArray(v.floors) || v.floors.length < 1 || v.floors.length > 2) return false
   return v.floors.every(

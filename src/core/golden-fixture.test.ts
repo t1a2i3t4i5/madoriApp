@@ -6,7 +6,7 @@ import { GEN_VERSION, candidatePool, generatePlans } from './generate'
 import { feasibility } from './program'
 import { planName, planTags } from './describe'
 import { planKey } from './enumerate'
-import { BOUNDARY, CONDITIONS, SEEDS } from './testing'
+import { BOUNDARY, CONDITIONS, PARTIAL_CONDITIONS, SEEDS } from './testing'
 import { shortSideViolations } from './validate'
 import type { PlanConfig, Room, ScoredPlan } from './types'
 
@@ -22,6 +22,10 @@ import type { PlanConfig, Room, ScoredPlan } from './types'
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.url)
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
+const FIXTURE_V4_PARTIAL = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
+/** v4 の提示案が v5 のプールに残る割合と、骨格が一致する割合の下限（GEN_VERSION 5 の実測の少し下） */
+const MIN_KEPT = 0.99
+const MIN_SKELETON = 0.75
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 const ALL = [...CONDITIONS, ...BOUNDARY]
@@ -184,21 +188,37 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
         expect(v4.cases.filter((c) => c.name === name).every((c) => c.plans.length === expected)).toBe(true)
       }
     })
-    it('v4 の提示案の骨格（planKey）が v5 の候補プールに残る割合を記録する（固定しない。差分レビューの材料）', () => {
-      let kept = 0
+    it('v4 の提示案の骨格（階段・LDK・玄関/土間の矩形とホールの y・高さ）が、同じ key の v5 の案でも一致する割合', () => {
+      // 骨格は階ごとに stair・ldk・entry・doma の矩形と、hall の y・高さ（ホールの x・幅は行き止まりの収納化で変わるので比べない）
+      const skeleton = (rs: string[]) =>
+        rs
+          .filter((r) => /^(stair|ldk|entry|doma|hall):/.test(r))
+          .map((r) => r.replace(/^hall:\d+,(\d+),\d+,(\d+)$/, 'hall:$1,$2'))
+          .sort()
+          .join('|')
+      const partial = JSON.parse(readFileSync(FIXTURE_V4_PARTIAL, 'utf8')) as { cases: { name: string; plans: { key: string; floors: { rooms: string[] }[] }[] }[] }
       let total = 0
-      for (const { name, cfg } of ALL) {
-        const keys = new Set<string>(candidatePool(copy(cfg)).map(planKey))
-        for (const c of v4.cases.filter((x) => x.name === name)) {
-          for (const p of c.plans) {
-            total++
-            if (keys.has(p.key)) kept++
-          }
+      let inPool = 0
+      let same = 0
+      const check = (cfg: PlanConfig, plans: { key: string; floors: string[][] }[]) => {
+        const pool = new Map<string, ScoredPlan>(candidatePool(copy(cfg)).map((p) => [planKey(p), p]))
+        for (const p of plans) {
+          total++
+          const q = pool.get(p.key)
+          if (!q) continue
+          inPool++
+          if (JSON.stringify(p.floors.map(skeleton)) === JSON.stringify(rooms(q).map(skeleton))) same++
         }
       }
-      expect(total).toBeGreaterThan(0)
-      // 弱モードの案は v4 と同じ key（-k なし）。幅の目標を変えるので骨格が動く案もある。極端に減ったら気づくための緩い下限
-      expect(kept / total, `${kept}/${total}`).toBeGreaterThan(0.5)
+      for (const { name, cfg } of ALL) check(cfg, v4.cases.filter((x) => x.name === name).flatMap((c) => c.plans))
+      for (const { name, cfg } of PARTIAL_CONDITIONS) {
+        check(cfg, partial.cases.filter((x) => x.name === name).flatMap((c) => c.plans.map((p) => ({ key: p.key, floors: p.floors.map((f) => f.rooms) }))))
+      }
+      expect(total).toBeGreaterThan(200)
+      // 実測（GEN_VERSION 5）: プールに残る 306/306（100%）、骨格が一致 241/306（78.8%）。一致しない案は、個室セルのクローゼット分を帯の高さの目標に足す
+      // （layoutFloor）ことで帯の高さが動き、LDK の幅などが1〜2セル変わったもの。外すと 286/306（93.5%）になるが、洋室の家具配置率が 19.3% → 8.2% に落ちるので残した
+      expect(inPool / total, `プールに残る ${inPool}/${total}`).toBeGreaterThanOrEqual(MIN_KEPT)
+      expect(same / total, `骨格が一致 ${same}/${total}`).toBeGreaterThanOrEqual(MIN_SKELETON)
     })
   })
 })

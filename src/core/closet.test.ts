@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { carveFloor } from './carve'
 import { privateStorageCount, storageOf, storageRatio } from './closets'
-import { computeDoors } from './derive'
+import { computeDoors, sharedEdge } from './derive'
 import { planFromKey, planKey } from './enumerate'
 import { candidatePool, generatePlans } from './generate'
 import { feasibility } from './program'
@@ -52,6 +52,10 @@ describe('GEN_VERSION 5: 付属収納の不変条件（全候補）', () => {
             const partner = mine[0] && (mine[0].a === r ? mine[0].b : mine[0].a)
             const ok = mine.length === 1 && mine[0]?.kind === 'fold' && !!partner && partner.x === r.x + r.of.dx && partner.y === r.y + r.of.dy
             if (!ok && bad.length < 10) bad.push(`${name} ${planKey(p)} ${r.name}: ドア ${mine.length} 枚`)
+            // クローゼットを持つ個室には、ホールへのドアがある（切り出しで個室とホールの接続を失っていない）
+            if (r.type === 'closet' && partner && fl.rooms.some((q) => q.type === 'hall') && !doors.some((d) => (d.a === partner && d.b.type === 'hall') || (d.b === partner && d.a.type === 'hall')) && bad.length < 10) {
+              bad.push(`${name} ${planKey(p)} 持ち主 ${partner.name} にホールへのドアがない`)
+            }
             if (r.type === 'closet' && partner) {
               if ((Math.min(partner.w, partner.h) < (partner.type === 'master' ? 6 : 5) || partner.area < partner.minArea - 1) && bad.length < 10) bad.push(`${name} ${planKey(p)} 持ち主 ${partner.name} が小さい`)
             }
@@ -96,14 +100,15 @@ describe('GEN_VERSION 5: 付属収納の不変条件（全候補）', () => {
 })
 
 describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グリッド seed 1）', () => {
-  // 実測（GEN_VERSION 5）: 収納率の中央値 10.5%、10%未満 42.6%、個室付属 84.5%、全個室付属 62.0%。仕様の表の下限を使う
+  // 実測（GEN_VERSION 5。階段の前を塞ぐホール帯の行き止まりの切り出しをやめた後）: 収納率の中央値 9.6%、10%未満 55.6%、個室付属 82.5%、全個室付属 63.0%。
+  // 下限は実測の少し下に置く（仕様 9.4 の表の試作値は 10.8%・40%・87%・67% で、行き止まりの切り出しが減った分だけ下がった）
   const plans = POPULAR.flatMap(({ cfg }) => SEEDS.flatMap((s) => generatePlans(cfg, s)))
   const ratios = plans.map(storageRatioIndependent)
 
-  it('人気: 収納率の中央値 ≥ 10%、10%未満の案 ≤ 50%', () => {
+  it('人気: 収納率の中央値 ≥ 9%、10%未満の案 ≤ 60%', () => {
     expect(plans).toHaveLength(POPULAR.length * SEEDS.length * 3)
-    expect(median(ratios)).toBeGreaterThanOrEqual(0.1)
-    expect(ratios.filter((r) => r < 0.1).length / ratios.length).toBeLessThanOrEqual(0.5)
+    expect(median(ratios)).toBeGreaterThanOrEqual(0.09)
+    expect(ratios.filter((r) => r < 0.1).length / ratios.length).toBeLessThanOrEqual(0.6)
   })
 
   it('人気: 個室の収納付属率 ≥ 80%、全個室に収納がある案 ≥ 55%', () => {
@@ -138,6 +143,7 @@ describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グ�
       }
     }
     expect(grid.length).toBeGreaterThan(200)
+    // 実測（seed 1、3案が出る80条件の240案）: 中央値 8.6%。下限 0.08 はその少し下
     expect(median(grid)).toBeGreaterThanOrEqual(0.08)
     expect(washOver).toBeLessThanOrEqual(91)
   }, 180_000) // 192条件のプールを構築するので、並列実行の負荷でも収まるよう長めにする
@@ -212,12 +218,62 @@ describe('carveFloor（割り付け後の収納化）', () => {
     expect(cl.h).toBe(2)
     expect(cl.w).toBeGreaterThanOrEqual(4)
     expect(cl.w).toBeLessThanOrEqual(6)
+    // 階段（東端）の前は塞がない: 階段はホールと辺を共有し続け、クローゼットは階段のない西端に切る
+    expect(cl.x).toBe(0)
+    const stair = defined(out.find((r) => r.type === 'stair'))
+    expect(sharedEdge(stair, defined(out.find((r) => r.type === 'hall')))).not.toBeNull()
     const owner = defined(out.find((r) => r.x === cl.x + defined(cl.of).dx && r.y === cl.y + defined(cl.of).dy))
     expect(owner.type).toBe('bed')
     // 面積は保存され、ホールはその分だけ減る
     expect(out.reduce((s, r) => s + r.area, 0)).toBe(input.reduce((s, r) => s + r.area, 0))
     expect(ownerViolations({ W: 20, H: 18, arch: 0, totalArea: 360, floors: [{ label: '1F', rooms: out }] } as Plan)).toEqual([])
   })
+
+  it('階段がホールの端にあり、両端とも切ると階段の前を塞ぐ形では、階段の側の端を切らない', () => {
+    // 階段（東端 x16〜20）がホール（y8〜10）と辺を共有している。東端を切ると階段の前を塞ぐ
+    const rooms = [
+      room('bed', 0, 0, 8, 8), room('bed', 8, 0, 8, 8), room('stair', 16, 0, 4, 8),
+      room('hall', 0, 8, 20, 2), room('entry', 0, 10, 4, 8), room('ldk', 4, 10, 16, 8),
+    ]
+    const out = carveFloor(rooms)
+    const hall = defined(out.find((r) => r.type === 'hall'))
+    expect(sharedEdge(defined(out.find((r) => r.type === 'stair')), hall)).not.toBeNull()
+    expect(out.filter((r) => r.type === 'closet').every((r) => r.x + r.w <= 16)).toBe(true)
+    // 西の個室が先に切られ、東の個室には切れない（階段の側）。ホールの東端は階段の下まで残る
+    expect(hall.x + hall.w).toBe(20)
+  })
+
+  it('吸収で太った収納（持ち主がなく奥行が2を超える store）は「納戸」と表示する。奥行2の収納・持ち主のある収納は「収納」のまま', () => {
+    const rooms = [
+      room('bed', 0, 0, 6, 8), room('store', 6, 0, 4, 8), room('bed', 10, 0, 6, 8), room('stair', 16, 0, 4, 8),
+      room('hall', 0, 8, 20, 2), room('entry', 0, 10, 4, 8), room('ldk', 4, 10, 16, 8),
+    ]
+    const out = carveFloor(rooms)
+    expect(out.find((r) => r.x === 6 && r.y === 0)?.name).toBe('納戸')
+    // 奥行2の持ち主のない収納は付け替わる（クローゼット）か、収納のまま
+    const thin = carveFloor([
+      room('bed', 0, 0, 8, 8), room('store', 8, 0, 2, 8, { name: '収納' }), room('bed', 10, 0, 6, 8), room('stair', 16, 0, 4, 8),
+      room('hall', 0, 8, 20, 2), room('entry', 0, 10, 4, 8), room('ldk', 4, 10, 16, 8),
+    ])
+    expect(thin.some((r) => r.name === '納戸')).toBe(false)
+  })
+
+  it('全プールで、持ち主のない奥行3以上の store だけが「納戸」と表示される', () => {
+    let nando = 0
+    for (const { cfg } of ALL) {
+      for (const p of candidatePool(cfg)) {
+        for (const fl of p.floors) {
+          for (const r of fl.rooms) {
+            if (r.type !== 'store') continue
+            const fat = !r.of && Math.min(r.w, r.h) > 2
+            if (fat) nando++
+            expect(r.name, `${planKey(p)} ${r.x},${r.y},${r.w},${r.h}`).toBe(fat ? '納戸' : '収納')
+          }
+        }
+      }
+    }
+    expect(nando).toBeGreaterThan(0)
+  }, 120_000)
 
   it('持ち主のない収納（奥行2・2×4 以上）を、収納のない個室のクローゼットに付け替える', () => {
     const rooms = [

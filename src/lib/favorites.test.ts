@@ -125,13 +125,27 @@ describe('お気に入り', () => {
   })
 
   it('v1 の旧データ（variant なし・接尾辞なしの key）は有効なまま読め、旧バージョン扱いになる。壊れた variant は捨てる', () => {
-    const { variant: _v, ...v1plan } = p0
+    const { variant: _v, ...p0NoVariant } = p0
     void _v
+    // 本物の旧データ: スコアの内訳に GEN_VERSION 5 で足した「個室収納」がない（現行の案から作ると含んでしまい、検出できない）
+    const { 個室収納: _c, ...oldParts } = p0.score.parts
+    void _c
+    expect(Object.keys(oldParts)).not.toContain('個室収納')
+    const v1plan = { ...p0NoVariant, score: { ...p0.score, parts: oldParts } } as unknown as ScoredPlan
     const old: Favorite = { key: planKey(v1plan), cfg, v: 1, plan: v1plan, savedAt: 5 }
     expect(old.key).toMatch(/^\d-\d+x\d+$/)
     const loaded = loadFavorites(memory(JSON.stringify([old])))
     expect(loaded).toHaveLength(1)
     expect(isOldVersion(defined(loaded[0]))).toBe(true)
+    expect(Object.keys(defined(loaded[0]).plan.score.parts)).not.toContain('個室収納')
+    // 個室収納以外の項目が欠けたデータは壊れたデータとして捨てる
+    const { 採光: _l, ...lacking } = oldParts
+    void _l
+    const lackingFav = { ...old, plan: { ...v1plan, score: { ...p0.score, parts: lacking } } }
+    expect(loadFavorites(memory(JSON.stringify([lackingFav])))).toHaveLength(0)
+    // 個室収納があるのに数値でないものも捨てる
+    const badFav = { ...old, plan: { ...v1plan, score: { ...p0.score, parts: { ...oldParts, 個室収納: 'x' } } } }
+    expect(loadFavorites(memory(JSON.stringify([badFav])))).toHaveLength(0)
     const broken = { ...must(addFavorite([], cfg, p0, 1))[0], plan: { ...p0, variant: { stairEnd: 'X', rev: [], bedShift: 9 } } }
     expect(loadFavorites(memory(JSON.stringify([broken])))).toHaveLength(0)
   })

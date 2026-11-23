@@ -118,6 +118,16 @@ describe('部分二階の生成', () => {
     }
   })
 
+  it('部分二階の1Fの割り付けの回数（f1Layouts・f1Validations）は v4 から変わらない（クローゼットのモードは1Fのメモに入らない）', () => {
+    // v4（コミット d865fd4）の実測。assembled は変種のモード（弱・強）で2倍になるが、1Fは個室セルがないのでモードで増えない
+    const v4: [number, number][] = [[264, 120], [240, 72], [240, 216], [144, 24], [264, 128], [264, 168]]
+    expect(PARTIAL_CONDITIONS).toHaveLength(v4.length)
+    PARTIAL_CONDITIONS.forEach(({ name, cfg }, i) => {
+      const st = poolBuildStats(cfg)
+      expect([name, st.f1Layouts, st.f1Validations]).toEqual([name, v4[i]?.[0], v4[i]?.[1]])
+    })
+  })
+
   it('総二階の cfg（story 省略・full）とはキャッシュが混ざらず、平屋では story は無視される', () => {
     const cfg = cfgOf(32, 3, ['kitchenFace'])
     const full = candidatePool(cfg)

@@ -45,8 +45,15 @@ function sync(st: State): State {
   return st
 }
 
+/** 吸収で太った収納（持ち主がなく、奥行が2を超える store）の表示名（仕様 6.2・11.5。種別は store のまま） */
+export const NANDO = '納戸'
+
 function finish(st: State): Room[] {
-  return sync(st).rooms
+  sync(st)
+  for (const r of st.rooms) {
+    if (r.type === 'store' && !r.of && Math.min(r.w, r.h) > 2) r.name = NANDO
+  }
+  return st.rooms
 }
 
 function clone(st: State): State {
@@ -113,7 +120,17 @@ function reassignStores(st0: State): State {
   return sync(st)
 }
 
-/** 2. ホール帯の行き止まり */
+/** 階段とホールが、切る前は辺を共有していたのに切った後は共有しなくなったか（階段の前を塞ぐ切り出しの検出） */
+function stairLost(before: Room[], after: Room[]): boolean {
+  const shared = (rs: Room[]) => {
+    const stair = rs.find((r) => r.type === 'stair')
+    const hall = rs.find((r) => r.type === 'hall')
+    return !stair || !hall || sharedEdge(stair, hall) !== null
+  }
+  return shared(before) && !shared(after)
+}
+
+/** 2. ホール帯の行き止まり（階段がホールと辺を共有し続けるときだけ。階段のある側の端は、階段の前を塞ぐなら切らない） */
 function carveHallEnds(st0: State): State {
   let st = st0
   for (const end of ['W', 'E'] as const) {
@@ -140,6 +157,8 @@ function carveHallEnds(st0: State): State {
         nh.area = nh.w * nh.h
         next.rooms.push(cl)
         next.owner.set(cl, no)
+        // 階段の前を塞がない: 切る前に階段がホールと辺を共有していたなら、切った後も共有していること
+        if (stairLost(st.rooms, next.rooms)) continue
         if (reachable(sync(next).rooms)) {
           st = next
           done = true
