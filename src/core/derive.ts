@@ -1,4 +1,4 @@
-import type { Door, DoorSwing, Edge, Pt, Rect as FloorRect, Room, RoomType } from './types'
+import type { Door, DoorSwing, Edge, Pt, FloorRect, Room, RoomType } from './types'
 import { HABITABLE, VIA } from './rooms'
 
 /** 2部屋の共有辺。ドアは辺の中央でなく端寄り（34%地点）に置き、部屋中央のラベルと開き弧を分離する */

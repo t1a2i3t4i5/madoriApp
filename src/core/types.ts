@@ -66,7 +66,7 @@ export interface Room {
 }
 
 /** 外形の矩形（セル。1F基準の共通座標。x,y は左上） */
-export interface Rect {
+export interface FloorRect {
   x: number
   y: number
   W: number
@@ -79,7 +79,7 @@ export interface Floor {
   /**
    * その階の板（部分二階の2F）。1F基準の共通座標。省略 = Plan の W×H 全体（総二階。総二階には付けない）
    */
-  fp?: Rect
+  fp?: FloorRect
 }
 
 /** アーキタイプ番号（ARCH_INFO の添字） */
@@ -96,7 +96,7 @@ export interface Variant {
 }
 
 /** i 階の板の矩形。fp がなければ建物全体（Plan.W × Plan.H） */
-export function floorRect(plan: { W: number; H: number; floors: Floor[] }, i: number): Rect {
+export function floorRect(plan: { W: number; H: number; floors: Floor[] }, i: number): FloorRect {
   return plan.floors[i]?.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
 }
 

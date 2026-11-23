@@ -1,10 +1,10 @@
-import type { Plan, Rect, Room } from './types'
+import type { FloorRect, Plan, Room } from './types'
 import { floorRect } from './types'
 import { HABITABLE } from './rooms'
 import { computeDoors, sharedEdge } from './derive'
 
 /** 外壁に接しているか（採光） */
-export function touchesOuterWall(r: { x: number; y: number; w: number; h: number }, rect: Rect): boolean {
+export function touchesOuterWall(r: { x: number; y: number; w: number; h: number }, rect: FloorRect): boolean {
   return r.x === rect.x || r.y === rect.y || r.x + r.w === rect.x + rect.W || r.y + r.h === rect.y + rect.H
 }
 

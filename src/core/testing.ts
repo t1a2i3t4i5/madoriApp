@@ -94,7 +94,7 @@ export function independentViolations(plan: Plan): string[] {
       out.push(String(e))
       return
     }
-    const fp = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H } // validate.ts の floorRect とは別に素朴に書く
+    const fp = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H } // types.ts の floorRect とは別に素朴に書く
     // 板の内側は全セルが1部屋、外側は0部屋
     grid.forEach((row, y) => row.forEach((n, x) => {
       const inside = x >= fp.x && x < fp.x + fp.W && y >= fp.y && y < fp.y + fp.H
