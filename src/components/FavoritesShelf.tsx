@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { planName } from '../core/describe'
 import { cfgId, isOldVersion, type Favorite } from '../lib/favorites'
 import { planMetrics } from '../lib/metrics'
+import { pctFloor } from '../lib/format'
 import { clampFloor } from '../lib/floor'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
@@ -94,6 +95,7 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
                   ['LDK', (f: Favorite) => fmt(planMetrics(f.plan).ldkTatami, '帖')],
                   ['個室の平均', (f: Favorite) => fmt(planMetrics(f.plan).roomAvgTatami, '帖')],
                   ['廊下率', (f: Favorite) => `${(planMetrics(f.plan).hallRatio * 100).toFixed(1)}%`],
+                  ['収納率', (f: Favorite) => pctFloor(planMetrics(f.plan).storageRatio)],
                   ['スコア', (f: Favorite) => String(f.plan.score.total)],
                 ] as const).map(([label, get]) => (
                   <tr key={label}>

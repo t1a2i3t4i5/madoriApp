@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { enumeratePlans, planKey } from '../core/enumerate'
 import { GEN_VERSION } from '../core/generate'
 import type { ScoredPlan } from '../core/types'
-import { CONDITIONS, PARTIAL_CONDITIONS, defined } from '../core/testing'
+import { CONDITIONS, PARTIAL_CONDITIONS, defined, privateStorageIndependent, storageRatioIndependent } from '../core/testing'
 import {
   FAVORITES_STORAGE_KEY, MAX_FAVORITES, addFavorite, isFavorited, isOldVersion, loadFavorites, removeFavorite, saveFavorites,
   type Favorite, type KeyValueStorage,
 } from './favorites'
-import { planMetrics } from './metrics'
+import { planMetrics, storageCount, storageMark } from './metrics'
+import { pctFloor } from './format'
 
 function memory(initial?: string): KeyValueStorage & { data: Map<string, string> } {
   const data = new Map<string, string>()
@@ -217,5 +218,33 @@ describe('planMetrics', () => {
     const hall = all.filter((r) => r.type === 'hall').reduce((s, r) => s + r.area, 0)
     expect(m.hallRatio).toBeCloseTo(hall / p0.totalArea)
     expect(m.hallRatio).toBeGreaterThan(0)
+  })
+
+  it('収納率は独立実装（storageRatioIndependent）と一致し、付属収納のある個室を数える', () => {
+    const withCl = defined(enumeratePlans(defined(CONDITIONS[2]).cfg).find((q) => q.floors.some((f) => f.rooms.some((r) => r.type === 'closet'))))
+    expect(planMetrics(withCl).storageRatio).toBeCloseTo(storageRatioIndependent(withCl), 12)
+    expect(planMetrics(withCl).storageRatio).toBeGreaterThan(0)
+    const c = storageCount(withCl)
+    const ind = privateStorageIndependent(withCl)
+    expect(c).toEqual(ind)
+    expect(c.with).toBeGreaterThan(0)
+  })
+
+  it('比較表の収納率は切り捨て（解説文と同じ丸め）', () => {
+    expect(pctFloor(0.0969)).toBe('9.6%')
+    expect(pctFloor(0.1)).toBe('10.0%')
+    expect(pctFloor(0.0999)).toBe('9.9%')
+  })
+
+  it('旧版お気に入り（closet も of もない v4 データ）には付属収納の印が出ない', () => {
+    const old = structuredClone(p0)
+    for (const f of old.floors) {
+      f.rooms = f.rooms.filter((r) => r.type !== 'closet').map((r) => {
+        const { of: _of, ...rest } = r
+        return rest
+      })
+    }
+    for (const f of old.floors) for (const r of f.rooms) expect(storageMark(f.rooms, r)).toBe(r.type === 'master' && f.rooms.some((x) => x.type === 'wic') ? '＋WIC' : '')
+    expect(storageCount(old).with).toBe(privateStorageIndependent(old).with)
   })
 })

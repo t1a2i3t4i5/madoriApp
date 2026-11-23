@@ -143,6 +143,15 @@ describe('コンポーネントの描画', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('クローゼット付きの案: カードに「＋収納 n室」、部屋一覧に「＋CL」', () => {
+    const { cfg: c2 } = defined(CONDITIONS[2])
+    const p2 = defined(enumeratePlans(c2).find((q) => q.floors.some((f) => f.rooms.some((r) => r.type === 'closet'))))
+    const card = renderToStaticMarkup(<PlanCard cfg={c2} plan={p2} index={0} scale={{ maxW: p2.W, maxH: p2.H }} onOpen={noop} starred={false} onToggleStar={noop} />)
+    expect(card).toMatch(/＋収納 \d+室/)
+    const dlg = renderToStaticMarkup(<PlanDialog cfg={c2} plan={p2} initialFloor={0} onClose={noop} starred={false} onToggleStar={noop} />)
+    expect(dlg).toContain('＋CL')
+  })
+
   it('PlanDialog / Gallery / FavoritesShelf', () => {
     const plan = defined(plans[0])
     expect(renderToStaticMarkup(<PlanDialog cfg={cfg} plan={plan} initialFloor={0} onClose={noop} starred={false} onToggleStar={noop} shareUrl="http://x/#c=1&p=0-1x1" />)).toContain('家具を表示')

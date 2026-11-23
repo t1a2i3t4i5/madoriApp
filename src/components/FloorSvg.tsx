@@ -48,20 +48,26 @@ const vch = (ch: string) => (ch === 'ー' ? '｜' : ch)
 
 /**
  * 折れ戸／引戸の記号。共有辺に沿った葉の区間の壁を背景色で抜き（壁より後に描く）、
- * 開き先（付属収納側）へ折れる斜め2本線を描く
+ * 開き先（付属収納側）へ折れる M 字のジグザグ線を描く
  */
 function FoldDoor({ d }: { d: Door }) {
   const { hinge, closed, open } = d.swing
   const horiz = d.edge.dir === 'h'
-  const mx = (hinge.x + closed.x) / 2
-  const my = (hinge.y + closed.y) / 2
   // 折れの向きは開き先の符号（辺に垂直な方向で、open が hinge のどちら側か）に合わせる
   const sign = (horiz ? open.y - hinge.y : open.x - hinge.x) < 0 ? -1 : 1
-  const t = horiz ? { x: 0, y: 0.35 * sign } : { x: 0.35 * sign, y: 0 }
+  // M 字の折れ戸: 開口を4等分し、折れ点を交互に収納側へ振ったジグザグ（M 字）。弧がないので開き戸と混同しない
+  const pt = (k: number) => {
+    const t = k / 4
+    const off = k % 2 === 1 ? 0.3 * sign : 0
+    return horiz
+      ? { x: hinge.x + (closed.x - hinge.x) * t, y: hinge.y + off }
+      : { x: hinge.x + off, y: hinge.y + (closed.y - hinge.y) * t }
+  }
+  const pts = [0, 1, 2, 3, 4].map(pt)
   return (
     <g>
       <line x1={hinge.x} y1={hinge.y} x2={closed.x} y2={closed.y} stroke="#fdfcf8" strokeWidth={0.4} />
-      <path d={`M ${hinge.x} ${hinge.y} L ${mx + t.x} ${my + t.y} L ${closed.x} ${closed.y}`} fill="none" stroke="#5a5a5a" strokeWidth={0.13} />
+      <path d={pts.map((q, i) => `${i ? 'L' : 'M'} ${q.x} ${q.y}`).join(' ')} fill="none" stroke="#5a5a5a" strokeWidth={0.13} strokeLinejoin="round" />
     </g>
   )
 }
@@ -71,9 +77,10 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
   if (r.type === 'closet') {
     const lo = Math.min(r.w, r.h), hi = Math.max(r.w, r.h)
     if (lo < 2 || hi < 2.4) return null
-    const fs = Math.min(0.95, lo - 0.5)
+    const fs = Math.min(0.8, lo - 0.9)
+    // ハンガーパイプの線・折れ戸の記号の上でも読めるよう、部屋色の縁取りを常に付ける（動線表示中は白）
     return (
-      <text x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} fontSize={fs} fontWeight={700} fill={LABEL_FILL} textAnchor="middle" {...(halo ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {})}>CL</text>
+      <text x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} fontSize={fs} fontWeight={700} fill={LABEL_FILL} textAnchor="middle" stroke={halo ? '#fff' : FILL.store} strokeWidth={0.35} strokeLinejoin="round" paintOrder="stroke">CL</text>
     )
   }
   const cx = r.x + r.w / 2

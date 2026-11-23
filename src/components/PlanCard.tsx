@@ -5,6 +5,7 @@ import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { floorAreaLabel, meters } from '../lib/format'
+import { storageCount } from '../lib/metrics'
 import { clampFloor } from '../lib/floor'
 import { StarButton } from './StarButton'
 import { CARD } from './ui'
@@ -26,6 +27,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
   // 条件変更で階数が減ってもタブ選択が残るため、存在する階にクランプする
   const floor = clampFloor(selectedFloor, plan.floors.length)
   const name = planName(cfg, plan)
+  const cl = storageCount(plan)
   const open = () => onOpen(floor)
   return (
     // カード全体のクリックはマウス・タッチ用の補助。キーボード・支援技術向けの操作は下の「拡大表示」ボタン（本物の button）が受ける。
@@ -52,7 +54,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
         <div className="mt-1.5 mb-2.5 flex flex-wrap gap-x-3.5 gap-y-0.5 text-[12px] text-ink2">
           <span>実測 <b className="font-bold text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
           {floorAreaLabel(plan) && <span>{floorAreaLabel(plan)}</span>}
-          <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室</span>
+          <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室{cl.with > 0 && `（＋収納 ${cl.with}室）`}</span>
           <span>{meters(plan.W, 3).replace(/0+$/, '').replace(/\.$/, '')}m × {meters(plan.H, 3).replace(/0+$/, '').replace(/\.$/, '')}m</span>
         </div>
         <p className="mb-2.5 flex flex-wrap gap-1.5">

@@ -1,4 +1,6 @@
 export const MM = 455
+/** 割合（0〜1）を小数1桁の % に切り捨てて表示する（解説文の pct と同じ丸め） */
+export const pctFloor = (v: number) => `${(Math.floor(v * 1000 + 1e-9) / 10).toFixed(1)}%`
 export const meters = (cells: number, digits = 2) => ((cells * MM) / 1000).toFixed(digits)
 export { tatami } from '../core/rooms'
 
