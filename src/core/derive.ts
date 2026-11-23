@@ -75,13 +75,19 @@ function opensInto(a: Room, b: Room): 'a' | 'b' {
   return a.x <= b.x ? 'a' : 'b'
 }
 
+/** doorSwing の上書き指定。opens: 開き先を固定、leaf: 葉を共有区間の下端（lo）／上端（hi）へ寄せる（既定は 34% 地点中心） */
+export interface SwingOpt {
+  opens?: 'a' | 'b'
+  leaf?: 'lo' | 'hi'
+}
+
 /**
  * ドア1枚の形状。葉は共有区間内（長さ最大 DOOR_LEAF）で 34% 地点を中心に置き、区間内へクランプする。
  * 半径は葉の長さと、開き先の壁に垂直な深さの小さい方 → 弧の矩形は開き先の部屋に収まる。
  * 描画（FloorSvg）・家具配置（furnish）・動線（flow）が共有する唯一の定義
  */
-export function doorSwing(a: Room, b: Room, e: Edge): DoorSwing {
-  const opens = opensInto(a, b)
+export function doorSwing(a: Room, b: Room, e: Edge, opt: SwingOpt = {}): DoorSwing {
+  const opens = opt.opens ?? opensInto(a, b)
   const room = opens === 'a' ? a : b
   // 開き先が辺の小さい座標側か大きい座標側か（at が部屋の末端か先端か）で開く向きが決まる
   const isV = e.dir === 'v'
@@ -89,7 +95,7 @@ export function doorSwing(a: Room, b: Room, e: Edge): DoorSwing {
   const near = isV ? room.x : room.y // 開き先の部屋の、辺に垂直な方向の始点
   const dirSign = e.at === near ? 1 : -1
   const r = Math.max(0, Math.min(DOOR_LEAF, e.len, depth))
-  const s = Math.min(Math.max(e.mid - r / 2, e.lo), e.hi - r)
+  const s = opt.leaf === 'lo' ? e.lo : opt.leaf === 'hi' ? e.hi - r : Math.min(Math.max(e.mid - r / 2, e.lo), e.hi - r)
   const pt = (along: number, perp: number): Pt => (isV ? { x: perp, y: along } : { x: along, y: perp })
   const hinge = pt(s, e.at)
   const closed = pt(s + r, e.at)
@@ -128,6 +134,44 @@ export function entryDoor(entry: Room, H: number): { path: string; rect: Rect; r
   }
 }
 
+function rectsOverlap(p: Rect, q: Rect): boolean {
+  return p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h
+}
+
+/**
+ * 同じ部屋に開く2枚のドアの弧が重ならないようにする後処理。先に決まったドアを優先し、
+ * 後のドアを (1) 葉を共有区間の反対側の端へ寄せる → (2) 反対側の端 → (3) 開き先を反対の部屋に切り替える（既定位置 → 両端）の順に試す。
+ * どれでも避けられなければ既定の形のまま残す
+ */
+function separateSwings(doors: Door[]): Door[] {
+  const out: Door[] = []
+  for (const d of doors) {
+    const opensRoom = (x: Door, o: 'a' | 'b') => (o === 'a' ? x.a : x.b)
+    const clash = (sw: DoorSwing) =>
+      out.some((o) => opensRoom(o, o.swing.opens) === opensRoom(d, sw.opens) && rectsOverlap(o.swing.rect, sw.rect))
+    if (!clash(d.swing)) {
+      out.push(d)
+      continue
+    }
+    const other = d.swing.opens === 'a' ? 'b' : 'a'
+    // 既定位置は 34% 地点（下端寄り）なので、まず上端、次に下端
+    const tries: SwingOpt[] = [
+      { leaf: 'hi' }, { leaf: 'lo' },
+      { opens: other }, { opens: other, leaf: 'hi' }, { opens: other, leaf: 'lo' },
+    ]
+    let best = d.swing
+    for (const t of tries) {
+      const sw = doorSwing(d.a, d.b, d.edge, { opens: d.swing.opens, ...t })
+      if (!clash(sw)) {
+        best = sw
+        break
+      }
+    }
+    out.push(best === d.swing ? d : { ...d, swing: best })
+  }
+  return out
+}
+
 export function computeDoors(rooms: Room[]): Door[] {
   const doors: Door[] = []
   for (const [i, a] of rooms.entries()) {
@@ -136,7 +180,7 @@ export function computeDoors(rooms: Room[]): Door[] {
       if (e && doorOK(a, b)) doors.push({ a, b, edge: e, swing: doorSwing(a, b, e) })
     }
   }
-  return doors
+  return separateSwings(doors)
 }
 
 export interface WindowSeg {

@@ -85,6 +85,23 @@ describe('家具配置 furnish', () => {
     }
   })
 
+  it('子供部屋は（ベッドと机を）2割5分以上で置ける（退行防止の下限）', () => {
+    let ok = 0
+    let total = 0
+    for (const { cfg, plan } of PLANS) {
+      for (const fl of plan.floors) {
+        const placed = furnish(fl.rooms, computeDoors(fl.rooms), { kitchenFace: cfg.feats.includes('kitchenFace') })
+        fl.rooms.forEach((r, i) => {
+          if (r.type !== 'bed') return
+          total++
+          if (placed.filter((p) => p.room === i).length === (PROGRAM.bed?.length ?? 0)) ok++
+        })
+      }
+    }
+    expect(total).toBeGreaterThan(100)
+    expect(ok / total, `bed ${ok}/${total}`).toBeGreaterThanOrEqual(0.25)
+  })
+
   it('畳数行: 避けられる位置があるケースでは家具が畳数行に重ならない（なければ部屋名のみ回避にフォールバック）', () => {
     let overlapped = 0
     let avoidable = 0
