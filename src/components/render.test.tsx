@@ -51,6 +51,17 @@ describe('コンポーネントの描画', () => {
     expect(s).toEqual([{ x: 0, y: 11, W: 20, H: 5 }])
     expect(area(ew)).toBe(20 * 16 - 14 * 16)
     expect(shimoyaRects(outer, outer)).toEqual([])
+    // 西側に下屋が出る（2階の板が東寄り）
+    expect(shimoyaRects(outer, { x: 6, y: 0, W: 14, H: 16 })).toEqual([{ x: 0, y: 0, W: 6, H: 16 }])
+  })
+
+  it('FloorSvg: 下屋は窓・外壁より先（下層）に描かれる', () => {
+    const pp = defined(enumeratePlans(defined(PARTIAL_CONDITIONS[0]).cfg)[0])
+    const html = renderToStaticMarkup(<FloorSvg plan={pp} floorIdx={1} uid="t" />)
+    const shimoya = html.indexOf('下屋</text>')
+    expect(shimoya).toBeGreaterThanOrEqual(0)
+    expect(shimoya).toBeLessThan(html.indexOf('stroke="#fdfcf8"')) // 窓（壁抜きの白線）
+    expect(shimoya).toBeLessThan(html.indexOf('stroke-width="0.42"')) // 外壁
   })
 
   it('FloorSvg: 動線は showFlow のときだけ描かれ、部屋ラベルより下（先）。ラベルには白縁取り', () => {

@@ -161,6 +161,9 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {/* 方位 */}
       <text x={W - 1.2} y={-PAD - 0.1} fontSize={1.7} fill="#8a8578" textAnchor="middle" fontWeight={700}>N</text>
       <path d={`M ${W - 1.2} ${-PAD + 0.6} l 0.45 0.9 h -0.9 z`} fill="#8a8578" />
+      {/* 下屋（部分二階の2階）: 1階の外形を破線で重ね、1階の板から2階の板を引いた部分に淡いハッチと「下屋」ラベル。
+          2階の外壁・窓より下層に描く（後に描くと外壁が半分の太さに見え、窓の二重線が潰れる） */}
+      {fl.fp && floorIdx > 0 && <Shimoya outer={floorRect(plan, 0)} fp={fp} uid={uid} />}
       {/* 部屋の塗り */}
       {fl.rooms.map((r, i) => {
         let fill = FILL[ROOM[r.type].cat]
@@ -206,8 +209,6 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
         <rect x={fp.x} y={fp.y} width={fp.W} height={fp.H} strokeWidth={0.42} />
       </g>
-      {/* 下屋（部分二階の2階）: 1階の外形を破線で重ね、1階の板から2階の板を引いた部分に淡いハッチと「下屋」ラベル */}
-      {fl.fp && floorIdx > 0 && <Shimoya outer={{ x: 0, y: 0, W, H }} fp={fp} uid={uid} />}
       {/* 動線は部屋名ラベルより下 */}
       {showFlow && <FlowOverlay flows={flows} legendY={legendY} legendX={vbX + 1.2} />}
       {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} />)}

@@ -55,6 +55,8 @@ export default function App() {
   })
   const [favMessage, setFavMessage] = useState<string | null>(null)
 
+  // 仕様: 平屋に切り替えても state.story（2階の形）は残す。toConfig・encodeHash は平屋では story を無視／出力しないので、
+  // 2階建てに戻せば元の選択に戻る。ただしハッシュには残らないため、平屋のままリロードすると総二階に戻る（許容）。
   // seed だけが変わるときは cfg の同一性を保ちたいので、条件の各フィールドを依存にする
   const cfg: PlanConfig = useMemo(
     () => toConfig(state),
