@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { candidatePool, dedupeBySig, generatePlans, generatePlansUncached, selectPlans } from './generate'
 import { planSignature } from './diversity'
 import { planKey } from './enumerate'
-import { validatePlan } from './validate'
+import { shortSideViolations, validatePlan } from './validate'
 import { diagnoseEmpty, fewReason, feasibility } from './program'
-import { BOUNDARY, CONDITIONS, SEEDS, ZERO_PLAN, defined } from './testing'
+import { BOUNDARY, CONDITIONS, SEEDS, ZERO_PLAN, defined, independentViolations } from './testing'
 import type { Plan, PlanConfig, Room, ScoredPlan } from './types'
 
 const POPULAR = CONDITIONS.slice(0, 3).map(({ name, cfg }): [string, PlanConfig] => [name, cfg])
@@ -39,6 +39,21 @@ describe('人気条件での生成', () => {
     it(`${name}: 同じseed+入力で同じ結果（再現性）`, () => {
       for (const seed of SEEDS) {
         expect(JSON.stringify(generatePlans(cfg, seed))).toBe(JSON.stringify(generatePlans(cfg, seed)))
+      }
+    })
+  }
+
+  // GEN_VERSION 4（R-EVAL-24、R-VERIFY-06）: 最小の短辺を入れても人気3条件が3案を保つ
+  for (const [name, cfg] of POPULAR) {
+    it(`${name}: seed 1〜20 すべてで3案。プールは30件以上。提示案の短辺・独立検証の違反は空`, () => {
+      expect(candidatePool(cfg).length).toBeGreaterThanOrEqual(30) // 実測 288／36／432。30坪平屋が最も薄い
+      for (let seed = 1; seed <= 20; seed++) {
+        const plans = generatePlans(cfg, seed)
+        expect(plans, `seed=${seed}`).toHaveLength(3)
+        for (const p of plans) {
+          for (const f of p.floors) expect(shortSideViolations(f.rooms), `seed=${seed} ${planKey(p)}`).toEqual([])
+          expect(independentViolations(p), `seed=${seed} ${planKey(p)}`).toEqual([])
+        }
       }
     })
   }
@@ -115,6 +130,17 @@ describe('人気条件での生成', () => {
 })
 
 describe('0案の診断 diagnoseEmpty', () => {
+  it('短辺が原因の0案（30坪/平屋/個室5）: 理由に短辺の文言があり、代替に「個室を4室にする」がある', () => {
+    const cfg = defined(BOUNDARY.find((b) => b.name.includes('個室5'))).cfg
+    expect(feasibility(cfg).ok).toBe(true)
+    expect(candidatePool(cfg)).toHaveLength(0)
+    const d = diagnoseEmpty(cfg)
+    expect(d.reason).toContain('短辺')
+    expect(d.reason).not.toContain('最低面積を満たせません')
+    const alt = defined(d.alts.find((a) => a.label === '個室を4室にする'))
+    expect(generatePlans({ ...cfg, feats: [...cfg.feats], ...alt.patch }, 1)).toHaveLength(3)
+  })
+
   const zeros = [
     { name: 'ZERO_PLAN', cfg: ZERO_PLAN },
     ...BOUNDARY.filter((b) => b.expected === 0).map((b) => ({ name: b.name, cfg: b.cfg })),

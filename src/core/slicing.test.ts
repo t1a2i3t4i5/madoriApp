@@ -184,3 +184,35 @@ describe('layoutFloor', () => {
     expect(JSON.stringify(b)).toBe(before)
   })
 })
+
+describe('最小の短辺（GEN_VERSION 4）', () => {
+  const band = (...cells: Band['cells']): Band => ({ cells })
+  const widthOf = (rs: { type: string; w: number }[], t: string) => rs.find((r) => r.type === t)?.w ?? 0
+
+  it('高さ9の帯で玄関・WIC が幅3以上（ignoreMinShort では v3 と同じ幅2）', () => {
+    const b = band(cell('master'), cell('wic'), cell('entry'), cell('wash'), cell('bath'), cell('wc'))
+    const ok = layoutBand(b, 20, 0, 9)
+    expect(ok).not.toBeNull()
+    expect(widthOf(ok ?? [], 'entry')).toBeGreaterThanOrEqual(3)
+    expect(widthOf(ok ?? [], 'wic')).toBeGreaterThanOrEqual(3)
+    const old = layoutBand(b, 15, 0, 9, true) // 面積由来の下限だけなら幅15に全部収まる（玄関・WIC は幅2）
+    expect(widthOf(old ?? [], 'entry')).toBe(2)
+    expect(widthOf(old ?? [], 'wic')).toBe(2)
+  })
+  it('帯の高さが短辺未満（高さ4に洋室）なら null。ignoreMinShort なら組める', () => {
+    const b = band(cell('bed'), cell('wash'))
+    expect(layoutBand(b, 14, 0, 4)).toBeNull()
+    expect(layoutBand(b, 14, 0, 4, true)).not.toBeNull()
+  })
+  it('max < min になる組（maxArea が小さく短辺が大きい）でも null にならない', () => {
+    const small = cell('bed', { maxArea: 20 }) // 高さ9なら面積由来の上限は3だが、短辺5が下限
+    const rs = layoutBand(band(small, cell('wash')), 14, 0, 9)
+    expect(rs).not.toBeNull()
+    expect(widthOf(rs ?? [], 'bed')).toBeGreaterThanOrEqual(5)
+  })
+  it('layoutFloor: 帯の高さの下限が帯内の短辺の最大以上（洋室を含む帯は高さ5以上）', () => {
+    const bands: Band[] = [{ cells: [cell('bed'), cell('wash'), cell('wc')], minH: 3 }, { cells: [cell('ldk')], minH: 7 }]
+    const r = layoutFloor(20, 14, bands)
+    expect(r === null || (r.heights[0] ?? 0) >= 5).toBe(true)
+  })
+})

@@ -87,6 +87,13 @@ function emptyReason(cfg: PlanConfig): string {
     }
   }
   const has = (k: PlanConfig['feats'][number]) => cfg.feats.includes(k)
+  // 1F/2F の割り付けが崩れたとき、最小の短辺の判定を外すと組めるなら原因は短辺
+  const shortCause =
+    (counts.f1 > 0 || counts.f2 > 0) &&
+    archs.some((arch) => shapes.some((fp) => buildPlanStage(cfg, arch, fp, CANONICAL, undefined, { ignoreMinShort: true }).plan !== null))
+  const shortMsg =
+    '部屋の幅（短辺）の最低限 — 個室 2.3m・主寝室 2.7m・浴室と洗面 1.4m など — を確保すると、帯に部屋が収まりません。個室を減らすか、延床を広げてください。'
+  if (shortCause) return partial ? `${shortMsg}総二階にするか、条件を調整してください。` : shortMsg
   if (partial) {
     const tail = '総二階にするか、条件を調整してください。'
     // 吹抜ありで f2/void が崩れたとき、吹抜を除いても組めるなら原因は吹抜（fixedW のセルが狭い2階の南帯を占める）

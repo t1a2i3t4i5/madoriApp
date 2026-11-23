@@ -16,7 +16,7 @@ export const CONDITIONS: { name: string; cfg: PlanConfig }[] = [
   { name: '34坪/平屋/ランドリー+書斎', cfg: { ...base, area: 34, floors: 1, rooms: 4, feats: ['laundry', 'study', 'kitchenFace'] } },
 ]
 
-/** 部分二階の条件セット（gen-v3-partial fixture・不変条件テストで共有）。先頭3件が人気条件 */
+/** 部分二階の条件セット（gen-v4-partial fixture・不変条件テストで共有）。先頭3件が人気条件 */
 export const PARTIAL_CONDITIONS: { name: string; cfg: PlanConfig }[] = [
   { name: '部分二階: 30坪/個室3', cfg: { ...base, area: 30, floors: 2, rooms: 3, feats: ['kitchenFace', 'wic'], story: 'partial' } },
   { name: '部分二階: 35坪/個室4', cfg: { ...base, area: 35, floors: 2, rooms: 4, feats: ['kitchenFace', 'wic'], story: 'partial' } },
@@ -36,11 +36,12 @@ export const INFEASIBLE: { name: string; cfg: PlanConfig }[] = [
 /** 実現可能と判定されるのに、検証を通る案が0になる条件（diagnoseEmpty の経路） */
 export const ZERO_PLAN: PlanConfig = { ...base, area: 26, floors: 2, rooms: 2, feats: ['doma'] }
 
-/** 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 2 の実測。36坪/吹抜+個室4+WIC は3案に改善） */
+/** 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 4 の実測。短辺の制約を入れても件数は変わらない） */
 export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全 SEEDS で返す件数（0案なら候補プールも空） */ expected: number }[] = [
   { name: '境界: 36坪/2階/吹抜+個室4+WIC+書斎（0案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'study', 'kitchenFace'] }, expected: 0 },
   { name: '境界: 36坪/2階/吹抜+個室4+WIC（3案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'kitchenFace'] }, expected: 3 },
   { name: '境界: 26坪/2階/個室2/土間（0案）', cfg: ZERO_PLAN, expected: 0 },
+  { name: '境界: 30坪/平屋/個室5（0案: 短辺）', cfg: { ...base, area: 30, floors: 1, rooms: 5, feats: [] }, expected: 0 },
 ]
 
 /** 末尾の 2**40+5 は 2^32 以上の seed（seed32 の上位ビット経路を通す）。golden.test.ts は先頭2件だけ使う */
@@ -68,6 +69,12 @@ export function defined<T>(v: T | null | undefined, what = '値'): T {
  * セル塗りと素朴な座標比較で確かめる。
  */
 export const LIVING = new Set(['ldk', 'master', 'bed', 'study', 'washitsu']) // rooms.ts の HABITABLE と同じ定義を独立に持つ
+
+/** 最小の短辺の閾値（rooms.ts の MIN_SHORT とは別に持つ独立実装。R-VERIFY-09） */
+const SHORT_MIN: Record<string, number> = {
+  master: 6, bed: 5, study: 5, washitsu: 5, bath: 3, wash: 3, wc: 2, laundry: 3,
+  kitchen: 3, pantry: 2, wic: 3, entry: 3, doma: 3,
+}
 
 export function paint(plan: Plan, floorIdx: number): number[][] {
   const grid = Array.from({ length: plan.H }, () => Array.from({ length: plan.W }, () => 0))
@@ -155,6 +162,8 @@ export function independentViolations(plan: Plan): string[] {
     }))
     for (const r of fl.rooms) {
       if (r.area !== r.w * r.h) out.push(`${fl.label} ${r.name}: area が w*h と不一致`)
+      const need = SHORT_MIN[r.type]
+      if (need !== undefined && (r.w < need || r.h < need)) out.push(`${fl.label} ${r.name}: 短辺 ${Math.min(r.w, r.h)} が最小 ${need} 未満`)
       if (LIVING.has(r.type) && !(r.x === fp.x || r.y === fp.y || r.x + r.w === fp.x + fp.W || r.y + r.h === fp.y + fp.H)) out.push(`${fl.label} ${r.name}: 居室が外壁に接していない`)
     }
   })

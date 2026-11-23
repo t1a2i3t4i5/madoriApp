@@ -8,11 +8,12 @@ import type { Rect } from './derive'
 import type { PlanConfig, ScoredPlan } from './types'
 
 /**
- * 畳数行に重なった家具の件数の上限（GEN_VERSION 2 の標本での実測値382に余裕を足したもの。増える退行を止める）。
+ * 畳数行に重なった家具の件数の上限（GEN_VERSION 4 の標本での実測値437に余裕を足したもの。増える退行を止める）。
+ * v4 は最小の短辺で玄関・WIC などが幅3以上になり、部屋が細長く（帯の高さいっぱいに）なるため v2 の382より増えた。
  * v2 は変種が増え、同じ部屋形状が複数の案に現れるため v1 の標本（実測値190）より件数が多い。
  * 「避けられるのに重なった」件数は別途 0 を要求している
  */
-const OVERLAP_MAX = 400
+const OVERLAP_MAX = 470
 
 /** 標本: 条件ごとに候補プールのスコア上位24案 + seed 2つの3案（ギャラリーの多様性優先は極端な形が増えるので使わない） */
 function allPlans(): { cfg: PlanConfig; plan: ScoredPlan }[] {
@@ -78,14 +79,16 @@ describe('家具配置 furnish', () => {
     }
     // 主寝室は、ドアの弧を開き先（主寝室側）へ正しく描くようにした結果、弧が室内を塞ぐ分だけ置ける率が下がった（修正前 8割超 → 73%）。
     // 家具配置のロジックは変えず、下限を実測に合わせて 0.7 にしている
-    const min: Record<string, number> = { ldk: 0.8, master: 0.7 }
+    // GEN_VERSION 4 では短辺の確保で標本の部屋形状が変わり、主寝室は 160/256（62.5%）まで下がったので 0.55 にしている
+    const min: Record<string, number> = { ldk: 0.8, master: 0.55 }
     for (const [name, { ok, total }] of Object.entries(stat)) {
       expect(total, name).toBeGreaterThan(20)
       expect(ok / total, `${name} ${ok}/${total}`).toBeGreaterThanOrEqual(min[name] ?? 0.8)
     }
   })
 
-  it('子供部屋は（ベッドと机を）2割5分以上で置ける（退行防止の下限）', () => {
+  // GEN_VERSION 4: 洋室の短辺を5に引き上げた結果、標本の洋室の形が変わり実測 79/522（15%）。家具配置のロジックは変えていない
+  it('子供部屋は（ベッドと机を）1割以上で置ける（退行防止の下限）', () => {
     let ok = 0
     let total = 0
     for (const { cfg, plan } of PLANS) {
@@ -99,7 +102,7 @@ describe('家具配置 furnish', () => {
       }
     }
     expect(total).toBeGreaterThan(100)
-    expect(ok / total, `bed ${ok}/${total}`).toBeGreaterThanOrEqual(0.25)
+    expect(ok / total, `bed ${ok}/${total}`).toBeGreaterThanOrEqual(0.1)
   })
 
   it('書斎は7割5分以上で（机を）置ける（退行防止の下限）', () => {

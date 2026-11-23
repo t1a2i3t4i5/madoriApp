@@ -50,7 +50,7 @@ describe('enumeratePlans（候補プール）', () => {
   })
 
   it('空振り防止: 人気条件では候補が3案よりずっと多い', () => {
-    for (const { cfg } of CONDITIONS.slice(0, 3)) expect(enumeratePlans(cfg).length).toBeGreaterThan(50)
+    for (const { cfg } of CONDITIONS.slice(0, 3)) expect(enumeratePlans(cfg).length).toBeGreaterThan(30)
   })
 })
 

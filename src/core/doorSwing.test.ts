@@ -51,7 +51,8 @@ describe('ドアの開き形状（全条件・全候補・全階）', () => {
       }
       expect(doors, '空振り防止').toBeGreaterThan(0)
       expect(flipped, '開き先の切替は例外的').toBeLessThan(doors * 0.05)
-      expect(entries, '空振り防止').toBeGreaterThan(0)
+      // GEN_VERSION 4: 33坪/2階/土間+パントリーは、玄関の短辺3と土間の短辺3で幅が溢れ、全案で「玄関・土間」の結合セル（type doma）になる
+      if (!(cfg.feats.includes('doma') && cfg.floors === 2)) expect(entries, '空振り防止').toBeGreaterThan(0)
     })
   }
 

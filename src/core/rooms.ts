@@ -32,6 +32,15 @@ export const VIA: Partial<Record<RoomType, true>> = {
   entry: true, hall: true, ldk: true, doma: true, wash: true, stair: true,
 }
 
+/** 最小の短辺（セル、芯々）。ない種別は対象外（design.md 7.2、R-ROOM-03）。LDK・階段・ホール・吹抜・収納は対象外 */
+export const MIN_SHORT: Partial<Record<RoomType, number>> = {
+  master: 6, bed: 5, study: 5, washitsu: 5,
+  bath: 3, wash: 3, wc: 2, laundry: 3,
+  kitchen: 3, pantry: 2, wic: 3,
+  entry: 3, doma: 3,
+}
+export const minShort = (t: RoomType): number => MIN_SHORT[t] ?? 0
+
 export function cell(type: RoomType, opts?: Partial<Cell>): Cell {
   const d = ROOM[type]
   return {

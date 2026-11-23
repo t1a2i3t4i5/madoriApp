@@ -7,7 +7,8 @@ import { feasibility } from './program'
 import { planName, planTags } from './describe'
 import { planKey } from './enumerate'
 import { BOUNDARY, CONDITIONS, SEEDS } from './testing'
-import type { PlanConfig, ScoredPlan } from './types'
+import { shortSideViolations } from './validate'
+import type { PlanConfig, Room, ScoredPlan } from './types'
 
 /**
  * 現在の GEN_VERSION に対応するスナップショット（__fixtures__/gen-v<GEN_VERSION>.json）との比較。
@@ -15,11 +16,11 @@ import type { PlanConfig, ScoredPlan } from './types'
  *   UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts
  * fixture の genVersion が現在の GEN_VERSION と同じで中身だけ違う場合は、書き込みを拒否する
  * （GEN_VERSION を上げずに出力を黙って書き換えないため。どうしても必要なら UPDATE_GOLDEN=force）。
- * 旧バージョンの fixture（gen-v2.json）は消さず、移行検証（ランドリーを含まない条件は v3 と v2 が一致）に使う。
+ * 旧バージョンの fixture（gen-v3.json）は消さず、移行検証（v3 → v4）に使う。
  * v1 の正解は legacy/index.html（golden.test.ts）。
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.url)
-const FIXTURE_V2 = new URL('./__fixtures__/gen-v2.json', import.meta.url)
+const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 const ALL = [...CONDITIONS, ...BOUNDARY]
@@ -119,43 +120,40 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
     expect(now.grid).toEqual(fixture.grid)
   })
 
-  // 移行検証: GEN_VERSION 3 の変更のうち、部屋の配置（ランドリーの並び替え・水回り制約）が変わるのは
-  // こだわりにランドリーを含む条件だけ。ドアの見直しは全条件で変わるが、ドアのスコアが上限に
-  // 張り付くため fixture 上は一致する。よって含まない条件は v2 の出力と完全に一致する
-  describe('v2 からの移行（ランドリーを含まない条件は変わらない）', () => {
-    let v2: Fixture
+  // 移行検証: GEN_VERSION 4 は最小の短辺のハード制約を足した（feasibility は不変）
+  describe('v3 からの移行（最小の短辺）', () => {
+    let v3: Fixture
     beforeAll(() => {
-      v2 = JSON.parse(readFileSync(FIXTURE_V2, 'utf8')) as Fixture
+      v3 = JSON.parse(readFileSync(FIXTURE_V3, 'utf8')) as Fixture
     })
-    const noLaundry = new Set(ALL.filter(({ cfg }) => !cfg.feats.includes('laundry')).map((c) => c.name))
+    const planViolations = (floors: string[][]) =>
+      floors.some((fl) =>
+        shortSideViolations(
+          fl.map((s) => {
+            const [type, rest = ''] = s.split(':')
+            const [x = 0, y = 0, w = 0, h = 0] = rest.split(',').map(Number)
+            return { type, name: type, x, y, w, h, area: w * h, target: 0, minArea: 0 } as Room
+          }),
+        ).length > 0,
+      )
 
-    it('fixture の対象条件にランドリーあり・なしの両方がある', () => {
-      expect(v2.genVersion).toBe(2)
-      expect(noLaundry.size).toBeGreaterThan(0)
-      expect(noLaundry.size).toBeLessThan(ALL.length)
+    it('v3 の提示案の 90% 超に短辺違反がある（改修が効いていることの記録）', () => {
+      expect(v3.genVersion).toBe(3)
+      const plans = v3.cases.flatMap((c) => c.plans)
+      const bad = plans.filter((p) => planViolations(p.floors)).length
+      expect(plans.length).toBeGreaterThan(0)
+      expect(bad / plans.length).toBeGreaterThan(0.9)
     })
-    it('cases: ランドリーなしの条件は gen-v2 と一致する', () => {
-      const old = v2.cases.filter((c) => noLaundry.has(c.name))
-      expect(old.length).toBe(noLaundry.size * SEEDS.length)
-      for (const c of old) {
-        expect(now.cases.find((n) => n.name === c.name && n.seed === c.seed), `${c.name} seed=${c.seed}`).toEqual(c)
+    it('v4 の全 cases・全プールの案で shortSideViolations が空', () => {
+      for (const c of fixture.cases) for (const p of c.plans) expect(planViolations(p.floors), `${c.name} ${p.key}`).toBe(false)
+      for (const { name, cfg } of ALL) {
+        for (const p of candidatePool(copy(cfg))) {
+          for (const f of p.floors) expect(shortSideViolations(f.rooms), `${name} ${planKey(p)}`).toEqual([])
+        }
       }
     })
-    it('pools: ランドリーなしの条件は件数・上位10件・ハッシュとも gen-v2 と一致する', () => {
-      const old = v2.pools.filter((p) => noLaundry.has(p.name))
-      expect(old.length).toBe(noLaundry.size)
-      for (const p of old) expect(now.pools.find((n) => n.name === p.name), p.name).toEqual(p)
-    })
-    it('grid: ランドリーを含まない条件は gen-v2 と一致する', () => {
-      const keys = Object.keys(v2.grid).filter((k) => !(JSON.parse(k) as PlanConfig).feats.includes('laundry'))
-      expect(keys.length).toBeGreaterThan(30)
-      for (const k of keys) expect(now.grid[k], k).toEqual(v2.grid[k])
-      // 可否の判定は変わらないので、条件の集合そのものも同じ
-      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v2.grid).sort())
-    })
-    it('ランドリーを含む条件では、プールが実際に変わっている（並び替えが効いている）', () => {
-      const changed = v2.pools.filter((p) => !noLaundry.has(p.name) && now.pools.find((n) => n.name === p.name)?.sha256 !== p.sha256)
-      expect(changed.length).toBeGreaterThan(0)
+    it('grid: 条件の集合（feasibility が ok のキー）は v3 と同一（feasibility 不変）', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v3.grid).sort())
     })
   })
 })
