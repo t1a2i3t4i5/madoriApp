@@ -67,8 +67,21 @@ function isPlan(v: unknown): v is ScoredPlan {
         (r: unknown) =>
           isObj(r) && typeof r.type === 'string' && Object.hasOwn(ROOM, r.type) && typeof r.name === 'string' &&
           isNum(r.x) && isNum(r.y) && isNum(r.w) && isNum(r.h) && isNum(r.area) && isNum(r.target) && isNum(r.minArea),
-      ),
+      ) &&
+      hasValidOwners(fl.rooms as Record<string, unknown>[]),
   )
+}
+
+/** 付属収納の持ち主: of が整数で、同じ階にその位置（左上）の部屋がちょうど1つあり、自分自身ではない */
+function hasValidOwners(rooms: readonly Record<string, unknown>[]): boolean {
+  return rooms.every((r) => {
+    if (r.of === undefined) return true
+    const o = r.of
+    if (!isObj(o) || !Number.isInteger(o.dx) || !Number.isInteger(o.dy)) return false
+    const ox = (r.x as number) + (o.dx as number)
+    const oy = (r.y as number) + (o.dy as number)
+    return rooms.filter((q) => q !== r && q.x === ox && q.y === oy).length === 1
+  })
 }
 
 function isFavorite(v: unknown): v is Favorite {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Plan, Room, RoomCategory } from '../core/types'
+import type { Door, Plan, Room, RoomCategory } from '../core/types'
 import { ROOM, findEntry } from '../core/rooms'
 import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
@@ -46,7 +46,30 @@ export interface FloorSvgProps {
 /** 縦に積むとき、長音「ー」は横線のままだと読めないので「｜」にする */
 const vch = (ch: string) => (ch === 'ー' ? '｜' : ch)
 
+/** 折れ戸／引戸の記号（開き弧は描かず、共有辺に沿った葉の区間に斜めの2本線を描く） */
+function FoldDoor({ d }: { d: Door }) {
+  const { hinge, closed } = d.swing
+  const horiz = d.edge.dir === 'h'
+  const mx = (hinge.x + closed.x) / 2
+  const my = (hinge.y + closed.y) / 2
+  const t = horiz ? { x: 0, y: 0.35 } : { x: 0.35, y: 0 }
+  return (
+    <g>
+      <line x1={hinge.x} y1={hinge.y} x2={closed.x} y2={closed.y} stroke="#fdfcf8" strokeWidth={0.4} />
+      <path d={`M ${hinge.x} ${hinge.y} L ${mx + t.x} ${my + t.y} L ${closed.x} ${closed.y}`} fill="none" />
+    </g>
+  )
+}
+
 function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean }) {
+  // クローゼットは「CL」と短く表示し、畳数は出さない
+  if (r.type === 'closet') {
+    if (r.w < 2 || r.h < 2.4) return null
+    const fs = Math.min(0.95, r.w - 0.5)
+    return (
+      <text x={r.x + r.w / 2} y={r.y + r.h / 2 + fs * 0.35} fontSize={fs} fontWeight={700} fill={LABEL_FILL} textAnchor="middle">CL</text>
+    )
+  }
   const cx = r.x + r.w / 2
   // 対面キッチンのカウンターがあるLDKはラベルを下へ逃がす
   const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
@@ -246,7 +269,11 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       </g>
       {/* ドアの開き弧 */}
       <g stroke="#5a5a5a" strokeWidth={0.13} fill="rgba(90,90,90,0.07)">
-        {doors.map((d, i) => <path key={i} d={doorPath(d)} />)}
+        {doors.map((d, i) => (d.kind === 'fold' ? null : <path key={i} d={doorPath(d)} />))}
+      </g>
+      {/* 付属収納の折れ戸／引戸（弧なし） */}
+      <g stroke="#5a5a5a" strokeWidth={0.13}>
+        {doors.map((d, i) => (d.kind === 'fold' ? <FoldDoor key={i} d={d} /> : null))}
       </g>
       {/* 壁（外壁は内壁の約2倍強の太さ） */}
       <g fill="none" stroke={INK}>

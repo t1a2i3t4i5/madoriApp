@@ -5,7 +5,7 @@ import type { SCORE_WEIGHTS } from './score'
 export type RoomType =
   | 'ldk' | 'kitchen' | 'master' | 'bed' | 'study' | 'washitsu'
   | 'bath' | 'wash' | 'wc' | 'laundry'
-  | 'pantry' | 'wic' | 'store'
+  | 'pantry' | 'wic' | 'store' | 'closet'
   | 'entry' | 'doma' | 'hall' | 'stair' | 'void'
 
 export type RoomCategory = 'living' | 'bed' | 'water' | 'store' | 'circ' | 'void'
@@ -65,6 +65,11 @@ export interface Room {
   area: number
   target: number
   minArea: number
+  /**
+   * 付属収納（closet、持ち主のある store）の持ち主の位置: 持ち主の左上 − 自分の左上。
+   * 持ち主のない部屋には付けない（JSON を従来と同じ形に保つ）。GEN_VERSION 5 で生成が使う（v4 までの生成は付けない）
+   */
+  of?: { dx: number; dy: number }
 }
 
 /** 外形の矩形（セル。1F基準の共通座標。x,y は左上） */
@@ -180,6 +185,8 @@ export interface Door {
   b: Room
   edge: Edge
   swing: DoorSwing
+  /** 'fold' = 付属収納の折れ戸／引戸（開き弧を描かない。swing.rect は開き先の薄い矩形）。省略 = 開き戸 */
+  kind?: 'swing' | 'fold'
 }
 
 export interface Footprint {

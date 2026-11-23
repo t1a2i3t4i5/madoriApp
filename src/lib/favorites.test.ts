@@ -149,6 +149,22 @@ describe('お気に入り', () => {
     expect(loadFavorites(memory(JSON.stringify([evil])))).toEqual([])
   })
 
+  it('付属収納の of は、同じ階に持ち主の部屋がちょうど1つあるときだけ受け付ける', () => {
+    const good = defined(must(addFavorite([], cfg, p0, 1))[0])
+    const fl = defined(good.plan.floors[0])
+    const [r0, r1] = [defined(fl.rooms[0]), defined(fl.rooms[1])]
+    const withOf = (of: unknown) => ({
+      ...good,
+      plan: { ...good.plan, floors: [{ ...fl, rooms: [{ ...r0, type: 'closet', of }, ...fl.rooms.slice(1)] }, ...good.plan.floors.slice(1)] },
+    })
+    const ok = { dx: r1.x - r0.x, dy: r1.y - r0.y }
+    expect(loadFavorites(memory(JSON.stringify([withOf(ok)])))).toHaveLength(1)
+    expect(loadFavorites(memory(JSON.stringify([withOf({ dx: 1000, dy: 0 })])))).toEqual([])
+    expect(loadFavorites(memory(JSON.stringify([withOf({ dx: 0.5, dy: 0 })])))).toEqual([])
+    expect(loadFavorites(memory(JSON.stringify([withOf({ dx: 0, dy: 0 })])))).toEqual([]) // 自分自身
+    expect(loadFavorites(memory(JSON.stringify([withOf('x')])))).toEqual([])
+  })
+
   it('ストレージが例外を投げても落ちない', () => {
     const throwing: KeyValueStorage = {
       getItem: () => { throw new Error('denied') },

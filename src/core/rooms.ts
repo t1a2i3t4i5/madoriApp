@@ -15,6 +15,7 @@ export const ROOM: Record<RoomType, RoomDef> = {
   pantry:   { name: 'パントリー', cat: 'store',  target: 12,  minArea: 8,  maxArea: 20 },
   wic:      { name: 'WIC',        cat: 'store',  target: 16,  minArea: 12, maxArea: 28 },
   store:    { name: '収納',       cat: 'store',  target: 8,   minArea: 6,  maxArea: 16 },
+  closet:   { name: 'クローゼット', cat: 'store', target: 8,   minArea: 8,  maxArea: 16 },
   entry:    { name: '玄関',       cat: 'circ',   target: 16,  minArea: 12, maxArea: 26 },
   doma:     { name: '土間',       cat: 'circ',   target: 24,  minArea: 16, maxArea: 44 },
   hall:     { name: 'ホール',     cat: 'circ',   target: 0,   minArea: 0,  maxArea: 999 },
@@ -36,7 +37,7 @@ export const VIA: Partial<Record<RoomType, true>> = {
 export const MIN_SHORT: Partial<Record<RoomType, number>> = {
   master: 6, bed: 5, study: 5, washitsu: 5,
   bath: 3, wash: 3, wc: 2, laundry: 3,
-  kitchen: 3, pantry: 2, wic: 3,
+  kitchen: 3, pantry: 2, wic: 3, closet: 2,
   entry: 3, doma: 3,
 }
 /**
