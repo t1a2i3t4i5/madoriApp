@@ -102,6 +102,24 @@ describe('家具配置 furnish', () => {
     expect(ok / total, `bed ${ok}/${total}`).toBeGreaterThanOrEqual(0.25)
   })
 
+  it('書斎は7割5分以上で（机を）置ける（退行防止の下限）', () => {
+    // ドアの弧の重なり回避を優先した結果、実測 92/115（80%）まで下がったのを受け入れ、余裕を持たせた下限にしている
+    let ok = 0
+    let total = 0
+    for (const { cfg, plan } of PLANS) {
+      for (const fl of plan.floors) {
+        const placed = furnish(fl.rooms, computeDoors(fl.rooms), { kitchenFace: cfg.feats.includes('kitchenFace') })
+        fl.rooms.forEach((r, i) => {
+          if (r.type !== 'study') return
+          total++
+          if (placed.filter((p) => p.room === i).length === (PROGRAM.study?.length ?? 0)) ok++
+        })
+      }
+    }
+    expect(total).toBeGreaterThan(50)
+    expect(ok / total, `study ${ok}/${total}`).toBeGreaterThanOrEqual(0.75)
+  })
+
   it('畳数行: 避けられる位置があるケースでは家具が畳数行に重ならない（なければ部屋名のみ回避にフォールバック）', () => {
     let overlapped = 0
     let avoidable = 0
