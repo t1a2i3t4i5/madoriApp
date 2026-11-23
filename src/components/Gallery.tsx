@@ -1,6 +1,7 @@
 import type { PlanConfig, ScoredPlan } from '../core/types'
 import { planKey } from '../core/enumerate'
 import { PlanCard } from './PlanCard'
+import { BTN_SECONDARY } from './ui'
 
 interface Props {
   cfg: PlanConfig
@@ -19,12 +20,12 @@ export function Gallery({ cfg, plans, total, isStarred, onToggleStar, onOpen, on
   const scale = { maxW: Math.max(0, ...plans.map((p) => p.W)), maxH: Math.max(0, ...plans.map((p) => p.H)) }
   return (
     <section id="gallery" aria-label="全候補" className="mt-12">
-      <div className="mb-3.5 border-t-2 border-ink pt-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-serif text-[20px] tracking-[.04em]">この条件の候補（上位{plans.length}案／全{total}案）</h2>
-        <button type="button" onClick={onClose} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-4 py-2 text-[13px] font-bold tracking-[.04em] text-ink">閉じる</button>
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[20px] font-bold">この条件の候補（上位{plans.length}案／全{total}案）</h2>
+        <button type="button" onClick={onClose} className={`min-h-[40px] px-4 py-2 text-[13px] ${BTN_SECONDARY}`}>閉じる</button>
       </div>
       <p className="mb-3 text-[13px] text-ink2">アーキタイプ × 外形 × 並べ替えの組み合わせを全部作り、似た案が並ばないように選んだ上位を、スコアの高い順に並べています（左右反転だけの違いは除外）。</p>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-x-7 gap-y-9">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-5">
         {plans.map((p, i) => (
           <PlanCard
             key={planKey(p)}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Alt, PlanConfig, ScoredPlan } from './core/types'
 import { candidatePool, generatePlans } from './core/generate'
 import { GALLERY_LIMIT, galleryPlans, planFromKey, planKey } from './core/enumerate'
@@ -8,6 +8,8 @@ import { ConditionForm } from './components/ConditionForm'
 import { FavoritesShelf } from './components/FavoritesShelf'
 import { Gallery } from './components/Gallery'
 import { Notice } from './components/Notice'
+import { PlanCarousel } from './components/PlanCarousel'
+import { BTN_PRIMARY, BTN_SECONDARY, NOTE } from './components/ui'
 import { PlanCard } from './components/PlanCard'
 import { PlanDialog } from './components/PlanDialog'
 import { encodeHash, parseHash, toConfig, type AppState } from './lib/hash'
@@ -54,6 +56,12 @@ export default function App() {
     return st ? loadFavorites(st) : []
   })
   const [favMessage, setFavMessage] = useState<string | null>(null)
+  /** モバイルの条件シートの開閉（見た目のみ） */
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 860px)').matches)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const summaryBtnRef = useRef<HTMLButtonElement>(null)
+  const modal = isMobile && sheetOpen
 
   // 仕様: 平屋に切り替えても state.story（2階の形）は残す。toConfig・encodeHash は平屋では story を無視／出力しないので、
   // 2階建てに戻せば元の選択に戻る。ただしハッシュには残らないため、平屋のままリロードすると総二階に戻る（許容）。
@@ -81,6 +89,40 @@ export default function App() {
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
   }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 860px)')
+    const on = () => setIsMobile(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+
+  // 条件シートをモーダルとして扱う: Esc で閉じる・Tab をシート内に閉じ込める・背景スクロール停止・フォーカスの移動と復帰
+  useEffect(() => {
+    if (!modal) return
+    const btn = summaryBtnRef.current
+    const focusables = () =>
+      Array.from(sheetRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select, textarea, [href], [tabindex]:not([tabindex="-1"])') ?? [])
+    focusables()[0]?.focus()
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setSheetOpen(false); return }
+      if (e.key !== 'Tab') return
+      const list = focusables()
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (!first || !last) return
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+      btn?.focus()
+    }
+  }, [modal])
 
   const openKey = detail && !detail.favCfg ? planKey(detail.plan) : undefined
   useEffect(() => {
@@ -162,33 +204,33 @@ export default function App() {
   } else {
     body = (
       <>
-        <div className="mt-0.5 mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink pt-3">
-          <h2 className="font-serif text-[20px] tracking-[.04em]">間取り {plans.length}案</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-[20px] font-bold">間取り {plans.length}案</h2>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={prev} disabled={seedHistory.length === 0} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-4 py-2 text-[13px] font-bold tracking-[.04em] text-ink active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">← 前の3案</button>
-            <button type="button" onClick={next} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink bg-ink px-4 py-2 text-[13px] font-bold tracking-[.04em] text-bg active:translate-y-px">別の3案を作る</button>
+            <button type="button" onClick={prev} disabled={seedHistory.length === 0} className={`min-h-[40px] px-4 py-2 text-[13px] ${BTN_SECONDARY}`}>← 前の3案</button>
+            <button type="button" onClick={next} className={`min-h-[40px] px-4 py-2 text-[13px] ${BTN_PRIMARY}`}>別の3案を作る</button>
           </div>
         </div>
         {plans.length < 3 && diagnosis && (
-          <div role="status" className="mb-3.5 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">
+          <div role="status" className={`mb-3.5 ${NOTE}`}>
             <p>この条件では{plans.length}案です。{diagnosis.reason}</p>
             {diagnosis.alts.length > 0 && (
               <div className="no-print mt-2 flex flex-wrap gap-2">
                 {diagnosis.alts.map((a) => (
-                  <button key={a.label} type="button" onClick={() => applyAlt(a)} className="min-h-[38px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-3.5 py-1.5 text-[13px] font-bold text-ink">{a.label}</button>
+                  <button key={a.label} type="button" onClick={() => applyAlt(a)} className={`min-h-[38px] px-3.5 py-1.5 text-[13px] ${BTN_SECONDARY}`}>{a.label}</button>
                 ))}
               </div>
             )}
           </div>
         )}
         {exhausted && (
-          <p role="status" className="no-print mb-3.5 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">
+          <p role="status" className={`no-print mb-3.5 ${NOTE}`}>
             この条件で出せる案はここまでです。
-            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-ink underline decoration-accent underline-offset-2">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
+            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline underline-offset-2">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
             か、条件を少し変えてみてください。
           </p>
         )}
-        <div className="plan-grid grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-x-7 gap-y-9">
+        <PlanCarousel key={plans.map((p) => p.sig).join("|")}>
           {plans.map((p, i) => (
             <PlanCard
               key={`${state.seed}-${i}`}
@@ -201,10 +243,10 @@ export default function App() {
               onToggleStar={() => toggleStar(cfg, p)}
             />
           ))}
-        </div>
+        </PlanCarousel>
         {!showGallery && poolCount > 0 && (
           <div className="no-print mt-4 text-center">
-            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-4 py-2 text-[13px] font-bold tracking-[.04em] text-ink">この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
+            <button type="button" onClick={() => setShowGallery(true)} className={`min-h-[40px] px-4 py-2 text-[13px] ${BTN_SECONDARY}`}>この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
           </div>
         )}
         {showGallery && (
@@ -222,22 +264,46 @@ export default function App() {
     )
   }
 
+  const summary = `${state.area}坪・${state.floors === 2 ? '2階建て' : '平屋'}・${state.rooms}室`
+  const closeSheet = () => setSheetOpen(false)
+
   return (
     <div className="mx-auto max-w-[1180px] px-4 pt-4 pb-12">
-      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t-2 border-ink border-b border-b-line py-2.5">
-        <h1 className="font-serif text-[19px] leading-none font-bold tracking-[.14em]">間取り図集<span className="ml-3 text-[11px] font-normal tracking-[.22em] text-ink2">MADORI</span></h1>
-        <p className="text-[11px] tracking-[.12em] text-ink2">455mmグリッド ／ 延床20–40坪 ／ 3案提示</p>
+      <header className="mb-4 flex items-center justify-between gap-3 py-1 max-[860px]:sticky max-[860px]:top-0 max-[860px]:z-30 max-[860px]:-mx-4 max-[860px]:mb-2 max-[860px]:bg-bg max-[860px]:px-4 max-[860px]:pt-2 max-[860px]:pb-2 print:static">
+        <h1 className="text-[22px] leading-none font-bold">間取りアプリ</h1>
+        {/* モバイル: 上端に固定した条件サマリー。タップで条件シートが開く */}
+        <button ref={summaryBtnRef} type="button" onClick={() => setSheetOpen(true)} aria-expanded={sheetOpen} aria-haspopup="dialog" className="no-print hidden min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-4 text-[13px] font-bold text-ink shadow-panel max-[860px]:inline-flex">
+          {summary} <span aria-hidden="true" className="text-ink2">▾</span>
+        </button>
       </header>
-      <div className="app-grid grid items-start gap-8 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
-        <div className="no-print"><ConditionForm state={state} onChange={patch} onGenerate={next} onRandom={random} /></div>
+      <div className="app-grid grid items-start gap-6 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
+        {/* デスクトップは左カラム。モバイルは同じフォームを下からのシートに入れる（フォームは1つだけ） */}
+        <div
+          className={`no-print max-[860px]:fixed max-[860px]:inset-0 max-[860px]:z-40 max-[860px]:transition-[visibility] ${sheetOpen ? 'max-[860px]:visible' : 'max-[860px]:invisible'}`}
+        >
+          <div onClick={closeSheet} className={`hidden overscroll-contain bg-scrim transition-opacity max-[860px]:absolute max-[860px]:inset-0 max-[860px]:block ${sheetOpen ? 'opacity-100' : 'opacity-0'}`} />
+          <div
+            ref={sheetRef}
+            {...(modal ? { role: 'dialog', 'aria-modal': true, 'aria-label': '条件シート' } : {})}
+            className={`max-[860px]:overscroll-contain max-[860px]:absolute max-[860px]:inset-x-0 max-[860px]:bottom-0 max-[860px]:max-h-[88%] max-[860px]:overflow-y-auto max-[860px]:rounded-t-[20px] max-[860px]:bg-surface max-[860px]:pb-[env(safe-area-inset-bottom)] max-[860px]:transition-transform ${sheetOpen ? 'max-[860px]:translate-y-0' : 'max-[860px]:translate-y-full'}`}
+          >
+            <div className="hidden items-center justify-between px-4 pt-3 max-[860px]:flex">
+              <span aria-hidden="true" className="mx-auto h-1 w-10 rounded-full bg-line" />
+            </div>
+            <ConditionForm state={state} onChange={patch} onGenerate={() => { next(); closeSheet() }} onRandom={() => { random(); closeSheet() }} />
+            <div className="hidden px-4 pb-4 max-[860px]:block">
+              <button type="button" onClick={closeSheet} className={`min-h-11 w-full text-[14px] ${BTN_SECONDARY}`}>閉じる</button>
+            </div>
+          </div>
+        </div>
         <section aria-label="生成結果">
           {staleVersion && (
-            <p role="status" className="mb-3.5 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">
+            <p role="status" className={`mb-3.5 ${NOTE}`}>
               このリンクは旧バージョンで作られたため同じ間取りは再現できません。同じ条件で新しく生成した案を表示しています
             </p>
           )}
           {body}
-          <p className="mt-8 border-t border-line pt-3 text-[11px] leading-[1.7] tracking-[.02em] text-ink2">※ 建築基準法・構造は未考慮、敷地は想定の図面です。実際の設計は建築士にご相談ください。寸法は455mmグリッド基準、1坪＝約3.31㎡で換算しています。</p>
+          <p className="mt-8 text-[11px] leading-[1.7] text-ink2">※ 建築基準法・構造は未考慮、敷地は想定の図面です。実際の設計は建築士にご相談ください。寸法は455mmグリッド基準、1坪＝約3.31㎡で換算しています。</p>
         </section>
       </div>
       <div className="no-print"><FavoritesShelf
