@@ -31,41 +31,43 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
     // role=button の中に☆ボタンやタブのボタンを入れ子にしない。
     <article
       onClick={open}
-      className="print-card relative w-full cursor-pointer rounded-[14px] border border-line bg-surface p-3.5 text-left shadow-panel hover:border-accent"
+      className="print-card relative w-full cursor-pointer border-t border-ink pt-3 text-left"
     >
-      <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-2" />
-      <p className="mb-0.5 mr-10 font-serif text-[17.5px] leading-[1.4] font-bold">{name}</p>
-      <div className="mb-2 flex flex-wrap gap-3 text-[12.5px] text-ink2">
-        <span>実測 <b className="text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
+      <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-2 right-0" />
+      <div className="flex items-baseline gap-3.5">
+        <span aria-hidden="true" className="font-serif text-[40px] leading-none font-light tracking-[-.02em] text-accent">{String(index + 1).padStart(2, '0')}</span>
+        <p className="mr-10 font-serif text-[20px] leading-[1.35] font-bold tracking-[.02em]">{name}</p>
+      </div>
+      <div className="mt-2 mb-2.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[11.5px] tracking-[.06em] text-ink2">
+        <span>実測 <b className="font-bold text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
         {floorAreaLabel(plan) && <span>{floorAreaLabel(plan)}</span>}
         <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室</span>
         <span>{meters(plan.W, 3).replace(/0+$/, '').replace(/\.$/, '')}m × {meters(plan.H, 3).replace(/0+$/, '').replace(/\.$/, '')}m</span>
       </div>
-      <div className="mb-2.5 flex flex-wrap gap-1.5">
+      <p className="mb-2.5 flex flex-wrap text-[11.5px] font-bold text-ink2">
         {planTags(cfg, plan).map((t, i) => (
-          <span key={t} className={`rounded-full px-[9px] py-[3px] text-[11.5px] font-bold ${i === 0 ? 'bg-warm/15 text-warm' : 'bg-surface2 text-ink2'}`}>{t}</span>
+          <span key={t} className={`${i === 0 ? 'text-accent' : ''} after:mx-1.5 after:font-normal after:text-line after:content-['・'] last:after:content-none`}>{t}</span>
         ))}
-      </div>
-      <p className="mb-2.5 text-[12.5px] leading-[1.7] text-ink2">{explainPlan(cfg, plan)}</p>
-      <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2 print:hidden">
+      </p>
+      <p className="mb-3 border-l border-line pl-3 text-[12px] leading-[1.8] text-ink2">{explainPlan(cfg, plan)}</p>
+      <div className="crop border border-plan-line bg-paper p-2 print:hidden">
         <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
       </div>
       {/* 印刷専用: 画面は表示中の階だけなので、印刷時は全階を並べる（pattern id は画面用と分ける） */}
       <div data-print-floors className="hidden gap-2 print:grid print:grid-cols-2" aria-hidden="true">
         {plan.floors.map((_, fi) => (
-          <div key={fi} className="rounded-[9px] border border-[#e3e0d2] bg-paper p-1.5">
+          <div key={fi} className="border border-plan-line bg-paper p-1.5">
             <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
           </div>
         ))}
       </div>
       {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
-      <div className="mt-2 flex items-center gap-2 text-xs text-ink2">
+      <div className="mt-3 flex items-end justify-between gap-3 border-b border-line pb-1 text-[11px] tracking-[.14em] text-ink2">
         <span>スコア</span>
-        <span className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-surface2"><i className="block h-full bg-accent" style={{ width: `${plan.score.total}%` }} /></span>
-        <b className="text-[13px] text-ink">{plan.score.total}</b>
+        <b className="font-serif text-[30px] leading-none font-light tracking-normal text-ink">{plan.score.total}</b>
       </div>
       {/* クリックは article の onClick へ伝わって開く（ここに onClick を付けると二重に開く） */}
-      <button type="button" aria-label={`${name}を拡大表示`} className="mt-2.5 cursor-pointer border-0 bg-transparent p-0 text-xs font-bold text-accent">タップで拡大表示 →</button>
+      <button type="button" aria-label={`${name}を拡大表示`} className="mt-2.5 cursor-pointer border-0 bg-transparent p-0 text-xs font-bold text-ink underline decoration-ink2 underline-offset-[3px]">タップで拡大表示 →</button>
     </article>
   )
 }

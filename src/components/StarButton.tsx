@@ -13,7 +13,7 @@ export function StarButton({ starred, onToggle, className = '' }: Props) {
       aria-label={starred ? 'お気に入りから外す' : 'お気に入りに追加'}
       title={starred ? 'お気に入りから外す' : 'お気に入りに追加'}
       onClick={(e) => { e.stopPropagation(); onToggle() }}
-      className={`size-10 cursor-pointer rounded-full border border-line bg-surface text-xl leading-none ${starred ? 'text-warm' : 'text-ink2'} ${className}`}
+      className={`size-10 cursor-pointer rounded-none border-0 bg-transparent text-xl leading-none ${starred ? 'text-accent' : 'text-ink2'} ${className}`}
     >
       {starred ? '★' : '☆'}
     </button>

@@ -64,20 +64,20 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
   }, [])
   const name = planName(cfg, plan)
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(10,12,11,.62)] px-3 py-[18px]" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-[860px] rounded-2xl bg-surface p-5 shadow-panel">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(16,16,19,.72)] px-3 py-[18px]" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full max-w-[900px] border border-ink bg-surface p-6 max-[640px]:p-4">
         <div className="float-right flex gap-2">
           <StarButton starred={starred} onToggle={onToggleStar} />
-          <button ref={closeRef} type="button" aria-label="閉じる" onClick={onClose} className="size-10 cursor-pointer rounded-full border border-line bg-surface text-lg leading-none text-ink">×</button>
+          <button ref={closeRef} type="button" aria-label="閉じる" onClick={onClose} className="size-10 cursor-pointer rounded-none border-0 bg-transparent text-xl leading-none text-ink">×</button>
         </div>
-        <h2 id="dlgTitle" className="mr-10 mb-1 font-serif text-[22px] leading-[1.4]">{name}</h2>
-        <div className="mb-2.5 text-[13px] text-ink2">
+        <h2 id="dlgTitle" className="mr-10 mb-1.5 border-t-2 border-ink pt-3 font-serif text-[26px] leading-[1.35] font-bold tracking-[.02em]">{name}</h2>
+        <div className="mb-2.5 text-[12px] tracking-[.06em] text-ink2">
           実測延床 約{(plan.totalArea / 16).toFixed(1)}坪{floorAreaLabel(plan) ? `（${floorAreaLabel(plan)}）` : ''} ／ 建物 {meters(plan.W)}m × {meters(plan.H)}m ／ スコア {plan.score.total}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {planTags(cfg, plan).map((t) => <span key={t} className="rounded-full bg-surface2 px-[9px] py-[3px] text-[11.5px] font-bold text-ink2">{t}</span>)}
+        <div className="flex flex-wrap text-[12px] font-bold text-ink2">
+          {planTags(cfg, plan).map((t, i) => <span key={t} className={`${i === 0 ? 'text-accent' : ''} after:mx-1.5 after:font-normal after:text-line after:content-['・'] last:after:content-none`}>{t}</span>)}
         </div>
-        <p className="mt-2.5 text-[13.5px] leading-[1.75] text-ink">{explainPlan(cfg, plan)}</p>
+        <p className="mt-3 border-l border-line pl-3 text-[13px] leading-[1.85] text-ink2">{explainPlan(cfg, plan)}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {cfg.floors === 2 && <FloorTabs value={floor} onChange={setFloor} />}
           <label className="mt-2.5 inline-flex min-h-9 cursor-pointer select-none items-center gap-2 text-[13px] font-bold text-ink2">
@@ -89,9 +89,9 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
             動線を表示
           </label>
           {shareUrl && (
-            <button type="button" onClick={copy} className="mt-2.5 min-h-9 cursor-pointer rounded-[7px] border border-line bg-surface px-3 py-1 text-[12.5px] font-bold text-ink2">この案のリンクをコピー</button>
+            <button type="button" onClick={copy} className="mt-2.5 min-h-9 cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-3 py-1 text-[12.5px] font-bold text-ink">この案のリンクをコピー</button>
           )}
-          <button type="button" onClick={savePng} disabled={pngState === 'busy'} className="no-print mt-2.5 min-h-9 cursor-pointer rounded-[7px] border border-line bg-surface px-3 py-1 text-[12.5px] font-bold text-ink2 disabled:opacity-50">
+          <button type="button" onClick={savePng} disabled={pngState === 'busy'} className="no-print mt-2.5 min-h-9 cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-3 py-1 text-[12.5px] font-bold text-ink disabled:opacity-50">
             {pngState === 'busy' ? '作成中…' : 'PNGで保存'}
           </button>
           {pngState === 'ng' && <span role="status" className="mt-2.5 text-xs text-ink2">PNGを作れませんでした。お使いのブラウザでは対応していない可能性があります</span>}
@@ -100,12 +100,12 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
             {copied === 'ng' && 'コピーできませんでした。アドレスバーのURLをお使いください'}
           </span>
         </div>
-        <div ref={svgBoxRef} className="mt-2.5 rounded-[9px] border border-[#e3e0d2] bg-paper p-3">
+        <div ref={svgBoxRef} className="crop mt-3 border border-plan-line bg-paper p-3">
           <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip showFurniture={furniture} showFlow={flow} />
         </div>
         <div className="mt-4 grid gap-[18px] max-[640px]:grid-cols-1 min-[641px]:grid-cols-2">
           <div>
-            <h3 className="mb-2 text-[13px] tracking-[.06em] text-ink2">部屋一覧</h3>
+            <h3 className="mb-2 border-t border-ink pt-2 text-[12px] tracking-[.2em] text-ink2">部屋一覧</h3>
             {plan.floors.map((fl) => (
               <table key={fl.label} className="w-full border-collapse text-[13px]">
                 <thead><tr><th colSpan={3} className="border-b border-line px-1.5 py-[5px] text-left">{fl.label}</th></tr></thead>
@@ -122,16 +122,16 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
             ))}
           </div>
           <div>
-            <h3 className="mb-2 text-[13px] tracking-[.06em] text-ink2">スコア内訳</h3>
+            <h3 className="mb-2 border-t border-ink pt-2 text-[12px] tracking-[.2em] text-ink2">スコア内訳</h3>
             {Object.entries(plan.score.parts).map(([k, v]) => (
               <div key={k} className="mb-1.5 grid grid-cols-[86px_1fr_30px] items-center gap-2 text-[12.5px]">
                 <span>{k}</span>
-                <span className="h-[7px] overflow-hidden rounded bg-surface2"><i className="block h-full bg-accent" style={{ width: `${Math.round(v * 100)}%` }} /></span>
-                <b className="text-right tabular-nums">{Math.round(v * 100)}</b>
+                <span className="h-px overflow-hidden bg-line"><i className="block h-full bg-ink" style={{ width: `${Math.round(v * 100)}%` }} /></span>
+                <b className="text-right font-serif font-normal tabular-nums">{Math.round(v * 100)}</b>
               </div>
             ))}
-            <h3 className="mt-[18px] mb-2 text-[13px] tracking-[.06em] text-ink2">敷地のイメージ（南道路）</h3>
-            <div className="rounded-[9px] border border-[#e3e0d2] bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} /></div>
+            <h3 className="mt-[18px] mb-2 border-t border-ink pt-2 text-[12px] tracking-[.2em] text-ink2">敷地のイメージ（南道路）</h3>
+            <div className="border border-plan-line bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} /></div>
           </div>
         </div>
       </div>
