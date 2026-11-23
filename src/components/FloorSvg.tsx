@@ -5,15 +5,28 @@ import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { Furniture } from './Furniture'
-import { Fixtures } from './Fixtures'
+import { Fixtures, STAIR_LABEL_MIN_H } from './Fixtures'
 import { tatami } from '../lib/format'
+
 import { computeFlows } from '../lib/flow'
 import { FlowOverlay, legendHeight, legendWidth } from './FlowOverlay'
 
+/** 不動産の間取り図の色分け（居室=フローリング系、和室=畳の緑、水回り=水色、廊下・収納=淡いグレー） */
 const FILL: Record<RoomCategory, string> = {
-  living: '#f1e2c6', bed: '#dfe9d8', water: '#d3e4ee', store: '#d9d4c6', circ: '#ece8de', void: '#f4f1e8',
+  living: '#EAD7B7', bed: '#EAD7B7', water: '#D6E8F3', store: '#F1F0EC', circ: '#F1F0EC', void: '#F7F6F2',
 }
-const PAD = 2.2
+const FILL_OVERRIDE: Partial<Record<Room['type'], string>> = {
+  washitsu: '#DCE5B8', stair: '#E6E4DC', entry: '#E2DFD6',
+}
+/** 外形の余白（左右・上・下）。下は玄関ドアの弧と動線凡例のぶんを残す */
+const PAD_X = 1.2
+const PAD_TOP = 2.4
+const PAD_BOTTOM = 2.2
+const INK = '#333333'
+const LABEL_FS = 1.2
+const AREA_FS = 1.0
+const LABEL_FILL = '#2b2b2b'
+const AREA_FILL = '#5a5a5a'
 
 export interface FloorSvgProps {
   plan: Plan
@@ -34,9 +47,16 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
   const cx = r.x + r.w / 2
   // 対面キッチンのカウンターがあるLDKはラベルを下へ逃がす
   const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
+  const outline = { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' }
   // 動線表示中は、下を通る線の上でも読めるよう白い縁取りを付ける
-  const haloProps = halo ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {}
-  const common = { fontWeight: 700, fill: '#33302a', textAnchor: 'middle' as const, ...haloProps }
+  const haloProps = halo ? outline : {}
+  const common = { fontWeight: 700, fill: LABEL_FILL, textAnchor: 'middle' as const, ...haloProps }
+  const len = Math.max(1, r.name.length)
+  if (r.type === 'stair') {
+    // 階段は矢印と重ならない上端に置く。矢印を逃がせない低い階段は名前を省く（段と矢印で階段と分かる）
+    if (r.h < STAIR_LABEL_MIN_H || r.w < 2.2) return null
+    return <text x={cx} y={r.y + 1.7} fontSize={Math.min(LABEL_FS, (r.w - 0.5) / len)} {...common}>{r.name}</text>
+  }
   // 細長い部屋（玄関・トイレ等）はラベルを縦積みにして壁に触れさせない
   if (isVerticalLabel(r)) {
     const fs = Math.min(1.0, r.w - 0.5)
@@ -50,25 +70,42 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
     )
   }
   const big = r.w >= 5 && r.h >= 4.5
-  const mid = r.w >= 3.4 && r.h >= 3.2
-  const fitFs = (base: number) => Math.min(base, (r.w - 0.25) / Math.max(1, r.name.length))
+  // 室名の大きさは全室で統一（LABEL_FS）。幅に収まらないときだけ縮め、縮めても読めない（0.75未満）なら
+  // 縦積みに切り替え、縦にも収まらなければ描かない（文字が壁で切れるより省く）
+  const fit = (r.w - 0.5) / len
+  if (fit < 0.75) {
+    const fs = Math.min(0.95, r.w - 0.5)
+    if (r.w >= 1.6 && fs >= 0.75 && r.h >= len * (fs + 0.15) + 0.6) {
+      const step = fs + 0.15
+      const y0 = cy - ((len - 1) * step) / 2 + fs * 0.35
+      return (
+        <text fontSize={fs} {...common}>
+          {Array.from(r.name).map((ch, i) => (
+            <tspan key={i} x={cx} y={y0 + i * step}>{ch}</tspan>
+          ))}
+        </text>
+      )
+    }
+    return null
+  }
+  const fs = Math.min(LABEL_FS, fit)
   if (big) {
+    // 部屋名＋帖数の2段組み（「LDK」の下に「15.8帖」）
     return (
       <>
-        <text x={cx} y={cy - 0.35} fontSize={fitFs(1.55)} {...common}>{r.name}</text>
+        <text x={cx} y={cy - 0.25} fontSize={fs} {...common}>{r.name}</text>
         <text
           x={cx}
-          y={cy + 1.55}
-          fontSize={1.2}
-          fill="#7a7568"
+          y={cy + 1.25}
+          fontSize={AREA_FS}
+          fill={AREA_FILL}
           textAnchor="middle"
-          {...(furnished || halo ? { stroke: '#fff', strokeWidth: 0.35, strokeLinejoin: 'round' as const, paintOrder: 'stroke' } : {})}
-        >{tatami(r.w, r.h)}畳</text>
+          {...(furnished || halo ? outline : {})}
+        >{tatami(r.w, r.h)}帖</text>
       </>
     )
   }
-  if (mid) return <text x={cx} y={cy + 0.5} fontSize={fitFs(1.25)} {...common}>{r.name}</text>
-  if (r.w >= 2 && r.h >= 2.4) return <text x={cx} y={cy + 0.42} fontSize={fitFs(0.98)} {...common}>{r.name}</text>
+  if (r.w >= 2 && r.h >= 2.4) return <text x={cx} y={cy + fs * 0.35} fontSize={fs} {...common}>{r.name}</text>
   return null
 }
 
@@ -121,14 +158,14 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
   const ldk = fl.rooms.find((r) => r.type === 'ldk')
   const entry = fl.rooms.find((r) => r.type === 'entry')
 
-  let vbX = -PAD, vbW = W + PAD * 2
-  const vbY = -PAD - 1.6
-  let vbH = H + PAD * 2 + 1.6
+  let vbX = -PAD_X, vbW = W + PAD_X * 2
+  const vbY = -PAD_TOP
+  let vbH = H + PAD_TOP + PAD_BOTTOM
   if (scale) {
-    const targetW = scale.maxW + 4.4
+    const targetW = scale.maxW + PAD_X * 2
     vbX -= (targetW - vbW) / 2
     vbW = targetW
-    vbH = scale.maxH + 4.4 + 1.6
+    vbH = scale.maxH + PAD_TOP + PAD_BOTTOM
   }
   // 敷地帯（南道路）の矩形の下端 H+2.5 まで、余白 0.3 を足して viewBox に収める
   if (siteStrip) {
@@ -146,31 +183,33 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
     <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={`${fl.label}の間取り図`} className="block h-auto w-full">
       <defs>
         <pattern id={`hatch${uid}`} width={1.6} height={1.6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <rect width={1.6} height={1.6} fill="#f4f1e8" />
-          <line x1={0} y1={0} x2={0} y2={1.6} stroke="#cbc6b4" strokeWidth={0.35} />
+          <rect width={1.6} height={1.6} fill="#F7F6F2" />
+          <line x1={0} y1={0} x2={0} y2={1.6} stroke="#d2cfc4" strokeWidth={0.3} />
         </pattern>
         <pattern id={`shimoya${uid}`} width={1.2} height={1.2} patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
           <rect width={1.2} height={1.2} fill="#f7f4ea" />
           <line x1={0} y1={0} x2={0} y2={1.2} stroke="#d6cfb8" strokeWidth={0.2} />
         </pattern>
         <pattern id={`dots${uid}`} width={1.4} height={1.4} patternUnits="userSpaceOnUse">
-          <rect width={1.4} height={1.4} fill="#dcd2bc" />
-          <circle cx={0.7} cy={0.7} r={0.16} fill="#b9ab8c" />
+          <rect width={1.4} height={1.4} fill="#D9D5C9" />
+          <circle cx={0.7} cy={0.7} r={0.16} fill="#b5b0a0" />
         </pattern>
       </defs>
-      {/* 方位 */}
-      <text x={W - 1.2} y={-PAD - 0.1} fontSize={1.7} fill="#8a8578" textAnchor="middle" fontWeight={700}>N</text>
-      <path d={`M ${W - 1.2} ${-PAD + 0.6} l 0.45 0.9 h -0.9 z`} fill="#8a8578" />
+      {/* 方位: 小さな円形コンパス（図の中だけの色）。余白の右上に収める */}
+      <g transform={`translate(${W - 0.9} ${-PAD_TOP + 0.95})`}>
+        <circle r={0.82} fill="#fff" stroke="#E05A1E" strokeWidth={0.12} />
+        <path d="M 0 -0.7 L 0.32 0.15 L 0 -0.05 L -0.32 0.15 Z" fill="#E05A1E" />
+        <path d="M 0 0.7 L 0.32 -0.15 L 0 0.05 L -0.32 -0.15 Z" fill="#c9c6bd" />
+        <text y={-1.0} fontSize={0.95} fontWeight={700} fill="#E05A1E" textAnchor="middle">N</text>
+      </g>
       {/* 下屋（部分二階の2階）: 1階の外形を破線で重ね、1階の板から2階の板を引いた部分に淡いハッチと「下屋」ラベル。
           2階の外壁・窓より下層に描く（後に描くと外壁が半分の太さに見え、窓の二重線が潰れる） */}
       {fl.fp && floorIdx > 0 && <Shimoya outer={floorRect(plan, 0)} fp={fp} uid={uid} />}
       {/* 部屋の塗り */}
       {fl.rooms.map((r, i) => {
-        let fill = FILL[ROOM[r.type].cat]
+        let fill = FILL_OVERRIDE[r.type] ?? FILL[ROOM[r.type].cat]
         if (r.type === 'doma') fill = `url(#dots${uid})`
         if (r.type === 'void') fill = `url(#hatch${uid})`
-        if (r.type === 'hall') fill = '#fcfaf3'
-        if (r.type === 'stair') fill = '#cdc6b0'
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} />
       })}
       {/* 対面キッチンカウンター */}
@@ -182,31 +221,31 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       )}
       {fl.rooms.map((r, i) => <Fixtures key={i} r={r} />)}
       {furniture.length > 0 && <Furniture items={furniture} />}
-      {/* 窓: 壁を抜いてから二重線 */}
-      <g stroke="#fdfcf8" strokeWidth={0.55}>
+      {/* 窓: 壁を抜いてから、読み取れる太さ・色の二重線 */}
+      <g stroke="#fdfcf8" strokeWidth={0.75}>
         {windows.map((wd, i) => {
           const yy = wd.side === 'S' ? fpBottom : fp.y
           return <line key={i} x1={wd.cx - wd.len / 2} y1={yy} x2={wd.cx + wd.len / 2} y2={yy} />
         })}
       </g>
-      <g stroke="#5f7f93" strokeWidth={0.14}>
+      <g stroke="#2f7fb0" strokeWidth={0.17}>
         {windows.map((wd, i) => {
           const yy = wd.side === 'S' ? fpBottom : fp.y
           return (
             <g key={i}>
-              <line x1={wd.cx - wd.len / 2} y1={yy - 0.22} x2={wd.cx + wd.len / 2} y2={yy - 0.22} />
-              <line x1={wd.cx - wd.len / 2} y1={yy + 0.22} x2={wd.cx + wd.len / 2} y2={yy + 0.22} />
+              <line x1={wd.cx - wd.len / 2} y1={yy - 0.26} x2={wd.cx + wd.len / 2} y2={yy - 0.26} />
+              <line x1={wd.cx - wd.len / 2} y1={yy + 0.26} x2={wd.cx + wd.len / 2} y2={yy + 0.26} />
             </g>
           )
         })}
       </g>
       {/* ドアの開き弧 */}
-      <g stroke="#6d675c" strokeWidth={0.13} fill="rgba(109,103,92,0.10)">
+      <g stroke="#5a5a5a" strokeWidth={0.13} fill="rgba(90,90,90,0.07)">
         {doors.map((d, i) => <path key={i} d={doorPath(d)} />)}
       </g>
-      {/* 壁（外壁は内壁の約2.5倍の太さ） */}
-      <g fill="none" stroke="#26241f">
-        {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
+      {/* 壁（外壁は内壁の約2倍強の太さ） */}
+      <g fill="none" stroke={INK}>
+        {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.19} />)}
         <rect x={fp.x} y={fp.y} width={fp.W} height={fp.H} strokeWidth={0.42} />
       </g>
       {/* 動線は部屋名ラベルより下 */}
@@ -215,7 +254,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === fpBottom && (() => {
         const ed = entryDoor(entry, fpBottom)
-        return <path d={ed.path} fill="rgba(109,103,92,0.10)" stroke="#6d675c" strokeWidth={0.13} />
+        return <path d={ed.path} fill="rgba(90,90,90,0.07)" stroke="#5a5a5a" strokeWidth={0.13} />
       })()}
       {siteStrip && (
         <>

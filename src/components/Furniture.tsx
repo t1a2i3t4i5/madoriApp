@@ -1,6 +1,6 @@
 import type { FurnitureItem } from '../core/furnish'
 
-const STROKE = '#a39c86'
+const STROKE = '#9b937d'
 const FILL = 'rgba(255,255,255,0.55)'
 const SW = 0.1
 

@@ -1,5 +1,8 @@
 import type { Room } from '../core/types'
 
+/** 階段の上り矢印と重ならないよう、ラベルは上端に置き、矢印は下側に短縮する（この高さ以上のときだけ。FloorSvg の RoomLabel と共有） */
+export const STAIR_LABEL_MIN_H = 5.2
+
 /** 水回りの器具・階段・畳目など、部屋種別ごとの描き込み */
 export function Fixtures({ r }: { r: Room }) {
   const { x, y, w, h } = r
@@ -41,19 +44,21 @@ export function Fixtures({ r }: { r: Room }) {
     case 'stair': {
       const steps = Math.max(3, Math.floor(h) - 1)
       const cx = x + w / 2
+      // 名前を上端に置ける高さのときは、矢印の頭をラベルの下で止める
+      const top = r.h >= STAIR_LABEL_MIN_H && w >= 2.2 ? y + 3.0 : y + 1.1
       return (
         <>
           {Array.from({ length: steps - 1 }, (_, k) => {
             const yy = y + (h / steps) * (k + 1)
             return <line key={k} x1={x} y1={yy} x2={x + w} y2={yy} stroke="#9a958a" strokeWidth={0.12} />
           })}
-          <line x1={cx} y1={y + h - 0.7} x2={cx} y2={y + 1.1} stroke="#55504a" strokeWidth={0.22} />
-          <path d={`M ${cx - 0.55} ${y + 1.9} L ${cx} ${y + 0.8} L ${cx + 0.55} ${y + 1.9}`} fill="none" stroke="#55504a" strokeWidth={0.22} />
+          <line x1={cx} y1={y + h - 0.7} x2={cx} y2={top} stroke="#55504a" strokeWidth={0.22} />
+          <path d={`M ${cx - 0.55} ${top + 0.8} L ${cx} ${top - 0.3} L ${cx + 0.55} ${top + 0.8}`} fill="none" stroke="#55504a" strokeWidth={0.22} />
         </>
       )
     }
     case 'washitsu': {
-      const S = '#aebd9f'
+      const S = '#a9b783'
       return (
         <>
           <line x1={x + w / 2} y1={y} x2={x + w / 2} y2={y + h} stroke={S} strokeWidth={0.14} />
