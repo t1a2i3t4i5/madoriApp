@@ -1,5 +1,6 @@
 import type { Band, Cell, Footprint, FootprintPair, Room } from './types'
 import { clamp } from './rng'
+import { minShort } from './rooms'
 
 export interface WaterfillItem {
   min: number
@@ -90,16 +91,22 @@ function mergePair(
   return out
 }
 
-function tryBand(cells: Cell[], W: number, y: number, h: number): Room[] | null {
+function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort = false): Room[] | null {
+  // 帯の高さが、帯内の幅可変セルの最小の短辺に満たなければ成立しない
+  if (!ignoreMinShort && cells.some((c) => !c.fixedW && h < minShort(c.type))) return null
   const fixedTotal = cells.reduce((s, c) => s + (c.fixedW || 0), 0)
   const flex = cells.filter((c) => !c.fixedW)
   const widths: Record<number, number> = {}
   if (flex.length) {
-    const items: WaterfillItem[] = flex.map((c) => ({
-      min: Math.max(2, Math.ceil(c.minArea / h)),
-      max: Math.max(3, Math.ceil(c.maxArea / h)),
-      w: Math.max(1, c.target / h),
-    }))
+    const items: WaterfillItem[] = flex.map((c) => {
+      const min = Math.max(2, Math.ceil(c.minArea / h), ignoreMinShort ? 0 : minShort(c.type))
+      return {
+        min,
+        // 短辺の下限が面積由来の上限を上回るときは、上限を下限に合わせる
+        max: Math.max(3, Math.ceil(c.maxArea / h), min),
+        w: Math.max(1, c.target / h),
+      }
+    })
     // 幅が余る場合は吸収セルのmaxを広げて余りを吸わせる
     const avail = W - fixedTotal
     const sumMax = items.reduce((s, i) => s + i.max, 0)
@@ -141,8 +148,8 @@ function tryBand(cells: Cell[], W: number, y: number, h: number): Room[] | null 
 }
 
 /** 帯（バンド）1本を横に割り付ける。fixedWセルは固定幅、それ以外はwater-filling */
-export function layoutBand(band: Band, W: number, y: number, h: number): Room[] | null {
-  const first = tryBand(band.cells, W, y, h)
+export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMinShort = false): Room[] | null {
+  const first = tryBand(band.cells, W, y, h, ignoreMinShort)
   if (first) return first
   // 小物セルが多すぎてmin合計が溢れる場合はクラスタを結合して再試行する。結合できるペアがなければ次の結合へ進む
   let cells = band.cells
@@ -154,7 +161,7 @@ export function layoutBand(band: Band, W: number, y: number, h: number): Room[] 
     const merged = mergePair(cells, t1, t2, label, keep)
     if (!merged) continue
     cells = merged
-    const res = tryBand(cells, W, y, h)
+    const res = tryBand(cells, W, y, h, ignoreMinShort)
     if (res) return res
   }
   return null
@@ -163,6 +170,8 @@ export function layoutBand(band: Band, W: number, y: number, h: number): Room[] 
 export interface LayoutFloorOpts {
   /** 帯番号 → 高さの上限（余りを吸わせる拡張もこれを超えない） */
   capH?: Record<number, number>
+  /** 診断専用: 最小の短辺の判定を外す（生成では使わない） */
+  ignoreMinShort?: boolean
 }
 
 /** 1フロア分: 帯の高さをwater-fillingで決めてから各帯を割り付ける。帯の高さ（帯番号順）も返す */
@@ -173,6 +182,7 @@ export function layoutFloor(
   opts?: LayoutFloorOpts,
 ): { rooms: Room[]; heights: number[] } | null {
   const capH = opts?.capH
+  const ignoreMinShort = opts?.ignoreMinShort ?? false
   const fixedH = bands.reduce((s, b) => s + (b.fixedH || 0), 0)
   const heights: Record<number, number> = {}
   const flexIdx = bands.flatMap((b, i) => (b.fixedH ? [] : [i]))
@@ -183,7 +193,8 @@ export function layoutFloor(
       if (!b) return null
       const t = b.cells.reduce((s, c) => s + (c.fixedW ? c.fixedW * 7 : c.target), 0)
       const cap = capH?.[i]
-      const min = b.minH || 5
+      const shortNeed = ignoreMinShort ? 0 : Math.max(0, ...b.cells.filter((c) => !c.fixedW).map((c) => minShort(c.type)))
+      const min = Math.max(b.minH || 5, shortNeed)
       let max = b.maxH || 14
       if (cap !== undefined) {
         if (cap < min) return null
@@ -220,7 +231,7 @@ export function layoutFloor(
   for (const [i, b] of bands.entries()) {
     const h = b.fixedH || heights[i]
     if (h === undefined) return null
-    const rs = layoutBand(b, W, y, h)
+    const rs = layoutBand(b, W, y, h, ignoreMinShort)
     if (!rs) return null
     rs.forEach((r) => rooms.push(r))
     hs.push(h)

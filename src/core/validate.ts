@@ -1,6 +1,6 @@
 import type { FloorRect, Plan, Room } from './types'
 import { floorRect } from './types'
-import { HABITABLE } from './rooms'
+import { HABITABLE, minShort } from './rooms'
 import { computeDoors, sharedEdge } from './derive'
 
 /** 外壁に接しているか（採光） */
@@ -32,12 +32,24 @@ export function wetViolations(rooms: readonly Room[]): string[] {
   return out
 }
 
+/** 最小の短辺の違反（なければ空）。hall・void・stair・ldk・store は閾値なしで対象外 */
+export function shortSideViolations(rooms: readonly Room[]): string[] {
+  const out: string[] = []
+  for (const r of rooms) {
+    const need = minShort(r.type)
+    const s = Math.min(r.w, r.h)
+    if (need > 0 && s < need) out.push(`${r.name}の短辺 ${s} が最小 ${need} 未満`)
+  }
+  return out
+}
+
 /** 1フロア分のハード制約の検証（validatePlan の階ごとの部分。階の板の矩形は floorRect） */
 export function validateFloor(plan: Plan, fi: number): boolean {
   const fl = plan.floors[fi]
   if (!fl) return false
   const rooms = fl.rooms
   if (wetViolations(rooms).length > 0) return false
+  if (shortSideViolations(rooms).length > 0) return false
   const doors = computeDoors(rooms)
   const adj = new Map(rooms.map((r) => [r, [] as typeof rooms]))
   for (const d of doors) {
@@ -67,7 +79,7 @@ export function validateFloor(plan: Plan, fi: number): boolean {
   return true
 }
 
-/** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接。違反は棄却 */
+/** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接 + 最小の短辺。違反は棄却 */
 export function validatePlan(plan: Plan): boolean {
   return plan.floors.every((_, fi) => validateFloor(plan, fi))
 }

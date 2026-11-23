@@ -83,7 +83,7 @@ describe('applyVariant', () => {
 })
 
 describe('buildPlan と variant', () => {
-  const W = 16
+  const W = 20 // GEN_VERSION 4: 最小の短辺で幅16では収まらないため
   const H = 15
   it('variant 省略は正規形で plan.variant を持たない。明示すると持つ', () => {
     const a = defined(buildPlan(cfg, 0, { W, H }))

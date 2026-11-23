@@ -259,9 +259,11 @@ export function buildPlanStage(
   fp: BuildFootprint,
   variant?: Variant,
   memo?: F1Memo,
+  opts?: { ignoreMinShort?: boolean },
 ): { plan: Plan | null; failed?: BuildFailure } {
   const fail = (failed: BuildFailure) => ({ plan: null, failed })
   const { W, H } = fp
+  const ignoreMinShort = opts?.ignoreMinShort ?? false
   const v = variant ?? CANONICAL
   const hasVoid = cfg.feats.indexOf('void') >= 0
   const partial = isPartial(cfg)
@@ -269,12 +271,12 @@ export function buildPlanStage(
   // 平屋では2F・階段・個室配分に関係する項目は正規形のみ
   if (cfg.floors === 1 && (v.stairEnd !== 'E' || v.bedShift !== 0 || v.rev[2] || v.rev[3])) return fail('variant')
   // 1F → 2F の順に組む（吹抜ありなら2F南帯の高さを1F南帯（LDK）の高さ以下に抑える）
-  const memoKey = f1MemoKey(cfg, arch, W, H, v)
+  const memoKey = f1MemoKey(cfg, arch, W, H, v) + (ignoreMinShort ? '|i' : '')
   let f1: F1Layout | undefined = memo?.get(memoKey)
   if (f1 === undefined) {
     const b1 = bandsFor(cfg, arch, 1, W)
     const f1bands = b1 && applyVariant(b1, 1, v, hasVoid)
-    f1 = !f1bands ? 'variant' : (layoutFloor(W, H, f1bands) ?? 'f1')
+    f1 = !f1bands ? 'variant' : (layoutFloor(W, H, f1bands, { ignoreMinShort }) ?? 'f1')
     memo?.set(memoKey, f1)
   }
   if (typeof f1 === 'string') return fail(f1)
@@ -290,7 +292,7 @@ export function buildPlanStage(
     const southH = f1.heights[2]
     if (southH === undefined) return fail('f1')
     const capSouth = southH - (H - H2)
-    const f2 = layoutFloor(W2, H2, f2bands, hasVoid ? { capH: { 2: capSouth } } : undefined)
+    const f2 = layoutFloor(W2, H2, f2bands, { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort })
     if (!f2) return fail('f2')
     const f2rooms = ox === 0 ? f2.rooms : f2.rooms.map((r) => ({ ...r, x: r.x + ox }))
     const floor2: Plan['floors'][number] = { label: '2F', rooms: relabelBeds(f2rooms) }

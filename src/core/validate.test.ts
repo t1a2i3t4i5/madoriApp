@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ArchId, Plan, Room, RoomType, Variant } from './types'
-import { wetViolations, validatePlan } from './validate'
+import { wetViolations, validatePlan, shortSideViolations } from './validate'
+import { candidatePool } from './generate'
+import { MIN_SHORT } from './rooms'
 import { buildPlan } from './archetypes'
 import { footprintList } from './slicing'
 import { CONDITIONS, defined } from './testing'
@@ -73,12 +75,7 @@ describe('制約C: 水回りの隣接は buildPlan の出力で棄却0件', () =
 
   it('違反のある Plan は validatePlan が false を返す', () => {
     const cfg = defined(CONDITIONS.find((c) => c.name === '34坪/平屋/ランドリー+書斎')).cfg
-    const fp = defined(footprintList((cfg.area * 16) / cfg.floors, 10)[0])
-    let plan: Plan | null = null
-    for (const v of allVariants(cfg.floors)) {
-      const p = buildPlan(cfg, 0, fp, v)
-      if (p && validatePlan(p)) { plan = p; break }
-    }
+    const plan: Plan | undefined = candidatePool(cfg)[0] // GEN_VERSION 4: 外形・変種の総当たりではなく、検証を通ったプールの先頭を使う
     const ok = defined(plan, '検証を通る案')
     expect(validatePlan(ok)).toBe(true)
     // 洗面を取り除く → 浴室・ランドリーが洗面に接していない違反になる
@@ -88,5 +85,43 @@ describe('制約C: 水回りの隣接は buildPlan の出力で棄却0件', () =
     }
     expect(broken.floors.some((fl) => wetViolations(fl.rooms).length > 0)).toBe(true)
     expect(validatePlan(broken)).toBe(false)
+  })
+})
+
+/** 期待する閾値（種別ごとのリテラル。MIN_SHORT から導出せず、表そのものの変更を検出する） */
+const EXPECTED_MIN_SHORT: Partial<Record<RoomType, number>> = {
+  master: 6, bed: 5, study: 5, washitsu: 5,
+  bath: 3, wash: 3, wc: 2, laundry: 3,
+  kitchen: 3, pantry: 2, wic: 3,
+  entry: 3, doma: 3,
+}
+
+describe('shortSideViolations（最小の短辺）', () => {
+  const at = (type: RoomType, w: number, h: number) => room(type, 0, 0, w, h)
+  it('MIN_SHORT は期待する閾値表と一致する（種別ごとのリテラル）', () => {
+    expect(MIN_SHORT).toEqual(EXPECTED_MIN_SHORT)
+  })
+  it('閾値ちょうどは通り、1 小さいと落ちる（縦横どちらの向きでも）', () => {
+    for (const [type, need] of Object.entries(EXPECTED_MIN_SHORT) as [RoomType, number][]) {
+      expect(shortSideViolations([at(type, need, 12)]), `${type} ちょうど`).toEqual([])
+      expect(shortSideViolations([at(type, 12, need)]), `${type} ちょうど(縦)`).toEqual([])
+      expect(shortSideViolations([at(type, need - 1, 12)]), `${type} -1`).toHaveLength(1)
+      expect(shortSideViolations([at(type, 12, need - 1)]), `${type} -1(縦)`).toHaveLength(1)
+    }
+  })
+  it('メッセージは「洋室の短辺 4 が最小 5 未満」の形', () => {
+    expect(shortSideViolations([{ ...at('bed', 4, 9), name: '洋室1' }])).toEqual(['洋室1の短辺 4 が最小 5 未満'])
+  })
+  it('hall・void・stair・ldk・store は対象外', () => {
+    for (const t of ['hall', 'void', 'stair', 'ldk', 'store'] as RoomType[]) expect(shortSideViolations([at(t, 1, 1)]), t).toEqual([])
+  })
+  // 結合セルは残る種別（玄関+土間→doma、キッチン+パントリー→kitchen）の閾値で判定する。
+  // パントリー（2）だけを満たす幅 2 のキッチン結合セルも、玄関と同じ 3 を満たさない土間結合セルも落ちる
+  it('結合セルは残る種別の閾値で判定する（doma は 3、kitchen は pantry より厳しい 3）', () => {
+    expect(shortSideViolations([at('doma', 2, 12)])).toHaveLength(1)
+    expect(shortSideViolations([at('doma', 3, 12)])).toEqual([])
+    expect(shortSideViolations([at('kitchen', 2, 12)])).toHaveLength(1)
+    expect(shortSideViolations([at('kitchen', 3, 12)])).toEqual([])
+    expect(shortSideViolations([at('pantry', 2, 12)])).toEqual([])
   })
 })

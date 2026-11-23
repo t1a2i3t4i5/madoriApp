@@ -1,4 +1,4 @@
-import type { Cell, RoomDef, RoomType } from './types'
+import type { Cell, Room, RoomDef, RoomType } from './types'
 
 /** 部屋タイプ定義: target/minArea/maxArea は単位² */
 export const ROOM: Record<RoomType, RoomDef> = {
@@ -31,6 +31,22 @@ export const HABITABLE: Partial<Record<RoomType, true>> = {
 export const VIA: Partial<Record<RoomType, true>> = {
   entry: true, hall: true, ldk: true, doma: true, wash: true, stair: true,
 }
+
+/** 最小の短辺（セル、芯々）。ない種別は対象外（design.md 7.2、R-ROOM-03）。LDK・階段・ホール・吹抜・収納は対象外 */
+export const MIN_SHORT: Partial<Record<RoomType, number>> = {
+  master: 6, bed: 5, study: 5, washitsu: 5,
+  bath: 3, wash: 3, wc: 2, laundry: 3,
+  kitchen: 3, pantry: 2, wic: 3,
+  entry: 3, doma: 3,
+}
+/**
+ * 玄関として扱う部屋。「玄関・土間」の結合セル（type doma）は玄関を兼ねるので、entry がなければ doma を返す。
+ * 外開きドアの描画（FloorSvg）・来客動線の起点（flow）が共有する
+ */
+export function findEntry<T extends Room>(rooms: readonly T[]): T | undefined {
+  return rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'doma')
+}
+export const minShort = (t: RoomType): number => MIN_SHORT[t] ?? 0
 
 export function cell(type: RoomType, opts?: Partial<Cell>): Cell {
   const d = ROOM[type]

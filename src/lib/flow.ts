@@ -93,7 +93,8 @@ function waypoints(plan: Plan, kind: FlowKind): Target[] | null {
   const ldk = findRoom(plan, 'ldk')
   if (!ldk) return null
   if (kind === 'guest') {
-    const entry = findRoom(plan, 'entry')
+    // 結合セル（玄関+土間 = doma）は玄関を兼ねる
+    const entry = findRoom(plan, 'entry') ?? findRoom(plan, 'doma')
     return entry ? [entry, ldk] : null
   }
   const rest = [findRoom(plan, 'wash'), findRoom(plan, 'bath')].filter((t): t is Target => t !== null)

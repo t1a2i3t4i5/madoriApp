@@ -50,7 +50,9 @@ describe('enumeratePlans（候補プール）', () => {
   })
 
   it('空振り防止: 人気条件では候補が3案よりずっと多い', () => {
-    for (const { cfg } of CONDITIONS.slice(0, 3)) expect(enumeratePlans(cfg).length).toBeGreaterThan(50)
+    // 下限は条件ごと。2階建ては高いまま（実測 288・432）。平屋は GEN_VERSION 4 の短辺で実測 36 まで減ったので 30
+    const min = (floors: number) => (floors === 1 ? 30 : 50)
+    for (const { name, cfg } of CONDITIONS.slice(0, 3)) expect(enumeratePlans(cfg).length, name).toBeGreaterThan(min(cfg.floors))
   })
 })
 

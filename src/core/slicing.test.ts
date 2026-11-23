@@ -131,27 +131,32 @@ describe('layoutFloor', () => {
   it('帯の高さを返し、合計が H になる', () => {
     const r = layoutFloor(16, 16, bands())
     expect(r).not.toBeNull()
-    expect(r?.heights.reduce((s, h) => s + h, 0)).toBe(16)
-    expect(r?.heights[1]).toBe(2)
+    if (!r) return
+    expect(r.heights.reduce((s, h) => s + h, 0)).toBe(16)
+    expect(r.heights[1]).toBe(2)
   })
   it('capH を超えない。cap が min 未満なら null', () => {
     const free = layoutFloor(16, 16, bands())
+    expect(free).not.toBeNull()
     const south = free?.heights[2] ?? 0
     expect(south).toBeGreaterThan(7)
     const capped = layoutFloor(16, 16, bands(), { capH: { 2: south - 1 } })
     expect(capped).not.toBeNull()
-    expect(capped?.heights[2]).toBeLessThanOrEqual(south - 1)
-    expect(capped?.heights.reduce((s, h) => s + h, 0)).toBe(16)
+    if (!capped) return
+    expect(capped.heights[2]).toBeLessThanOrEqual(south - 1)
+    expect(capped.heights.reduce((s, h) => s + h, 0)).toBe(16)
     expect(layoutFloor(16, 16, bands(), { capH: { 2: 6 } })).toBeNull()
   })
   it('上限の拡張（maxH 合計が H に満たない）でも cap を守る', () => {
     // 16x24: maxH 合計 8+12 < 22 なので、通常は幅の大きい南帯を 15 まで広げる
     const free = layoutFloor(16, 24, bands())
+    expect(free).not.toBeNull()
     expect(free?.heights[2]).toBe(15)
     const capped = layoutFloor(16, 24, bands(), { capH: { 2: 14 } })
     expect(capped).not.toBeNull()
-    expect(capped?.heights[2]).toBe(14)
-    expect(capped?.heights.reduce((s, h) => s + h, 0)).toBe(24)
+    if (!capped) return
+    expect(capped.heights[2]).toBe(14)
+    expect(capped.heights.reduce((s, h) => s + h, 0)).toBe(24)
     // cap が小さすぎて合計が H に届かなければ null
     expect(layoutFloor(16, 24, bands(), { capH: { 2: 12 } })).toBeNull()
   })
@@ -167,20 +172,55 @@ describe('layoutFloor', () => {
       { cells: [cell('hall')], fixedH: 2 },
       { cells: [cell('master'), cell('bed'), cell('bed')], minH: 6, maxH: 12 },
     ]
-    const south1 = layoutFloor(16, 16, f1)?.heights[2]
+    const floor1 = layoutFloor(16, 16, f1)
+    expect(floor1).not.toBeNull()
+    const south1 = floor1?.heights[2]
     expect(south1).toBe(8)
     const uncapped = layoutFloor(16, 16, f2())
     expect(uncapped).not.toBeNull()
     expect(uncapped?.heights[2]).toBeGreaterThan(south1 ?? 0) // cap がなければ違反になる
     const capped = layoutFloor(16, 16, f2(), { capH: { 2: south1 ?? 0 } })
     expect(capped).not.toBeNull()
-    expect(capped?.heights[2]).toBeLessThanOrEqual(south1 ?? 0)
-    expect(capped?.heights).toEqual([6, 2, 8])
+    if (!capped) return
+    expect(capped.heights[2]).toBeLessThanOrEqual(south1 ?? 0)
+    expect(capped.heights).toEqual([6, 2, 8])
   })
   it('入力の bands を書き換えない', () => {
     const b = bands()
     const before = JSON.stringify(b)
     layoutFloor(16, 16, b, { capH: { 2: 9 } })
     expect(JSON.stringify(b)).toBe(before)
+  })
+})
+
+describe('最小の短辺（GEN_VERSION 4）', () => {
+  const band = (...cells: Band['cells']): Band => ({ cells })
+  const widthOf = (rs: { type: string; w: number }[], t: string) => rs.find((r) => r.type === t)?.w ?? 0
+
+  it('高さ9の帯で玄関・WIC が幅3以上（ignoreMinShort では v3 と同じ幅2）', () => {
+    const b = band(cell('master'), cell('wic'), cell('entry'), cell('wash'), cell('bath'), cell('wc'))
+    const ok = layoutBand(b, 20, 0, 9)
+    expect(ok).not.toBeNull()
+    expect(widthOf(ok ?? [], 'entry')).toBeGreaterThanOrEqual(3)
+    expect(widthOf(ok ?? [], 'wic')).toBeGreaterThanOrEqual(3)
+    const old = layoutBand(b, 15, 0, 9, true) // 面積由来の下限だけなら幅15に全部収まる（玄関・WIC は幅2）
+    expect(widthOf(old ?? [], 'entry')).toBe(2)
+    expect(widthOf(old ?? [], 'wic')).toBe(2)
+  })
+  it('帯の高さが短辺未満（高さ4に洋室）なら null。ignoreMinShort なら組める', () => {
+    const b = band(cell('bed'), cell('wash'))
+    expect(layoutBand(b, 14, 0, 4)).toBeNull()
+    expect(layoutBand(b, 14, 0, 4, true)).not.toBeNull()
+  })
+  it('max < min になる組（maxArea が小さく短辺が大きい）でも null にならない', () => {
+    const small = cell('bed', { maxArea: 20 }) // 高さ9なら面積由来の上限は3だが、短辺5が下限
+    const rs = layoutBand(band(small, cell('wash')), 14, 0, 9)
+    expect(rs).not.toBeNull()
+    expect(widthOf(rs ?? [], 'bed')).toBeGreaterThanOrEqual(5)
+  })
+  it('layoutFloor: 帯の高さの下限が帯内の短辺の最大以上（洋室を含む帯は高さ5以上）', () => {
+    const bands: Band[] = [{ cells: [cell('bed'), cell('wash'), cell('wc')], minH: 3 }, { cells: [cell('ldk')], minH: 7 }]
+    const r = layoutFloor(20, 14, bands)
+    expect(r === null || (r.heights[0] ?? 0) >= 5).toBe(true)
   })
 })

@@ -34,6 +34,13 @@ describe('computeFlows', () => {
     expect(life.stops.some((s) => s.role === 'via' && s.x === 4.5 && s.y === 2)).toBe(true)
   })
 
+  it('結合セル（玄関+土間 = doma）は玄関を兼ね、来客動線の起点になる', () => {
+    const p = tiny()
+    const merged: Plan = { ...p, floors: [{ label: '1F', rooms: defined(p.floors[0]).rooms.map((r) => (r.type === 'entry' ? { ...r, type: 'doma' as const } : r)) }] }
+    const guest = defined(computeFlows(merged, 0).find((l) => l.kind === 'guest'))
+    expect(guest.stops[0]).toMatchObject({ role: 'start', x: 1.5, y: 6 })
+  })
+
   it('部屋が無い系統は描かない（玄関なし→来客なし／洗面も浴室もなし→生活なし）', () => {
     const p = tiny()
     const noEntry: Plan = { ...p, floors: [{ label: '1F', rooms: defined(p.floors[0]).rooms.filter((r) => r.type !== 'entry') }] }
