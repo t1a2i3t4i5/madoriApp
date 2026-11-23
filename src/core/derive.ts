@@ -1,4 +1,4 @@
-import type { Door, DoorSwing, Edge, Pt, Room, RoomType } from './types'
+import type { Door, DoorSwing, Edge, Pt, FloorRect, Room, RoomType } from './types'
 import { HABITABLE, VIA } from './rooms'
 
 /** 2部屋の共有辺。ドアは辺の中央でなく端寄り（34%地点）に置き、部屋中央のラベルと開き弧を分離する */
@@ -191,14 +191,14 @@ export interface WindowSeg {
 }
 
 /** 居室の北・南外壁に窓を自動配置する */
-export function computeWindows(rooms: Room[], H: number): WindowSeg[] {
+export function computeWindows(rooms: Room[], fp: FloorRect): WindowSeg[] {
   const out: WindowSeg[] = []
   for (const r of rooms) {
     if (!HABITABLE[r.type]) continue
     const len = Math.min(6, Math.max(2.4, r.w - 2.4))
     const cx = r.x + r.w / 2
-    if (r.y + r.h === H) out.push({ side: 'S', cx, len })
-    if (r.y === 0) out.push({ side: 'N', cx, len })
+    if (r.y + r.h === fp.y + fp.H) out.push({ side: 'S', cx, len })
+    if (r.y === fp.y) out.push({ side: 'N', cx, len })
   }
   return out
 }

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { Plan, Room, RoomCategory } from '../core/types'
 import { ROOM } from '../core/rooms'
+import { floorRect } from '../core/types'
 import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { Furniture } from './Furniture'
@@ -76,9 +77,11 @@ const NO_ROOMS: Room[] = []
 export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, showFlow, scale }: FloorSvgProps) {
   const fl = plan.floors[floorIdx]
   const { W, H } = plan
+  const fp = floorRect(plan, floorIdx)
+  const fpBottom = fp.y + fp.H
   const rooms = fl?.rooms ?? NO_ROOMS
   const doors = useMemo(() => computeDoors(rooms), [rooms])
-  const windows = useMemo(() => computeWindows(rooms, H), [rooms, H])
+  const windows = useMemo(() => computeWindows(rooms, fp), [rooms, fp.x, fp.y, fp.W, fp.H])
   const furniture = useMemo(
     () => (showFurniture ? furnish(rooms, doors, { kitchenFace: !!kitchenFace }) : []),
     [showFurniture, rooms, doors, kitchenFace],
@@ -146,13 +149,13 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {/* 窓: 壁を抜いてから二重線 */}
       <g stroke="#fdfcf8" strokeWidth={0.55}>
         {windows.map((wd, i) => {
-          const yy = wd.side === 'S' ? H : 0
+          const yy = wd.side === 'S' ? fpBottom : fp.y
           return <line key={i} x1={wd.cx - wd.len / 2} y1={yy} x2={wd.cx + wd.len / 2} y2={yy} />
         })}
       </g>
       <g stroke="#4a90b8" strokeWidth={0.13}>
         {windows.map((wd, i) => {
-          const yy = wd.side === 'S' ? H : 0
+          const yy = wd.side === 'S' ? fpBottom : fp.y
           return (
             <g key={i}>
               <line x1={wd.cx - wd.len / 2} y1={yy - 0.22} x2={wd.cx + wd.len / 2} y2={yy - 0.22} />
@@ -168,14 +171,14 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {/* 壁（外壁は内壁の約2.5倍の太さ） */}
       <g fill="none" stroke="#3a382f">
         {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
-        <rect x={0} y={0} width={W} height={H} strokeWidth={0.42} />
+        <rect x={fp.x} y={fp.y} width={fp.W} height={fp.H} strokeWidth={0.42} />
       </g>
       {/* 動線は部屋名ラベルより下 */}
       {showFlow && <FlowOverlay flows={flows} legendY={legendY} legendX={vbX + 1.2} />}
       {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} />)}
       {/* 玄関ドア（南側・外開き） */}
-      {entry && entry.y + entry.h === H && (() => {
-        const ed = entryDoor(entry, H)
+      {entry && entry.y + entry.h === fpBottom && (() => {
+        const ed = entryDoor(entry, fpBottom)
         return <path d={ed.path} fill="rgba(109,103,92,0.10)" stroke="#6d675c" strokeWidth={0.13} />
       })()}
       {siteStrip && (
