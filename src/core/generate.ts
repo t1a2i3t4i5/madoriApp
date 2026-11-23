@@ -9,7 +9,7 @@ import { scorePlan } from './score'
 import { planDistance, planSignature } from './diversity'
 
 /** 生成ロジックのバージョン。アルゴリズムを変えたら上げる（URLハッシュに保存） */
-export const GEN_VERSION = 4
+export const GEN_VERSION = 5
 
 /** 外形候補の件数（縦横比 0.62〜1.62 の制限は footprintList 側で不変） */
 export const FOOTPRINT_LIMIT = 10
@@ -19,7 +19,7 @@ export function scored(plan: Plan): ScoredPlan {
   return { ...plan, score: scorePlan(plan), sig: planSignature(plan, false), sigM: planSignature(plan, true) }
 }
 
-/** 変種の列挙順（正規形が先頭）: stairEnd → rev（1F北が最上位ビット）→ bedShift */
+/** 変種の列挙順（正規形が先頭）: stairEnd → rev（1F北が最上位ビット）→ bedShift → クローゼットのモード（弱 → 強） */
 const STAIR_ENDS: Variant['stairEnd'][] = ['E', 'W']
 const BED_SHIFTS: Variant['bedShift'][] = [0, 1, 2, -1]
 
@@ -36,7 +36,11 @@ function variantsFor(cfg: PlanConfig): Variant[] {
         cfg.floors === 1
           ? [(m & 2) !== 0, (m & 1) !== 0, false, false]
           : [(m & 8) !== 0, (m & 4) !== 0, (m & 2) !== 0, (m & 1) !== 0]
-      for (const bedShift of shifts) out.push({ stairEnd, rev, bedShift })
+      // クローゼットのモード（弱 → 強）は最内側の軸。同じ部屋配置になった案は重複除去で先着（弱）が残る
+      for (const bedShift of shifts) {
+        out.push({ stairEnd, rev, bedShift })
+        out.push({ stairEnd, rev, bedShift, closet: 'hard' })
+      }
     }
   }
   return out
@@ -53,10 +57,14 @@ function distinctVariants(cfg: PlanConfig, arch: ArchId, variants: Variant[]): V
   const base = [bandsFor(cfg, arch, 1), cfg.floors === 2 ? bandsFor(cfg, arch, 2) : null]
   const seen = new Set<string>()
   const out: Variant[] = []
+  // クローゼットを切り出す個室セルが1つもない構成では、強モードは弱モードと同じ案になるので省く
+  const hasClosetCell = base.some((b) => b?.some((band) => band.cells.some((c) => c.closet)))
   for (const v of variants) {
-    const key = JSON.stringify(
-      base.map((b, i) => (b ? applyVariant(b, i + 1, v, hasVoid) : null)),
-    )
+    if (v.closet && !hasClosetCell) continue
+    const key = JSON.stringify([
+      v.closet ?? '',
+      ...base.map((b, i) => (b ? applyVariant(b, i + 1, v, hasVoid) : null)),
+    ])
     if (seen.has(key)) continue
     seen.add(key)
     out.push(v)

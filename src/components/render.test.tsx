@@ -32,11 +32,11 @@ describe('コンポーネントの描画', () => {
     const pp = defined(enumeratePlans(pc)[0])
     const f2 = renderToStaticMarkup(<FloorSvg plan={pp} floorIdx={1} uid="t" />)
     expect(f2).toContain('下屋</text>')
-    expect(f2).toContain('stroke-dasharray')
+    expect(f2).toContain('stroke-dasharray="0.6 0.4"') // 1F 外形の破線（クローゼットのハンガーパイプの破線とは別）
     expect(renderToStaticMarkup(<FloorSvg plan={pp} floorIdx={0} uid="t" />)).not.toContain('下屋</text>')
     const full = renderToStaticMarkup(<FloorSvg plan={defined(plans[0])} floorIdx={1} uid="t" />)
     expect(full).not.toContain('下屋</text>')
-    expect(full).not.toContain('stroke-dasharray')
+    expect(full).not.toContain('stroke-dasharray="0.6 0.4"')
     // カード・拡大表示で階別の坪数が出る
     const card = renderToStaticMarkup(<PlanCard cfg={pc} plan={pp} index={0} scale={{ maxW: pp.W, maxH: pp.H }} onOpen={noop} starred={false} onToggleStar={noop} />)
     expect(card).toMatch(/1F 約[\d.]+坪・2F 約[\d.]+坪/)

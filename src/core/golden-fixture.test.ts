@@ -16,11 +16,12 @@ import type { PlanConfig, Room, ScoredPlan } from './types'
  *   UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts
  * fixture の genVersion が現在の GEN_VERSION と同じで中身だけ違う場合は、書き込みを拒否する
  * （GEN_VERSION を上げずに出力を黙って書き換えないため。どうしても必要なら UPDATE_GOLDEN=force）。
- * 旧バージョンの fixture（gen-v3.json）は消さず、移行検証（v3 → v4）に使う。
+ * 旧バージョンの fixture（gen-v3.json、gen-v4.json）は消さず、移行検証（v3 → v4、v4 → v5）に使う。
  * v1 の正解は legacy/index.html（golden.test.ts）。
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.url)
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
+const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 const ALL = [...CONDITIONS, ...BOUNDARY]
@@ -154,6 +155,50 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
     })
     it('grid: 条件の集合（feasibility が ok のキー）は v3 と同一（feasibility 不変）', () => {
       expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v3.grid).sort())
+    })
+  })
+
+  // 移行検証: GEN_VERSION 5 はクローゼット（弱・強のモード）と収納化を足した。成立条件・プールは v4 以上、境界は不変
+  describe('v4 からの移行（クローゼット）', () => {
+    let v4: Fixture
+    beforeAll(() => {
+      v4 = JSON.parse(readFileSync(FIXTURE_V4, 'utf8')) as Fixture
+    })
+    it('grid: v4 で3案が出た条件は v5 でも3案が出る（3案条件の集合が縮まない）。条件の集合（feasibility）も同一', () => {
+      expect(v4.genVersion).toBe(4)
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v4.grid).sort())
+      const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
+      const lost = three(v4.grid).filter((k) => now.grid[k]?.length !== 3)
+      expect(lost).toEqual([])
+      expect(three(now.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
+    })
+    it('候補プールの件数は、全 CONDITIONS・BOUNDARY で v4 以上（弱モードが v4 の成立を保つ）', () => {
+      expect(v4.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
+      for (const [i, p] of now.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
+    })
+    it('BOUNDARY の提示案の件数は v4 と同じ（0案・3案の境界が動かない）', () => {
+      for (const { name, expected } of BOUNDARY) {
+        const cs = now.cases.filter((c) => c.name === name)
+        expect(cs).toHaveLength(SEEDS.length)
+        for (const c of cs) expect(c.plans.length, `${name} seed=${c.seed}`).toBe(expected)
+        expect(v4.cases.filter((c) => c.name === name).every((c) => c.plans.length === expected)).toBe(true)
+      }
+    })
+    it('v4 の提示案の骨格（planKey）が v5 の候補プールに残る割合を記録する（固定しない。差分レビューの材料）', () => {
+      let kept = 0
+      let total = 0
+      for (const { name, cfg } of ALL) {
+        const keys = new Set<string>(candidatePool(copy(cfg)).map(planKey))
+        for (const c of v4.cases.filter((x) => x.name === name)) {
+          for (const p of c.plans) {
+            total++
+            if (keys.has(p.key)) kept++
+          }
+        }
+      }
+      expect(total).toBeGreaterThan(0)
+      // 弱モードの案は v4 と同じ key（-k なし）。幅の目標を変えるので骨格が動く案もある。極端に減ったら気づくための緩い下限
+      expect(kept / total, `${kept}/${total}`).toBeGreaterThan(0.5)
     })
   })
 })

@@ -1,0 +1,193 @@
+import type { Room } from './types'
+import { ROOM, minShort } from './rooms'
+import { doorOK, sharedEdge } from './derive'
+import { isPrivateRoom, storageOf } from './closets'
+import { shortSideViolations, wetViolations } from './validate'
+
+/**
+ * 割り付け後の収納化（GEN_VERSION 5）。追加の面積を使わず、階ごとに次の順で収納を作る:
+ * 1. 付け替え: 持ち主のない収納（奥行2・2×4 以上・16 以下）を、辺を共有する収納のない個室のクローゼットにする
+ * 2. ホール帯の行き止まり: ホール帯の両端を長さ 6→5→4 の順に試し、上下で接する収納のない個室のクローゼットにする
+ * 3. 水回りの超過: 最大面積を超えた洗面・浴室・トイレ・ランドリーの、ホールと反対側（外壁側）の2列を収納にする
+ * どの段も、切り出した後に全室への到達可能性が保たれるときだけ行う（3 は短辺・最小面積・水回りの隣接も）。
+ * 純関数: rooms は書き換えず新しい配列を返す。既存の付属収納（Room.of）はそのまま引き継ぐ
+ */
+export function carveFloor(rooms0: readonly Room[]): Room[] {
+  let st = start(rooms0)
+  st = reassignStores(st)
+  st = carveHallEnds(st)
+  st = carveWetOvers(st)
+  return finish(st)
+}
+
+/** 作業状態: 部屋（作業用のコピー）と、付属収納 → 持ち主の対応（of は座標が動いても壊れないよう、部屋の同一性で持つ） */
+interface State {
+  rooms: Room[]
+  owner: Map<Room, Room>
+}
+
+function start(rooms0: readonly Room[]): State {
+  const rooms = rooms0.map((r) => ({ ...r }))
+  const owner = new Map<Room, Room>()
+  for (const r of rooms) {
+    const of = r.of
+    if (!of) continue
+    const o = rooms.find((q) => q !== r && q.x === r.x + of.dx && q.y === r.y + of.dy)
+    if (o) owner.set(r, o)
+  }
+  return sync({ rooms, owner })
+}
+
+/** owner の対応から of を書き直す（座標が動いた後に呼ぶ）。st を返す */
+function sync(st: State): State {
+  for (const r of st.rooms) delete r.of
+  for (const [s, o] of st.owner) s.of = { dx: o.x - s.x, dy: o.y - s.y }
+  return st
+}
+
+function finish(st: State): Room[] {
+  return sync(st).rooms
+}
+
+function clone(st: State): State {
+  const map = new Map(st.rooms.map((r) => [r, { ...r }]))
+  const owner = new Map<Room, Room>()
+  for (const [s, o] of st.owner) {
+    const ns = map.get(s)
+    const no = map.get(o)
+    if (ns && no) owner.set(ns, no)
+  }
+  return { rooms: st.rooms.map((r) => map.get(r) ?? r), owner }
+}
+
+/** 全室（吹抜を除く）が、玄関（なければ土間・階段）からドアでたどれるか */
+function reachable(rooms: Room[]): boolean {
+  // ドアの形状（開き弧）は到達可能性に関係しないので、computeDoors は使わず、辺の共有と doorOK だけで隣接を作る
+  const adj = new Map(rooms.map((r) => [r, [] as Room[]]))
+  for (const [i, a] of rooms.entries()) {
+    for (const b of rooms.slice(i + 1)) {
+      if (sharedEdge(a, b) && doorOK(a, b)) {
+        adj.get(a)?.push(b)
+        adj.get(b)?.push(a)
+      }
+    }
+  }
+  const first = rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'doma') ?? rooms.find((r) => r.type === 'stair')
+  if (!first) return false
+  const seen = new Set([first])
+  const stack = [first]
+  for (let cur = stack.pop(); cur; cur = stack.pop()) {
+    for (const n of adj.get(cur) ?? []) {
+      if (!seen.has(n)) {
+        seen.add(n)
+        stack.push(n)
+      }
+    }
+  }
+  return rooms.every((r) => r.type === 'void' || seen.has(r))
+}
+
+/** 個室 p に収納（クローゼット・収納・WIC）が付いているか（現在の状態で） */
+const hasStorage = (st: State, p: Room): boolean => storageOf(sync(st).rooms, p) !== undefined
+
+/** 1. 付け替え */
+function reassignStores(st0: State): State {
+  let st = st0
+  for (const s of st0.rooms.filter((r) => r.type === 'store' && !r.of)) {
+    if (Math.min(s.w, s.h) !== 2 || Math.max(s.w, s.h) < 4 || s.area > ROOM.closet.maxArea) continue
+    const cur = st.rooms.find((r) => r.x === s.x && r.y === s.y && r.type === 'store' && !st.owner.has(r))
+    if (!cur) continue
+    const owner = st.rooms.find((o) => isPrivateRoom(o) && !hasStorage(st, o) && sharedEdge(o, cur) !== null)
+    if (!owner) continue
+    const next = clone(st)
+    const ns = next.rooms.find((r) => r.x === cur.x && r.y === cur.y)
+    const no = next.rooms.find((r) => r.x === owner.x && r.y === owner.y)
+    if (!ns || !no) continue
+    ns.type = 'closet'
+    ns.name = 'CL'
+    ns.target = ROOM.closet.target
+    ns.minArea = ROOM.closet.minArea
+    next.owner.set(ns, no)
+    if (reachable(sync(next).rooms)) st = next
+  }
+  return sync(st)
+}
+
+/** 2. ホール帯の行き止まり */
+function carveHallEnds(st0: State): State {
+  let st = st0
+  for (const end of ['W', 'E'] as const) {
+    const hall = st.rooms.find((r) => r.type === 'hall')
+    if (!hall) break
+    let done = false
+    for (let len = Math.min(6, hall.w - 4); len >= 4 && !done; len--) {
+      const cx = end === 'W' ? hall.x : hall.x + hall.w - len
+      const ovl = (o: Room) => Math.min(o.x + o.w, cx + len) - Math.max(o.x, cx)
+      const owners = st.rooms
+        .filter((o) => isPrivateRoom(o) && !hasStorage(st, o) && (o.y + o.h === hall.y || hall.y + hall.h === o.y) && ovl(o) >= 2)
+        .sort((a, b) => ovl(b) - ovl(a) || a.x - b.x || a.y - b.y)
+      for (const o of owners) {
+        const next = clone(st)
+        const nh = next.rooms.find((r) => r.type === 'hall')
+        const no = next.rooms.find((r) => r.x === o.x && r.y === o.y && r.type === o.type)
+        if (!nh || !no) continue
+        const cl: Room = {
+          type: 'closet', name: 'CL', x: cx, y: hall.y, w: len, h: hall.h, area: len * hall.h,
+          target: ROOM.closet.target, minArea: ROOM.closet.minArea,
+        }
+        if (end === 'W') nh.x += len
+        nh.w -= len
+        nh.area = nh.w * nh.h
+        next.rooms.push(cl)
+        next.owner.set(cl, no)
+        if (reachable(sync(next).rooms)) {
+          st = next
+          done = true
+          break
+        }
+      }
+    }
+  }
+  return sync(st)
+}
+
+const WET = new Set(['wash', 'bath', 'wc', 'laundry'])
+/** 水回りの外壁側を切るときの収納の奥行（セル） */
+const CUT = 2
+
+/** 3. 水回りの超過 */
+function carveWetOvers(st0: State): State {
+  let st = st0
+  // 持ち主を探しやすいよう、浴室・トイレ（持ち主が隣の洗面・ランドリー・個室）→ 洗面・ランドリー（自分が持ち主）の順
+  const order = (r: Room) => (r.type === 'wash' || r.type === 'laundry' ? 1 : 0)
+  const targets = st0.rooms.filter((r) => WET.has(r.type) && r.area > ROOM[r.type].maxArea).sort((a, b) => order(a) - order(b))
+  for (const t of targets) {
+    const r = st.rooms.find((q) => q.x === t.x && q.y === t.y && q.type === t.type)
+    if (!r || r.h < 4) continue
+    const hallAbove = st.rooms.some((h) => h.type === 'hall' && h.y + h.h === r.y)
+    const hallBelow = st.rooms.some((h) => h.type === 'hall' && r.y + r.h === h.y)
+    if (hallAbove === hallBelow) continue
+    const next = clone(st)
+    const nr = next.rooms.find((q) => q.x === r.x && q.y === r.y && q.type === r.type)
+    if (!nr) continue
+    const sy = hallBelow ? nr.y : nr.y + nr.h - CUT
+    const strip: Room = { type: 'store', name: '収納', x: nr.x, y: sy, w: nr.w, h: CUT, area: nr.w * CUT, target: 8, minArea: 4 }
+    if (hallBelow) nr.y += CUT
+    nr.h -= CUT
+    nr.area = nr.w * nr.h
+    if (nr.h < Math.max(minShort(nr.type), 2) || nr.area < ROOM[nr.type].minArea) continue
+    next.rooms.push(strip)
+    // 持ち主: 洗面・ランドリーは自分、浴室・トイレは辺を共有する洗面・ランドリー・個室
+    const ownerRoom =
+      nr.type === 'wash' || nr.type === 'laundry'
+        ? nr
+        : next.rooms.find((o) => o !== nr && o !== strip && (o.type === 'wash' || o.type === 'laundry' || isPrivateRoom(o)) && sharedEdge(o, strip) !== null)
+    if (!ownerRoom) continue
+    next.owner.set(strip, ownerRoom)
+    sync(next)
+    if (sharedEdge(strip, ownerRoom) === null) continue
+    if (wetViolations(next.rooms).length > 0 || shortSideViolations(next.rooms).length > 0) continue
+    if (reachable(next.rooms)) st = next
+  }
+  return sync(st)
+}

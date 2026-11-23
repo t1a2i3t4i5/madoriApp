@@ -59,11 +59,39 @@ export function waterfill(total: number, items: WaterfillItem[]): number[] | nul
   return slots.map((o) => o.val)
 }
 
-/** 幅が余る場合に余りを吸わせるセルの優先順（収納系→居室の順） */
+/**
+ * 幅が余る場合に余りを吸わせるセルの優先順（R-PROG-11/12: LDK → 個室 → 収納系 → 玄関 → キッチン → 水回り。
+ * 水回りを後ろへ回して、洗面・浴室・トイレに余りを吸わせにくくする）
+ */
 const ABSORB_PRIORITY = [
-  'store', 'pantry', 'wic', 'laundry', 'wash', 'ldk', 'master', 'bed',
-  'study', 'washitsu', 'doma', 'entry', 'kitchen', 'wc', 'bath',
+  'ldk', 'master', 'bed', 'study', 'washitsu', 'store', 'pantry', 'wic',
+  'doma', 'entry', 'kitchen', 'laundry', 'wash', 'wc', 'bath',
 ]
+
+/** クローゼットの幅（セル）。個室セルの幅からこの分を切り出す */
+export const CLOSET_W = 2
+/** クローゼットの長さの上限（セル）。帯の高さがこれを超えるとき、ホール側の残りは廊下収納にする */
+export const CLOSET_MAX_LEN = 8
+
+/** クローゼットのモード。soft（弱）= 入るときだけ切り出す。hard（強）= 個室の幅の下限を上げて必ず切り出す */
+export type ClosetMode = 'soft' | 'hard'
+
+/**
+ * 個室の矩形から、幅 CLOSET_W × 高さ h の縦の帯をクローゼットとして切り出す。
+ * 位置: 帯の西端（x=0）の個室は東側、それ以外は西側（隣り合う個室のクローゼットが背中合わせになる）。
+ * 外壁に接する辺は個室側に残す。クローゼットは持ち主（個室）の相対位置 of を持つ。
+ * 入力は書き換えず [西, 東] の順に2室を返す
+ */
+function carveCloset(r: Room): Room[] {
+  const west = r.x !== 0
+  const own: Room = { ...r, w: r.w - CLOSET_W, area: (r.w - CLOSET_W) * r.h, x: west ? r.x + CLOSET_W : r.x }
+  const cx = west ? r.x : r.x + r.w - CLOSET_W
+  const cl: Room = {
+    type: 'closet', name: 'CL', x: cx, y: r.y, w: CLOSET_W, h: r.h, area: CLOSET_W * r.h,
+    target: 8, minArea: 8, of: { dx: own.x - cx, dy: 0 },
+  }
+  return west ? [cl, own] : [own, cl]
+}
 
 function mergePair(
   cells: Cell[],
@@ -91,7 +119,7 @@ function mergePair(
   return out
 }
 
-function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort = false): Room[] | null {
+function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort = false, closet?: ClosetMode): Room[] | null {
   // 帯の高さが、帯内の幅可変セルの最小の短辺に満たなければ成立しない
   if (!ignoreMinShort && cells.some((c) => !c.fixedW && h < minShort(c.type))) return null
   const fixedTotal = cells.reduce((s, c) => s + (c.fixedW || 0), 0)
@@ -99,12 +127,15 @@ function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort 
   const widths: Record<number, number> = {}
   if (flex.length) {
     const items: WaterfillItem[] = flex.map((c) => {
-      const min = Math.max(2, Math.ceil(c.minArea / h), ignoreMinShort ? 0 : minShort(c.type))
+      const base = Math.max(2, Math.ceil(c.minArea / h), ignoreMinShort ? 0 : minShort(c.type))
+      // クローゼットを切り出す個室は、目標の幅と上限に CLOSET_W を足す（強モードは下限にも足す）
+      const add = closet && c.closet ? CLOSET_W : 0
+      const min = base + (closet === 'hard' && c.closet ? CLOSET_W : 0)
       return {
         min,
-        // 短辺の下限が面積由来の上限を上回るときは、上限を下限に合わせる
-        max: Math.max(3, Math.ceil(c.maxArea / h), min),
-        w: Math.max(1, c.target / h),
+        // 短辺の下限が面積由来の上限を上回るときは、上限を下限に合わせる。上限は最大面積を超えないよう切り捨てる
+        max: Math.max(3, Math.floor(c.maxArea / h), base) + add,
+        w: Math.max(1, c.target / h) + add,
       }
     })
     // 幅が余る場合は吸収セルのmaxを広げて余りを吸わせる
@@ -137,19 +168,55 @@ function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort 
   cells.forEach((c, i) => {
     const w = c.fixedW || widths[i]
     if (w == null || w <= 0) return
-    rooms.push({
+    const room: Room = {
       type: c.type, name: c.label || c.name, x, y, w, h,
       area: w * h, target: c.target, minArea: c.minArea,
-    })
+    }
+    // 弱モードは、残りの個室が短辺の下限・最小面積を満たすときだけ切り出す
+    const fits = closet === 'hard' || w - CLOSET_W >= Math.max(minShort(c.type), Math.ceil(c.minArea / h))
+    if (closet && c.closet && !ignoreMinShort && fits) rooms.push(...carveCloset(room))
+    else rooms.push(room)
     x += w
   })
   if (x !== W) return null
   return rooms
 }
 
+/**
+ * 長さが CLOSET_MAX_LEN を超えるクローゼットは、外壁側の L セルだけをクローゼットに残し、ホール側の残り（2セル以上）を
+ * ホールを持ち主とする収納（廊下収納）にする（合計の面積は変わらない）。L = h − max(2, h − CLOSET_MAX_LEN)。
+ * ホール（type hall）がなければ何もしない。入力は書き換えない
+ */
+function capClosets(rooms: Room[]): Room[] {
+  const hall = rooms.find((r) => r.type === 'hall')
+  if (!hall) return rooms
+  const out: Room[] = []
+  for (const r of rooms) {
+    if (r.type !== 'closet' || r.h <= CLOSET_MAX_LEN) {
+      out.push(r)
+      continue
+    }
+    const rest = Math.max(2, r.h - CLOSET_MAX_LEN)
+    const len = r.h - rest
+    // ホールが帯の南（この帯が北帯）なら外壁側は北、ホールが帯の北なら外壁側は南
+    const hallBelow = hall.y >= r.y + r.h
+    const cy = hallBelow ? r.y : r.y + rest
+    const sy = hallBelow ? r.y + len : r.y
+    const cl: Room = { ...r, y: cy, h: len, area: r.w * len }
+    const store: Room = {
+      type: 'store', name: '収納', x: r.x, y: sy, w: r.w, h: rest, area: r.w * rest,
+      target: 8, minArea: 4, of: { dx: hall.x - r.x, dy: hall.y - sy },
+    }
+    // of（持ち主 = 個室の左上）は dy を cl の y に合わせ直す
+    if (r.of) cl.of = { dx: r.of.dx, dy: r.of.dy + (r.y - cy) }
+    out.push(...(hallBelow ? [cl, store] : [store, cl]))
+  }
+  return out
+}
+
 /** 帯（バンド）1本を横に割り付ける。fixedWセルは固定幅、それ以外はwater-filling */
-export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMinShort = false): Room[] | null {
-  const first = tryBand(band.cells, W, y, h, ignoreMinShort)
+export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMinShort = false, closet?: ClosetMode): Room[] | null {
+  const first = tryBand(band.cells, W, y, h, ignoreMinShort, closet)
   if (first) return first
   // 小物セルが多すぎてmin合計が溢れる場合はクラスタを結合して再試行する。結合できるペアがなければ次の結合へ進む
   let cells = band.cells
@@ -161,7 +228,7 @@ export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMi
     const merged = mergePair(cells, t1, t2, label, keep)
     if (!merged) continue
     cells = merged
-    const res = tryBand(cells, W, y, h, ignoreMinShort)
+    const res = tryBand(cells, W, y, h, ignoreMinShort, closet)
     if (res) return res
   }
   return null
@@ -172,6 +239,8 @@ export interface LayoutFloorOpts {
   capH?: Record<number, number>
   /** 診断専用: 最小の短辺の判定を外す（生成では使わない） */
   ignoreMinShort?: boolean
+  /** クローゼットのモード。省略 = 切り出さない（v4 の割り付け）。ignoreMinShort のときは無効 */
+  closet?: ClosetMode
 }
 
 /** 1フロア分: 帯の高さをwater-fillingで決めてから各帯を割り付ける。帯の高さ（帯番号順）も返す */
@@ -183,6 +252,7 @@ export function layoutFloor(
 ): { rooms: Room[]; heights: number[] } | null {
   const capH = opts?.capH
   const ignoreMinShort = opts?.ignoreMinShort ?? false
+  const closet = ignoreMinShort ? undefined : opts?.closet
   const fixedH = bands.reduce((s, b) => s + (b.fixedH || 0), 0)
   const heights: Record<number, number> = {}
   const flexIdx = bands.flatMap((b, i) => (b.fixedH ? [] : [i]))
@@ -191,7 +261,7 @@ export function layoutFloor(
     for (const i of flexIdx) {
       const b = bands[i]
       if (!b) return null
-      const t = b.cells.reduce((s, c) => s + (c.fixedW ? c.fixedW * 7 : c.target), 0)
+      const t = b.cells.reduce((s, c) => s + (c.fixedW ? c.fixedW * 7 : c.target + (closet && c.closet ? CLOSET_W * 8 : 0)), 0)
       const cap = capH?.[i]
       const shortNeed = ignoreMinShort ? 0 : Math.max(0, ...b.cells.filter((c) => !c.fixedW).map((c) => minShort(c.type)))
       const min = Math.max(b.minH || 5, shortNeed)
@@ -231,14 +301,14 @@ export function layoutFloor(
   for (const [i, b] of bands.entries()) {
     const h = b.fixedH || heights[i]
     if (h === undefined) return null
-    const rs = layoutBand(b, W, y, h, ignoreMinShort)
+    const rs = layoutBand(b, W, y, h, ignoreMinShort, closet)
     if (!rs) return null
     rs.forEach((r) => rooms.push(r))
     hs.push(h)
     y += h
   }
   if (y !== H) return null
-  return { rooms, heights: hs }
+  return { rooms: capClosets(rooms), heights: hs }
 }
 
 /** 外形候補（シャッフル前）: 目標面積に近く縦横比が極端でない (W,H) の上位 limit 件（既定10）。enumerate と共有する */

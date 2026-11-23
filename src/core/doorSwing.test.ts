@@ -104,6 +104,11 @@ describe('ドアの開き形状（全条件・全候補・全階）', () => {
         for (const fl of p.floors) {
           for (const d of computeDoors(fl.rooms)) {
             n++
+            if (d.kind === 'fold') {
+              // 折れ戸（付属収納）は弧を描かない: swing.rect は共有辺に沿う薄い矩形（厚み 0.3）
+              expect(Math.min(d.swing.rect.w, d.swing.rect.h)).toBeCloseTo(0.3, 9)
+              continue
+            }
             const { hinge, closed, open, r, rect } = d.swing
             const xs = [hinge.x, closed.x, open.x], ys = [hinge.y, closed.y, open.y]
             expect(rect.x).toBeCloseTo(Math.min(...xs), 9)

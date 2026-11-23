@@ -2,6 +2,7 @@ import type { Plan, PlanConfig, Room, ScoredPlan } from './types'
 import { floorRect } from './types'
 import { ROOM } from './rooms'
 import { sharedEdge } from './derive'
+import { privateStorageCount, storageRatio } from './closets'
 
 /** 解説文に使う判定のしきい値（根拠のない褒め言葉を避けるため、満たしたときだけ書く） */
 export const EXPLAIN_TH = {
@@ -11,8 +12,8 @@ export const EXPLAIN_TH = {
   hallShort: 0.07,
   /** 廊下率がこれ以上なら弱点として触れる */
   hallLong: 0.11,
-  /** 収納室（パントリー・WIC・収納）面積 ÷ 延床 がこれ以上なら「収納率が高い」 */
-  storeHigh: 0.07,
+  /** 収納率（R-IDX-02: クローゼット・WIC・パントリー・収納の面積 ÷ 延床）がこれ以上なら「収納が延床の約x%ある」と書く（R-IDX-02 の目標 10%） */
+  storeHigh: 0.1,
   /** スコア内訳がこれ未満の項目は弱点として触れる */
   weak: 0.55,
 } as const
@@ -71,7 +72,9 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   const parts = plan.score.parts
   const area = plan.totalArea || 1
   const hallRatio = rooms.filter((r) => r.type === 'hall').reduce((s, r) => s + r.area, 0) / area
-  const storeRatio = rooms.filter((r) => ROOM[r.type].cat === 'store').reduce((s, r) => s + r.area, 0) / area
+  // 収納の数え方は R-IDX-02 に揃える（クローゼットを含み、最小の短辺を満たすものだけ）
+  const storeRatio = storageRatio(plan)
+  const priv = privateStorageCount(plan)
   const hasVoid = rooms.some((r) => r.type === 'void')
 
   // --- 1文目: 配置 ---
@@ -95,7 +98,8 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   if (hallRatio === 0) s2.push(clause('廊下がなく', '廊下がありません。'))
   else if (hallRatio < EXPLAIN_TH.hallShort) s2.push(clause(`廊下は延床の約${pct(hallRatio)}と短く`, `廊下は延床の約${pct(hallRatio)}と短めです。`))
   if (parts.水回り集約 >= EXPLAIN_TH.waterGood) s2.push(clause('水回りが近くに集約され', '水回りが近くに集約されています。'))
-  if (storeRatio >= EXPLAIN_TH.storeHigh) s2.push(clause(`収納室が延床の約${pct(storeRatio)}あり`, `収納室が延床の約${pct(storeRatio)}あり、収納は多めです。`))
+  if (priv.total > 0 && priv.with === priv.total) s2.push(clause('すべての個室にクローゼットがあり', 'すべての個室にクローゼットがあります。'))
+  if (storeRatio >= EXPLAIN_TH.storeHigh) s2.push(clause(`クローゼットなどの収納が延床の約${pct(storeRatio)}あり`, `クローゼットなどの収納が延床の約${pct(storeRatio)}あります。`))
 
   const sentences: string[] = []
   if (s1.length) sentences.push(sentence(s1))
@@ -107,6 +111,7 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   if (hallRatio >= EXPLAIN_TH.hallLong) weak.push('廊下がやや長いこと')
   if (parts.縦横比 < EXPLAIN_TH.weak) weak.push('細長い部屋があること')
   if (parts.面積適合 < EXPLAIN_TH.weak) weak.push('目標の広さから外れた部屋があること')
+  if (priv.with < priv.total) weak.push('クローゼットのない個室があること')
   const weakText = weak.length ? `気になる点は、${weak.join('、')}です。` : ''
 
   const st = stairSide(plan)

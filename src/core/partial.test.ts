@@ -107,9 +107,9 @@ describe('部分二階の生成', () => {
     for (const { cfg } of [...POPULAR, defined(PARTIAL_CONDITIONS[3])]) {
       const st = poolBuildStats(cfg)
       expect(st.poolSize).toBeGreaterThan(0)
-      // 外形の組12 × アーキタイプ3 × 変種（distinct 後。2階建ての全変種は 2×16×4=128）が上限
-      expect(st.assembled).toBeLessThanOrEqual(12 * 3 * 128)
-      expect(st.assembled).toBeLessThanOrEqual(3600)
+      // 外形の組12 × アーキタイプ3 × 変種（distinct 後。2階建ての全変種は 2×16×4=128 に、クローゼットのモード（弱・強）で ×2）が上限
+      expect(st.assembled).toBeLessThanOrEqual(12 * 3 * 128 * 2)
+      expect(st.assembled).toBeLessThanOrEqual(7200) // v5 の実測最大 6144（v4 は 3072）
       // 1Fの割り付け: (arch, 1Fの板, stairEnd, rev[0], rev[1]) の個数が上限 = 12 × 3 × 2 × 4
       expect(st.f1Layouts).toBeLessThanOrEqual(12 * 3 * 2 * 4)
       expect(st.f1Validations).toBeLessThanOrEqual(st.f1Layouts)

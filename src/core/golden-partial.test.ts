@@ -18,6 +18,7 @@ import type { PlanConfig, ScoredPlan } from './types'
  * 部分二階の生成を意図して変えたときは GEN_VERSION を上げること。
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}-partial.json`, import.meta.url)
+const FIXTURE_V4 = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 
@@ -113,5 +114,27 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
   it('0案の境界条件の診断（reason と alts）が一致する', () => {
     expect(fixture.diagnoses.length).toBeGreaterThan(0)
     expect(now.diagnoses).toEqual(fixture.diagnoses)
+  })
+
+  // 移行検証（v4 → v5）: 成立条件・プールは v4 以上、0案の境界は不変（旧 fixture は消さずに残す）
+  describe('v4 からの移行（クローゼット）', () => {
+    let v4: Fixture
+    beforeAll(() => {
+      v4 = JSON.parse(readFileSync(FIXTURE_V4, 'utf8')) as Fixture
+    })
+    it('grid: v4 で3案が出た条件は v5 でも3案が出る。条件の集合も同一', () => {
+      expect(v4.genVersion).toBe(4)
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v4.grid).sort())
+      const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
+      expect(three(v4.grid).filter((k) => now.grid[k]?.length !== 3)).toEqual([])
+      expect(three(now.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
+    })
+    it('候補プールの件数は全条件で v4 以上', () => {
+      expect(v4.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
+      for (const [i, p] of now.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
+    })
+    it('提示案の件数は v4 と同じ（0案の境界が動かない）', () => {
+      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v4.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
   })
 })

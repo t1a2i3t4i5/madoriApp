@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { enumeratePlans } from './enumerate'
 import { EXPLAIN_TH, explainPlan } from './explain'
+import { storageRatio } from './closets'
 import { CONDITIONS, defined, sharesEdge } from './testing'
 import type { ScoredPlan } from './types'
 
@@ -46,15 +47,15 @@ describe('explainPlan', () => {
     for (const p of enumeratePlans(cfg).slice(0, 10)) expect(explainPlan(cfg, p)).not.toContain('吹抜')
   })
 
-  it('収納率: パントリー・WIC等が多い案だけ「収納」に触れる', () => {
+  it('収納率（R-IDX-02 の数え方）が10%以上の案だけ「収納が延床の約x%あります」と書く', () => {
     const { cfg } = cond('33坪/2階/土間+パントリー')
     const plans = enumeratePlans(cfg)
-    const store = (p: ScoredPlan) => p.floors.flatMap((f) => f.rooms).filter((r) => ['pantry', 'wic', 'store'].includes(r.type)).reduce((s, r) => s + r.area, 0) / p.totalArea
-    const hi = plans.find((p) => store(p) >= 0.07)
+    const hi = plans.find((p) => storageRatio(p) >= EXPLAIN_TH.storeHigh)
     expect(hi).toBeDefined()
-    expect(explainPlan(cfg, defined(hi))).toContain('収納')
-    const lo = plans.find((p) => store(p) < 0.07)
-    if (lo) expect(explainPlan(cfg, lo)).not.toContain('収納は多め')
+    expect(explainPlan(cfg, defined(hi))).toContain('クローゼットなどの収納が延床の約')
+    const lo = plans.find((p) => storageRatio(p) < EXPLAIN_TH.storeHigh)
+    expect(lo).toBeDefined()
+    expect(explainPlan(cfg, defined(lo))).not.toContain('クローゼットなどの収納が延床')
   })
 
   it('廊下: 短い案は「廊下」を短いと書き、長い案は弱点として挙げる', () => {
@@ -128,10 +129,10 @@ describe('explainPlan', () => {
           kitchenPlans++
           expect(text).toContain(`約${Math.round((ldk.w * ldk.h + k.w * k.h) / 8)}帖`)
         }
-        // 「廊下は延床の約X%と短め」の X は 7.0 未満、「収納室が延床の約X%」の X は 7.0 以上
+        // 「廊下は延床の約X%と短め」の X は 7.0 未満、「収納が延床の約X%」の X は 10.0 以上
         const hallM = /廊下は延床の約([\d.]+)%と短め/.exec(text)
         if (hallM) expect(Math.round(Number(hallM[1]) * 10)).toBeLessThan(Math.round(EXPLAIN_TH.hallShort * 1000))
-        const storeM = /収納室が延床の約([\d.]+)%/.exec(text)
+        const storeM = /収納が延床の約([\d.]+)%/.exec(text)
         if (storeM) expect(Math.round(Number(storeM[1]) * 10)).toBeGreaterThanOrEqual(Math.round(EXPLAIN_TH.storeHigh * 1000))
         expect(text).not.toMatch(/帖）、/)
       }
