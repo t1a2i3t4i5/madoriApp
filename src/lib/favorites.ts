@@ -3,7 +3,7 @@ import { isPlanKey, planKey } from '../core/enumerate'
 import { ROOM } from '../core/rooms'
 import { SCORE_WEIGHTS } from '../core/score'
 import { ALL_FEATURE_KEYS } from './features'
-import type { PlanConfig, PlanKey, ScoredPlan } from '../core/types'
+import { isPartial, type PlanConfig, type PlanKey, type ScoredPlan } from '../core/types'
 
 export interface Favorite {
   key: PlanKey
@@ -40,6 +40,14 @@ function isVariant(v: unknown): boolean {
   )
 }
 
+/** fp が建物（W × H）に収まる正の矩形か */
+function isFpInside(fp: unknown, W: number, H: number): boolean {
+  return (
+    isObj(fp) && isNum(fp.x) && isNum(fp.y) && isNum(fp.W) && isNum(fp.H) &&
+    fp.x >= 0 && fp.y >= 0 && fp.W > 0 && fp.H > 0 && fp.x + fp.W <= W && fp.y + fp.H <= H
+  )
+}
+
 /** 描画で落ちない程度に、案データの形を確かめる（variant は GEN_VERSION 1 の旧データでは無い） */
 function isPlan(v: unknown): v is ScoredPlan {
   if (!isObj(v) || !isNum(v.W) || !isNum(v.H) || !isNum(v.totalArea) || !(v.arch === 0 || v.arch === 1 || v.arch === 2)) return false
@@ -49,11 +57,12 @@ function isPlan(v: unknown): v is ScoredPlan {
   if (!isObj(sc) || !isNum(sc.total) || !isObj(sc.parts)) return false
   const parts = sc.parts
   if (!Object.keys(SCORE_WEIGHTS).every((k) => isNum(parts[k]))) return false
+  const { W, H } = v
   if (!Array.isArray(v.floors) || v.floors.length < 1 || v.floors.length > 2) return false
   return v.floors.every(
     (fl: unknown) =>
       isObj(fl) && typeof fl.label === 'string' && Array.isArray(fl.rooms) &&
-      (fl.fp === undefined || (isObj(fl.fp) && isNum(fl.fp.x) && isNum(fl.fp.y) && isNum(fl.fp.W) && isNum(fl.fp.H))) &&
+      (fl.fp === undefined || isFpInside(fl.fp, W, H)) &&
       fl.rooms.every(
         (r: unknown) =>
           isObj(r) && typeof r.type === 'string' && Object.hasOwn(ROOM, r.type) && typeof r.name === 'string' &&
@@ -91,7 +100,7 @@ export function saveFavorites(storage: KeyValueStorage, list: readonly Favorite[
 
 /** 条件の同一判定用。こだわりの並びは無視する */
 export function cfgId(cfg: PlanConfig): string {
-  return JSON.stringify([cfg.area, cfg.floors, cfg.rooms, cfg.parking, cfg.garden, [...cfg.feats].sort()])
+  return JSON.stringify([cfg.area, cfg.floors, cfg.rooms, cfg.parking, cfg.garden, [...cfg.feats].sort(), ...(isPartial(cfg) ? ['p'] : [])])
 }
 
 /**

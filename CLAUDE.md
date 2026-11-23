@@ -76,6 +76,7 @@ npm test      # vitest
 - 2F面積割合 W2*H2 / 合計 は **0.35〜0.45**（下屋の出は3セル以上）
 - 新しいスコア項目は入れない（総二階の total が変わるため）。壁の直下率（2Fの壁が1Fの壁の上に載っているか）は課題として残す
 - **PR2（core）実装済み**: `PlanConfig.story?: 'full'|'partial'`（`isPartial(cfg)` が実効値。平屋では無視）。`footprintPairs`（slicing.ts。東西下屋・南下屋を形ごとに上位6件、決定的順）、`buildPlanStage` が `fp2`（`W2`/`H2`）・北寄せ＋階段側寄せ・吹抜 capH（`southH − (H1−H2)`）に対応し、1F の割り付けは `F1Memo`（キー `f1MemoKey`）で使い回す。`validateFloor` で階ごとの検証。`cfgId` は部分二階のときだけ `|p` を足す。planKey は部分二階のみ末尾 `-p<W2>x<H2>`。feasibility は部分二階の下限（2F最低面積×1.18 ≤ 延床×0.45）、診断の代替先頭は「総二階にする」。部分二階の golden は `__fixtures__/gen-v3-partial.json`（`golden-partial.test.ts`、更新手順は総二階と同じ）。テスト共有の条件は `PARTIAL_CONDITIONS`、プール構築の作業量は `poolBuildStats`（回数で性能の退行を見る）
+- **PR3（UI）実装済み**: ConditionForm に「2階の形」セグメント（`Seg` は number/string 両対応・`disabled`/`note`。平屋ではグレーアウト）。`toConfig`・`encodeHash` は部分二階かつ2階建てのときだけ `story` を出す（総二階・平屋の文字列は従来と同一。`hash.test` で固定）。`parseHash` は `'partial'` のときだけ採用。favorites の `cfgId` は部分二階のときだけ `p` を足し、`isPlan` は `fp` が建物に収まる正の矩形であることを検査。FloorSvg は2Fに `fp` があるとき、1F外形の破線＋下屋領域（`shimoyaRects`）のハッチと「下屋」ラベルを描く（viewBox は `plan.W/H` のまま。印刷・PNG も同じ SVG）。PlanCard/PlanDialog は `floorAreaLabel` で階別の坪数を表示。`randomConfig` は総二階のみ（App の `random` は `story: 'full'` を明示）。成立しやすい条件: 個室2〜4・30坪前後以上。吹抜とは相性が悪い（総二階より成立条件が減る）
 - 段階: PR1 土台リファクタ（fp?・floorRect・rect化。挙動不変）→ PR2 core の部分二階（`PlanConfig.story`・生成・feasibility・診断）→ PR3 UI・URL・お気に入り・下屋描画。PR1 では `PlanConfig` に story を足さない
 
 ## 今後の課題・既知の問題（現状は挙動を変えない）

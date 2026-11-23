@@ -4,7 +4,7 @@ import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
-import { meters } from '../lib/format'
+import { floorAreaLabel, meters } from '../lib/format'
 import { clampFloor } from '../lib/floor'
 import { StarButton } from './StarButton'
 
@@ -37,6 +37,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
       <p className="mb-0.5 mr-10 font-serif text-[17.5px] leading-[1.4] font-bold">{name}</p>
       <div className="mb-2 flex flex-wrap gap-3 text-[12.5px] text-ink2">
         <span>実測 <b className="text-ink">約{(plan.totalArea / 16).toFixed(1)}坪</b></span>
+        {floorAreaLabel(plan) && <span>{floorAreaLabel(plan)}</span>}
         <span>{cfg.floors === 2 ? '2階建て' : '平屋'}・{cfg.rooms}個室</span>
         <span>{meters(plan.W, 3).replace(/0+$/, '').replace(/\.$/, '')}m × {meters(plan.H, 3).replace(/0+$/, '').replace(/\.$/, '')}m</span>
       </div>

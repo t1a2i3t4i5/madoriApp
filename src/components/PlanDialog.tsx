@@ -5,7 +5,7 @@ import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
-import { meters, tatami } from '../lib/format'
+import { floorAreaLabel, meters, tatami } from '../lib/format'
 import { clampFloor } from '../lib/floor'
 import { StarButton } from './StarButton'
 import { downloadBlob, safeFileName, svgElementToPng } from '../lib/exportPng'
@@ -72,7 +72,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
         </div>
         <h2 id="dlgTitle" className="mr-10 mb-1 font-serif text-[22px] leading-[1.4]">{name}</h2>
         <div className="mb-2.5 text-[13px] text-ink2">
-          実測延床 約{(plan.totalArea / 16).toFixed(1)}坪 ／ 建物 {meters(plan.W)}m × {meters(plan.H)}m ／ スコア {plan.score.total}
+          実測延床 約{(plan.totalArea / 16).toFixed(1)}坪{floorAreaLabel(plan) ? `（${floorAreaLabel(plan)}）` : ''} ／ 建物 {meters(plan.W)}m × {meters(plan.H)}m ／ スコア {plan.score.total}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {planTags(cfg, plan).map((t) => <span key={t} className="rounded-full bg-surface2 px-[9px] py-[3px] text-[11.5px] font-bold text-ink2">{t}</span>)}

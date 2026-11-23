@@ -92,6 +92,12 @@ describe('お気に入り', () => {
     const badStory = { ...good, cfg: { ...good.cfg, story: 'half' } }
     const badFp = { ...good, plan: { ...good.plan, floors: [good.plan.floors[0], { ...good.plan.floors[1], fp: { x: 0, y: 0, W: 'a', H: 3 } }] } }
     expect(loadFavorites(memory(JSON.stringify([badStory, good, badFp])))).toEqual([good])
+    // 建物からはみ出す・大きさ0・負の fp も捨てる
+    const withFp = (fp: unknown) => ({ ...good, plan: { ...good.plan, floors: [good.plan.floors[0], { ...good.plan.floors[1], fp }] } })
+    const { W, H } = good.plan
+    for (const fp of [{ x: 0, y: 0, W: W + 1, H: 3 }, { x: -1, y: 0, W: 3, H: 3 }, { x: 0, y: 0, W: 0, H: 3 }, { x: W - 2, y: 0, W: 3, H: 3 }, { x: 0, y: H, W: 3, H: 1 }]) {
+      expect(loadFavorites(memory(JSON.stringify([withFp(fp)]))), JSON.stringify(fp)).toEqual([])
+    }
     // 総二階（story 省略）の保存データは従来どおり読める
     expect(loadFavorites(memory(JSON.stringify([defined(must(addFavorite([], cfg, p0, 1))[0])])))).toHaveLength(1)
   })
