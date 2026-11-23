@@ -216,7 +216,7 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       }
       expect(total).toBeGreaterThan(200)
       // 実測（GEN_VERSION 5）: プールに残る 306/306（100%）、骨格が一致 241/306（78.8%）。一致しない案は、個室セルのクローゼット分を帯の高さの目標に足す
-      // （layoutFloor）ことで帯の高さが動き、LDK の幅などが1〜2セル変わったもの。外すと 286/306（93.5%）になるが、洋室の家具配置率が 19.3% → 8.2% に落ちるので残した
+      // （layoutFloor）ことで帯の高さが動き、LDK の幅などが1〜2セル変わったもの。外すと 286/306（93.5%）になるが、洋室の家具配置率が 18.6% → 8.2% に落ちるので残した
       expect(inPool / total, `プールに残る ${inPool}/${total}`).toBeGreaterThanOrEqual(MIN_KEPT)
       expect(same / total, `骨格が一致 ${same}/${total}`).toBeGreaterThanOrEqual(MIN_SKELETON)
     })

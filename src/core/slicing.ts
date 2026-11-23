@@ -262,7 +262,7 @@ export function layoutFloor(
       const b = bands[i]
       if (!b) return null
       // 帯の高さの目標: クローゼットを切り出す個室セルは、切り出す分（幅 CLOSET_W × 高さ 8 セル²）を目標に足す。
-      // 仕様書にない追加だが、外すと洋室が帯の高さ方向に小さくなり、ベッド+机を置ける洋室が 19.3% → 8.2% に減る（弱モードでも v4 の骨格に近づく代わりに）。
+      // 仕様書にない追加だが、外すと洋室が帯の高さ方向に小さくなり、ベッド+机を置ける洋室が 18.6% → 8.2% に減る（弱モードでも v4 の骨格に近づく代わりに）。
       // 3案が出る条件数・候補プール件数は同じ。理由は closet-spec.md と CLAUDE.md にも記録した
       const t = b.cells.reduce((s, c) => s + (c.fixedW ? c.fixedW * 7 : c.target + (closet && c.closet ? CLOSET_W * 8 : 0)), 0)
       const cap = capH?.[i]
