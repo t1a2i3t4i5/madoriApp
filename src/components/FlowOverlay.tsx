@@ -1,6 +1,6 @@
 import type { FlowKind, FlowLine } from '../lib/flow'
 
-export const FLOW_COLOR: Record<FlowKind, string> = { guest: '#c73e1d', life: '#2f6f9a' }
+export const FLOW_COLOR: Record<FlowKind, string> = { guest: '#8a3fb0', life: '#1d5f95' }
 
 const LINE_W = 0.38
 const dashOf = (k: FlowKind) => (k === 'life' ? '1.1 0.7' : undefined)

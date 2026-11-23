@@ -115,7 +115,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
                     <tr key={i}>
                       <td className="border-b border-line px-1.5 py-[5px]">{r.name}</td>
                       <td className="border-b border-line px-1.5 py-[5px] text-right whitespace-nowrap tabular-nums">{meters(r.w)}×{meters(r.h)}m</td>
-                      <td className="border-b border-line px-1.5 py-[5px] text-right whitespace-nowrap tabular-nums">{tatami(r.w, r.h)}畳</td>
+                      <td className="border-b border-line px-1.5 py-[5px] text-right whitespace-nowrap tabular-nums">{tatami(r.w, r.h)}帖</td>
                     </tr>
                   ))}
                 </tbody>

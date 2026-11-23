@@ -91,8 +91,8 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
                 </tr>
                 {([
                   ['条件', (f: Favorite) => `${f.cfg.area}坪・${f.cfg.floors === 2 ? '2階建て' : '平屋'}・${f.cfg.rooms}個室`],
-                  ['LDK', (f: Favorite) => fmt(planMetrics(f.plan).ldkTatami, '畳')],
-                  ['個室の平均', (f: Favorite) => fmt(planMetrics(f.plan).roomAvgTatami, '畳')],
+                  ['LDK', (f: Favorite) => fmt(planMetrics(f.plan).ldkTatami, '帖')],
+                  ['個室の平均', (f: Favorite) => fmt(planMetrics(f.plan).roomAvgTatami, '帖')],
                   ['廊下率', (f: Favorite) => `${(planMetrics(f.plan).hallRatio * 100).toFixed(1)}%`],
                   ['スコア', (f: Favorite) => String(f.plan.score.total)],
                 ] as const).map(([label, get]) => (
