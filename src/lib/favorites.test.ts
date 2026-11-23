@@ -149,20 +149,31 @@ describe('お気に入り', () => {
     expect(loadFavorites(memory(JSON.stringify([evil])))).toEqual([])
   })
 
-  it('付属収納の of は、同じ階に持ち主の部屋がちょうど1つあるときだけ受け付ける', () => {
+  it('付属収納の of は、closet / store が個室の持ち主と辺を共有しているときだけ受け付ける', () => {
     const good = defined(must(addFavorite([], cfg, p0, 1))[0])
     const fl = defined(good.plan.floors[0])
-    const [r0, r1] = [defined(fl.rooms[0]), defined(fl.rooms[1])]
-    const withOf = (of: unknown) => ({
-      ...good,
-      plan: { ...good.plan, floors: [{ ...fl, rooms: [{ ...r0, type: 'closet', of }, ...fl.rooms.slice(1)] }, ...good.plan.floors.slice(1)] },
-    })
-    const ok = { dx: r1.x - r0.x, dy: r1.y - r0.y }
-    expect(loadFavorites(memory(JSON.stringify([withOf(ok)])))).toHaveLength(1)
-    expect(loadFavorites(memory(JSON.stringify([withOf({ dx: 1000, dy: 0 })])))).toEqual([])
-    expect(loadFavorites(memory(JSON.stringify([withOf({ dx: 0.5, dy: 0 })])))).toEqual([])
-    expect(loadFavorites(memory(JSON.stringify([withOf({ dx: 0, dy: 0 })])))).toEqual([]) // 自分自身
-    expect(loadFavorites(memory(JSON.stringify([withOf('x')])))).toEqual([])
+    const base = defined(fl.rooms[0])
+    const bed = { ...base, type: 'bed', name: '洋室', x: 0, y: 0, w: 6, h: 6 }
+    const hall = { ...base, type: 'hall', name: 'ホール', x: 0, y: 6, w: 6, h: 2 }
+    const mk = (over: Record<string, unknown>, owner: Record<string, unknown> = bed) => {
+      const cl = { ...base, type: 'closet', name: 'CL', x: 6, y: 0, w: 2, h: 6, of: { dx: -6, dy: 0 }, ...over }
+      return { ...good, plan: { ...good.plan, floors: [{ ...fl, rooms: [owner, cl, hall] }, ...good.plan.floors.slice(1)] } }
+    }
+    const loads = (f: unknown) => loadFavorites(memory(JSON.stringify([f]))).length
+    expect(loads(mk({}))).toBe(1)
+    expect(loads(mk({ type: 'store' }))).toBe(1)
+    expect(loads(mk({ of: { dx: 1000, dy: 0 } }))).toBe(0)
+    expect(loads(mk({ of: { dx: -5.5, dy: 0 } }))).toBe(0)
+    expect(loads(mk({ of: { dx: 0, dy: 0 } }))).toBe(0) // 自分自身
+    expect(loads(mk({ of: 'x' }))).toBe(0)
+    expect(loads(mk({ type: 'bath' }))).toBe(0) // of を付けられない種別
+    expect(loads(mk({}, { ...bed, type: 'ldk' }))).toBe(0) // 持ち主が個室でない
+    expect(loads(mk({ x: 9, of: { dx: -9, dy: 0 } }))).toBe(0) // 離れている
+    // 2階でも同じ規則: 同じ階に持ち主がいれば通り、持ち主が別の階にしかなければ棄却
+    const floors2 = (rooms: unknown[]) => ({ ...good, plan: { ...good.plan, floors: [fl, { ...fl, label: '2F', rooms }] } })
+    const cl2 = { ...base, type: 'closet', name: 'CL', x: 6, y: 0, w: 2, h: 6, of: { dx: -6, dy: 0 } }
+    expect(loads(floors2([bed, cl2, hall]))).toBe(1)
+    expect(loads(floors2([cl2, hall]))).toBe(0)
   })
 
   it('ストレージが例外を投げても落ちない', () => {

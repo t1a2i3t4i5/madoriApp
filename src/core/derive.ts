@@ -130,9 +130,11 @@ const FOLD_DEPTH = 0.3
 function foldSwing(a: Room, b: Room, e: Edge): DoorSwing {
   const base = doorSwing(a, b, e, { opens: isOwned(a) ? 'a' : 'b' })
   const q = base.rect
+  // 開く向き（付属収納側が共有辺の + 側か − 側か）で、薄い矩形を共有辺に沿わせる。
+  // 開き先が − 側（西・北に収納があるとき）は、辺の手前 FOLD_DEPTH から辺までの帯にする
   const rect: Rect = e.dir === 'v'
-    ? { x: Math.min(e.at, base.open.x), y: q.y, w: FOLD_DEPTH, h: q.h }
-    : { x: q.x, y: Math.min(e.at, base.open.y), w: q.w, h: FOLD_DEPTH }
+    ? { x: base.open.x >= e.at ? e.at : e.at - FOLD_DEPTH, y: q.y, w: FOLD_DEPTH, h: q.h }
+    : { x: q.x, y: base.open.y >= e.at ? e.at : e.at - FOLD_DEPTH, w: q.w, h: FOLD_DEPTH }
   return { ...base, rect }
 }
 
