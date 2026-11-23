@@ -1,4 +1,5 @@
 import type { Plan, PlanConfig, Room, ScoredPlan } from './types'
+import { floorRect } from './types'
 import { ROOM } from './rooms'
 import { sharedEdge } from './derive'
 
@@ -37,8 +38,9 @@ function stairSide(plan: Plan): { side: '東' | '西'; floorIdx: number; stair: 
   for (const [floorIdx, fl] of plan.floors.entries()) {
     const stair = fl.rooms.find((r) => r.type === 'stair')
     if (!stair) continue
-    if (stair.x === 0) return { side: '西', floorIdx, stair }
-    if (stair.x + stair.w === plan.W) return { side: '東', floorIdx, stair }
+    const fp = floorRect(plan, floorIdx)
+    if (stair.x === fp.x) return { side: '西', floorIdx, stair }
+    if (stair.x + stair.w === fp.x + fp.W) return { side: '東', floorIdx, stair }
     return null
   }
   return null

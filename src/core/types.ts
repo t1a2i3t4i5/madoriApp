@@ -65,9 +65,21 @@ export interface Room {
   minArea: number
 }
 
+/** 外形の矩形（セル。1F基準の共通座標。x,y は左上） */
+export interface Rect {
+  x: number
+  y: number
+  W: number
+  H: number
+}
+
 export interface Floor {
   label: string
   rooms: Room[]
+  /**
+   * その階の板（部分二階の2F）。1F基準の共通座標。省略 = Plan の W×H 全体（総二階。総二階には付けない）
+   */
+  fp?: Rect
 }
 
 /** アーキタイプ番号（ARCH_INFO の添字） */
@@ -81,6 +93,11 @@ export interface Variant {
   stairEnd: 'E' | 'W'
   rev: [boolean, boolean, boolean, boolean]
   bedShift: -1 | 0 | 1 | 2
+}
+
+/** i 階の板の矩形。fp がなければ建物全体（Plan.W × Plan.H） */
+export function floorRect(plan: { W: number; H: number; floors: Floor[] }, i: number): Rect {
+  return plan.floors[i]?.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
 }
 
 /** 正規形（v1 と同じ並び） */

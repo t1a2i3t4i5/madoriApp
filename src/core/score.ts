@@ -1,4 +1,5 @@
 import type { Plan, ScoreResult } from './types'
+import { floorRect } from './types'
 import { HABITABLE, ROOM } from './rooms'
 import { clamp } from './rng'
 import { computeDoors } from './derive'
@@ -19,14 +20,14 @@ export function scorePlan(plan: Plan): ScoreResult {
   let light = 0, lightN = 0, fit = 0, fitN = 0, aspect = 0, aspN = 0
   let hallArea = 0, doorCount = 0, roomCount = 0, mod = 0, modN = 0
   const waters: { x: number; y: number }[] = []
-  for (const fl of plan.floors) {
+  for (const [fi, fl] of plan.floors.entries()) {
     doorCount += computeDoors(fl.rooms).length
     for (const r of fl.rooms) {
       roomCount++
       if (r.type === 'hall') hallArea += r.area
       if (HABITABLE[r.type]) {
         lightN++
-        if (touchesOuterWall(r, plan.W, plan.H)) light++
+        if (touchesOuterWall(r, floorRect(plan, fi))) light++
       }
       if (r.type !== 'hall' && r.type !== 'void' && r.type !== 'stair') {
         const ratio = clamp(r.area / r.target, 0.4, 1.8)

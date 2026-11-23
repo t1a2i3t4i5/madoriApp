@@ -53,7 +53,9 @@ export function paint(plan: Plan, floorIdx: number): number[][] {
   const grid = Array.from({ length: plan.H }, () => Array.from({ length: plan.W }, () => 0))
   const fl = plan.floors[floorIdx]
   if (!fl) throw new Error(`floor ${floorIdx} がない`)
+  const fp = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H } // 板の外のセルは塗れない（はみ出し）
   for (const r of fl.rooms) {
+    if (r.x < fp.x || r.y < fp.y || r.x + r.w > fp.x + fp.W || r.y + r.h > fp.y + fp.H) throw new Error(`${r.name} が板(${fp.W}x${fp.H})の外にはみ出している`)
     for (let y = r.y; y < r.y + r.h; y++) {
       for (let x = r.x; x < r.x + r.w; x++) {
         const row = grid[y]
@@ -92,10 +94,15 @@ export function independentViolations(plan: Plan): string[] {
       out.push(String(e))
       return
     }
-    grid.forEach((row, y) => row.forEach((n, x) => { if (n !== 1) out.push(`${fl.label} (${x},${y}) が${n}部屋`) }))
+    const fp = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H } // validate.ts の floorRect とは別に素朴に書く
+    // 板の内側は全セルが1部屋、外側は0部屋
+    grid.forEach((row, y) => row.forEach((n, x) => {
+      const inside = x >= fp.x && x < fp.x + fp.W && y >= fp.y && y < fp.y + fp.H
+      if (n !== (inside ? 1 : 0)) out.push(`${fl.label} (${x},${y}) が${n}部屋`)
+    }))
     for (const r of fl.rooms) {
       if (r.area !== r.w * r.h) out.push(`${fl.label} ${r.name}: area が w*h と不一致`)
-      if (LIVING.has(r.type) && !(r.x === 0 || r.y === 0 || r.x + r.w === plan.W || r.y + r.h === plan.H)) out.push(`${fl.label} ${r.name}: 居室が外壁に接していない`)
+      if (LIVING.has(r.type) && !(r.x === fp.x || r.y === fp.y || r.x + r.w === fp.x + fp.W || r.y + r.h === fp.y + fp.H)) out.push(`${fl.label} ${r.name}: 居室が外壁に接していない`)
     }
   })
   plan.floors.forEach((fl) => {

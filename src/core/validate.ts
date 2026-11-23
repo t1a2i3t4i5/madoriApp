@@ -1,10 +1,11 @@
-import type { Plan, Room } from './types'
+import type { Plan, Rect, Room } from './types'
+import { floorRect } from './types'
 import { HABITABLE } from './rooms'
 import { computeDoors, sharedEdge } from './derive'
 
 /** 外壁に接しているか（採光） */
-export function touchesOuterWall(r: { x: number; y: number; w: number; h: number }, W: number, H: number): boolean {
-  return r.x === 0 || r.y === 0 || r.x + r.w === W || r.y + r.h === H
+export function touchesOuterWall(r: { x: number; y: number; w: number; h: number }, rect: Rect): boolean {
+  return r.x === rect.x || r.y === rect.y || r.x + r.w === rect.x + rect.W || r.y + r.h === rect.y + rect.H
 }
 
 /**
@@ -33,7 +34,7 @@ export function wetViolations(rooms: readonly Room[]): string[] {
 
 /** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接。違反は棄却 */
 export function validatePlan(plan: Plan): boolean {
-  for (const fl of plan.floors) {
+  for (const [fi, fl] of plan.floors.entries()) {
     const rooms = fl.rooms
     if (wetViolations(rooms).length > 0) return false
     const doors = computeDoors(rooms)
@@ -59,7 +60,7 @@ export function validatePlan(plan: Plan): boolean {
       if (r.type !== 'void' && !seen.has(r)) return false
     }
     for (const r of rooms) {
-      if (HABITABLE[r.type] && !touchesOuterWall(r, plan.W, plan.H)) return false
+      if (HABITABLE[r.type] && !touchesOuterWall(r, floorRect(plan, fi))) return false
       if (r.type !== 'hall' && r.type !== 'void' && r.area < (r.minArea || 0) - 1) return false
     }
   }
