@@ -3,7 +3,7 @@ import type { Room } from '../core/types'
 /** 水回りの器具・階段・畳目など、部屋種別ごとの描き込み */
 export function Fixtures({ r }: { r: Room }) {
   const { x, y, w, h } = r
-  const B = '#7d97a5'
+  const B = '#7f949f'
   switch (r.type) {
     case 'bath':
       return (
@@ -31,7 +31,7 @@ export function Fixtures({ r }: { r: Room }) {
     case 'kitchen':
       return (
         <>
-          <rect x={x} y={y} width={w} height={1.4} fill="#e8c9a0" stroke="#b08b57" strokeWidth={0.12} />
+          <rect x={x} y={y} width={w} height={1.4} fill="#e6d8bf" stroke="#a38c64" strokeWidth={0.12} />
           <rect x={x + 0.5} y={y + 0.25} width={1.6} height={0.9} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
           {[0, 1].map((i) => (
             <circle key={i} cx={x + w - 1.6 - i * 1.1} cy={y + 0.7} r={0.42 - i * 0.14} fill="none" stroke="#8a8a8a" strokeWidth={0.1} />
@@ -53,7 +53,7 @@ export function Fixtures({ r }: { r: Room }) {
       )
     }
     case 'washitsu': {
-      const S = '#a9bd97'
+      const S = '#aebd9f'
       return (
         <>
           <line x1={x + w / 2} y1={y} x2={x + w / 2} y2={y + h} stroke={S} strokeWidth={0.14} />

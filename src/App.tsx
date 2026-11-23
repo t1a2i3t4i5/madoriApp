@@ -162,33 +162,33 @@ export default function App() {
   } else {
     body = (
       <>
-        <div className="mt-0.5 mb-3.5 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-serif text-[21px]">間取り {plans.length}案</h2>
+        <div className="mt-0.5 mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-ink pt-3">
+          <h2 className="font-serif text-[20px] tracking-[.04em]">間取り {plans.length}案</h2>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={prev} disabled={seedHistory.length === 0} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">← 前の3案</button>
-            <button type="button" onClick={next} className="min-h-[42px] cursor-pointer rounded-full border-[1.5px] border-accent bg-transparent px-[18px] py-[9px] text-sm font-extrabold text-accent active:translate-y-px">別の3案を作る</button>
+            <button type="button" onClick={prev} disabled={seedHistory.length === 0} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-4 py-2 text-[13px] font-bold tracking-[.04em] text-ink active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">← 前の3案</button>
+            <button type="button" onClick={next} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink bg-ink px-4 py-2 text-[13px] font-bold tracking-[.04em] text-bg active:translate-y-px">別の3案を作る</button>
           </div>
         </div>
         {plans.length < 3 && diagnosis && (
-          <div role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+          <div role="status" className="mb-3.5 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">
             <p>この条件では{plans.length}案です。{diagnosis.reason}</p>
             {diagnosis.alts.length > 0 && (
               <div className="no-print mt-2 flex flex-wrap gap-2">
                 {diagnosis.alts.map((a) => (
-                  <button key={a.label} type="button" onClick={() => applyAlt(a)} className="min-h-[38px] cursor-pointer rounded-full border-[1.5px] border-warn-line bg-surface px-3.5 py-1.5 text-[13px] font-extrabold text-ink">{a.label}</button>
+                  <button key={a.label} type="button" onClick={() => applyAlt(a)} className="min-h-[38px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-3.5 py-1.5 text-[13px] font-bold text-ink">{a.label}</button>
                 ))}
               </div>
             )}
           </div>
         )}
         {exhausted && (
-          <p role="status" className="no-print mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+          <p role="status" className="no-print mb-3.5 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">
             この条件で出せる案はここまでです。
-            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-accent underline">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
+            <button type="button" onClick={() => { setShowGallery(true); setTimeout(() => document.getElementById('gallery')?.scrollIntoView(), 0) }} className="ml-1 cursor-pointer border-0 bg-transparent p-0 font-bold text-ink underline decoration-accent underline-offset-2">全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
             か、条件を少し変えてみてください。
           </p>
         )}
-        <div className="plan-grid grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
+        <div className="plan-grid grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-x-7 gap-y-9">
           {plans.map((p, i) => (
             <PlanCard
               key={`${state.seed}-${i}`}
@@ -204,7 +204,7 @@ export default function App() {
         </div>
         {!showGallery && poolCount > 0 && (
           <div className="no-print mt-4 text-center">
-            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[42px] cursor-pointer rounded-full border border-line bg-surface px-[18px] py-[9px] text-sm font-bold text-ink2">この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
+            <button type="button" onClick={() => setShowGallery(true)} className="min-h-[40px] cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-4 py-2 text-[13px] font-bold tracking-[.04em] text-ink">この条件の全候補（上位{galleryCount}案／全{poolCount}案）を見る</button>
           </div>
         )}
         {showGallery && (
@@ -223,21 +223,21 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto max-w-[1180px] px-4 pt-5 pb-10">
-      <div className="mt-1.5 mb-[18px]">
-        <h1 className="mb-1.5 font-serif text-[clamp(24px,4.5vw,36px)] leading-[1.3] font-bold">条件を選ぶと、間取りが3案出てくる。</h1>
-        <p className="max-w-[640px] text-[14.5px] text-ink2">延床・階数・部屋数とこだわりを指定すると、455mmグリッドの上で間取り候補を大量生成し、動線・採光・階段位置を検証して残った中から、顔ぶれの違う3案を並べます。</p>
-      </div>
-      <div className="app-grid grid items-start gap-5 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
+    <div className="mx-auto max-w-[1180px] px-4 pt-4 pb-12">
+      <header className="mb-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t-2 border-ink border-b border-b-line py-2.5">
+        <h1 className="font-serif text-[19px] leading-none font-bold tracking-[.14em]">間取り図集<span className="ml-3 text-[11px] font-normal tracking-[.22em] text-ink2">MADORI</span></h1>
+        <p className="text-[11px] tracking-[.12em] text-ink2">455mmグリッド ／ 延床20–40坪 ／ 3案提示</p>
+      </header>
+      <div className="app-grid grid items-start gap-8 max-[860px]:grid-cols-1 min-[861px]:grid-cols-[340px_1fr]">
         <div className="no-print"><ConditionForm state={state} onChange={patch} onGenerate={next} onRandom={random} /></div>
         <section aria-label="生成結果">
           {staleVersion && (
-            <p role="status" className="mb-3.5 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">
+            <p role="status" className="mb-3.5 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">
               このリンクは旧バージョンで作られたため同じ間取りは再現できません。同じ条件で新しく生成した案を表示しています
             </p>
           )}
           {body}
-          <p className="mt-[22px] text-[11.5px] leading-[1.6] text-ink2">※ 建築基準法・構造は未考慮、敷地は想定の図面です。実際の設計は建築士にご相談ください。寸法は455mmグリッド基準、1坪＝約3.31㎡で換算しています。</p>
+          <p className="mt-8 border-t border-line pt-3 text-[11px] leading-[1.7] tracking-[.02em] text-ink2">※ 建築基準法・構造は未考慮、敷地は想定の図面です。実際の設計は建築士にご相談ください。寸法は455mmグリッド基準、1坪＝約3.31㎡で換算しています。</p>
         </section>
       </div>
       <div className="no-print"><FavoritesShelf

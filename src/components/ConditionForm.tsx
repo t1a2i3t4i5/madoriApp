@@ -12,12 +12,15 @@ interface SegProps<T extends number | string> {
   note?: string
 }
 
+const ROW = 'border-t border-line py-3.5 [counter-increment:spec]'
+const LBL = 'text-[12px] font-bold tracking-[.14em] text-ink2 before:mr-2.5 before:font-serif before:font-normal before:tracking-normal before:text-accent before:content-[counter(spec,decimal-leading-zero)]'
+
 function Seg<T extends number | string>({ label, value, options, onChange, disabled, note }: SegProps<T>) {
   const id = useId()
   return (
-    <div className={`mb-[18px] ${disabled ? 'opacity-50' : ''}`}>
-      <div className="mb-2 text-[14.5px] font-bold" id={id}>{label}</div>
-      <div className="flex gap-1 rounded-[10px] bg-surface2 p-1" role="group" aria-labelledby={id}>
+    <div className={`${ROW} ${disabled ? 'opacity-50' : ''}`}>
+      <div className={`mb-2.5 ${LBL}`} id={id}>{label}</div>
+      <div className="flex gap-4" role="group" aria-labelledby={id}>
         {options.map((o) => (
           <button
             key={o.v}
@@ -25,15 +28,15 @@ function Seg<T extends number | string>({ label, value, options, onChange, disab
             aria-pressed={o.v === value}
             disabled={disabled}
             onClick={() => onChange(o.v)}
-            className={`min-h-10 flex-1 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-[7px] border-0 px-1 py-2 text-sm font-bold ${
-              o.v === value ? 'bg-surface text-ink shadow-[0_1px_4px_rgba(0,0,0,.14)]' : 'bg-transparent text-ink2'
+            className={`min-h-10 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} rounded-none border-0 border-b-2 bg-transparent min-w-10 px-2 py-1.5 text-sm ${
+              o.v === value ? 'border-accent font-bold text-ink' : 'border-transparent font-medium text-ink2'
             }`}
           >
             {o.text}
           </button>
         ))}
       </div>
-      {note && <p className="mt-1.5 text-[11.5px] leading-[1.55] text-ink2">{note}</p>}
+      {note && <p className="mt-2 text-[11px] leading-[1.55] text-ink2">{note}</p>}
     </div>
   )
 }
@@ -65,9 +68,9 @@ function AreaSlider({ value, onCommit }: AreaSliderProps) {
   }, [])
   return (
     <>
-      <div className="mb-2 flex items-baseline justify-between">
-        <label htmlFor="area" className="text-[14.5px] font-bold">延床面積</label>
-        <span className="text-[17px] font-black text-accent">{draft}<small className="text-xs font-medium text-ink2"> 坪</small></span>
+      <div className="mb-1 flex items-baseline justify-between">
+        <label htmlFor="area" className={LBL}>延床面積</label>
+        <span className="font-serif text-[26px] leading-none text-ink">{draft}<small className="font-sans text-xs text-ink2"> 坪</small></span>
       </div>
       <input ref={ref} id="area" type="range" min={20} max={40} step={1} value={draft} className="h-9 w-full cursor-pointer" onChange={(e) => setDraft(Number(e.target.value))} />
     </>
@@ -85,11 +88,11 @@ export function ConditionForm({ state, onChange, onGenerate, onRandom }: Props) 
   const toggle = (k: FeatureKey) =>
     onChange({ feats: state.feats.includes(k) ? state.feats.filter((f) => f !== k) : [...state.feats, k] })
   return (
-    <section aria-label="条件入力" className="rounded-[14px] border border-line bg-surface p-[18px] shadow-panel min-[861px]:sticky min-[861px]:top-4">
-      <h2 className="mb-3.5 text-[13px] font-bold tracking-[.08em] text-ink2">条件</h2>
-      <div className="mb-[18px]">
+    <section aria-label="条件入力" className="border-t-2 border-ink pt-3 [counter-reset:spec] min-[861px]:sticky min-[861px]:top-4">
+      <h2 className="mb-3 font-serif text-[15px] tracking-[.3em]">条件</h2>
+      <div className={ROW}>
         <AreaSlider value={state.area} onCommit={(area) => onChange({ area })} />
-        <div className="-mt-1 flex justify-between text-[11px] text-ink2"><span>20坪</span><span>30坪</span><span>40坪</span></div>
+        <div className="-mt-1 flex justify-between font-serif text-[11px] text-ink2"><span>20坪</span><span>30坪</span><span>40坪</span></div>
       </div>
       <Seg label="階数" value={state.floors} options={[{ v: 1, text: '平屋' }, { v: 2, text: '2階建て' }]} onChange={(floors) => onChange({ floors })} />
       <Seg
@@ -103,27 +106,27 @@ export function ConditionForm({ state, onChange, onGenerate, onRandom }: Props) 
       <Seg label="個室数（主寝室ふくむ）" value={state.rooms} options={[2, 3, 4, 5].map((v) => ({ v, text: `${v}室` }))} onChange={(rooms) => onChange({ rooms })} />
       <Seg label="駐車場" value={state.parking} options={[{ v: 0, text: 'なし' }, { v: 1, text: '1台' }, { v: 2, text: '2台' }]} onChange={(parking) => onChange({ parking })} />
       <Seg label="庭" value={state.garden} options={[{ v: 0, text: 'なし' }, { v: 1, text: '小さめ' }, { v: 2, text: '広め' }]} onChange={(garden) => onChange({ garden })} />
-      <div className="mb-[18px]">
-        <div className="mb-2 text-[14.5px] font-bold">こだわり</div>
-        <div className="flex flex-wrap gap-2">
+      <div className={ROW}>
+        <div className={`mb-2.5 ${LBL}`}>こだわり</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
           {FEATURES.map((f) => {
             const on = state.feats.includes(f.key)
             return (
-              <label key={f.key} className={`inline-flex min-h-[38px] cursor-pointer select-none items-center gap-[7px] rounded-full border-[1.5px] px-[13px] py-[9px] text-[13.5px] ${on ? 'border-accent bg-accent/10 font-bold' : 'border-line bg-chip font-medium'}`}>
-                <input type="checkbox" className="m-0 size-[17px] flex-none" checked={on} onChange={() => toggle(f.key)} />
+              <label key={f.key} className={`inline-flex min-h-9 cursor-pointer select-none items-center gap-[7px] text-[13.5px] ${on ? 'font-bold text-ink' : 'font-medium text-ink2'}`}>
+                <input type="checkbox" className="m-0 size-[15px] flex-none rounded-none" checked={on} onChange={() => toggle(f.key)} />
                 {f.label}
               </label>
             )
           })}
         </div>
       </div>
-      <button type="button" onClick={onGenerate} className="min-h-[50px] w-full cursor-pointer rounded-[11px] border-0 bg-accent p-3 text-base font-black text-accent-ink active:translate-y-px">
+      <button type="button" onClick={onGenerate} className="min-h-[48px] w-full cursor-pointer rounded-[1px] border border-ink bg-ink p-3 text-[15px] font-bold tracking-[.1em] text-bg active:translate-y-px">
         この条件で3案作る
       </button>
-      <button type="button" onClick={onRandom} className="mt-2 min-h-11 w-full cursor-pointer rounded-[11px] border-[1.5px] border-line bg-surface p-2.5 text-sm font-bold text-ink2 active:translate-y-px">
+      <button type="button" onClick={onRandom} className="mt-2 min-h-11 w-full cursor-pointer rounded-[1px] border border-ink2 bg-transparent p-2.5 text-[13px] font-bold tracking-[.06em] text-ink active:translate-y-px">
         おまかせ条件で作る
       </button>
-      <p className="mt-3 text-[11.5px] leading-[1.55] text-ink2">道路は南側・敷地は矩形を想定。間取りはアイデアスケッチで、建築基準法・構造計算は考慮していません。</p>
+      <p className="mt-4 border-t border-line pt-3 text-[11px] leading-[1.65] text-ink2">道路は南側・敷地は矩形を想定。間取りはアイデアスケッチで、建築基準法・構造計算は考慮していません。</p>
     </section>
   )
 }

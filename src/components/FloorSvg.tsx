@@ -11,7 +11,7 @@ import { computeFlows } from '../lib/flow'
 import { FlowOverlay, legendHeight, legendWidth } from './FlowOverlay'
 
 const FILL: Record<RoomCategory, string> = {
-  living: '#f3ddba', bed: '#dde7d8', water: '#d3e2ea', store: '#e7ddcb', circ: '#eae4d3', void: '#f4f1e6',
+  living: '#f1e2c6', bed: '#dfe9d8', water: '#d3e4ee', store: '#d9d4c6', circ: '#ece8de', void: '#f4f1e8',
 }
 const PAD = 2.2
 
@@ -146,16 +146,16 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
     <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label={`${fl.label}の間取り図`} className="block h-auto w-full">
       <defs>
         <pattern id={`hatch${uid}`} width={1.6} height={1.6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <rect width={1.6} height={1.6} fill="#f4f1e6" />
-          <line x1={0} y1={0} x2={0} y2={1.6} stroke="#c9c2ab" strokeWidth={0.35} />
+          <rect width={1.6} height={1.6} fill="#f4f1e8" />
+          <line x1={0} y1={0} x2={0} y2={1.6} stroke="#cbc6b4" strokeWidth={0.35} />
         </pattern>
         <pattern id={`shimoya${uid}`} width={1.2} height={1.2} patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
           <rect width={1.2} height={1.2} fill="#f7f4ea" />
           <line x1={0} y1={0} x2={0} y2={1.2} stroke="#d6cfb8" strokeWidth={0.2} />
         </pattern>
         <pattern id={`dots${uid}`} width={1.4} height={1.4} patternUnits="userSpaceOnUse">
-          <rect width={1.4} height={1.4} fill="#d9cbae" />
-          <circle cx={0.7} cy={0.7} r={0.16} fill="#b7a67f" />
+          <rect width={1.4} height={1.4} fill="#dcd2bc" />
+          <circle cx={0.7} cy={0.7} r={0.16} fill="#b9ab8c" />
         </pattern>
       </defs>
       {/* 方位 */}
@@ -169,14 +169,14 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         let fill = FILL[ROOM[r.type].cat]
         if (r.type === 'doma') fill = `url(#dots${uid})`
         if (r.type === 'void') fill = `url(#hatch${uid})`
-        if (r.type === 'hall') fill = '#efe9da'
-        if (r.type === 'stair') fill = '#e3ded0'
+        if (r.type === 'hall') fill = '#fcfaf3'
+        if (r.type === 'stair') fill = '#cdc6b0'
         return <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fill} />
       })}
       {/* 対面キッチンカウンター */}
       {ldk && counter && (
         <>
-          <rect x={counter.x} y={counter.y} width={counter.w} height={counter.h} fill="#e8c9a0" stroke="#b08b57" strokeWidth={0.14} />
+          <rect x={counter.x} y={counter.y} width={counter.w} height={counter.h} fill="#e6d8bf" stroke="#a38c64" strokeWidth={0.14} />
           <rect x={ldk.x + ldk.w - Math.min(8, ldk.w - 3) + 0.1} y={ldk.y + 1.45} width={1.7} height={1.0} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
         </>
       )}
@@ -189,7 +189,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
           return <line key={i} x1={wd.cx - wd.len / 2} y1={yy} x2={wd.cx + wd.len / 2} y2={yy} />
         })}
       </g>
-      <g stroke="#4a90b8" strokeWidth={0.13}>
+      <g stroke="#5f7f93" strokeWidth={0.14}>
         {windows.map((wd, i) => {
           const yy = wd.side === 'S' ? fpBottom : fp.y
           return (
@@ -205,7 +205,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
         {doors.map((d, i) => <path key={i} d={doorPath(d)} />)}
       </g>
       {/* 壁（外壁は内壁の約2.5倍の太さ） */}
-      <g fill="none" stroke="#3a382f">
+      <g fill="none" stroke="#26241f">
         {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.17} />)}
         <rect x={fp.x} y={fp.y} width={fp.W} height={fp.H} strokeWidth={0.42} />
       </g>
@@ -219,7 +219,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       })()}
       {siteStrip && (
         <>
-          <rect x={0} y={H + 1.0} width={W} height={1.5} fill="#d8d5cc" />
+          <rect x={0} y={H + 1.0} width={W} height={1.5} fill="#dedbd2" />
           <text x={W / 2} y={H + 2.15} fontSize={1.15} fill="#8a8578" textAnchor="middle">南道路</text>
         </>
       )}

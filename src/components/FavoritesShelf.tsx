@@ -32,31 +32,31 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
   const fmt = (v: number | null, unit: string) => (v === null ? '—' : `${v.toFixed(1)}${unit}`)
 
   return (
-    <section id="favorites" aria-label="お気に入り" className="mt-10 border-t border-line pt-6">
-      <h2 className="mb-1 font-serif text-[21px]">お気に入り {favorites.length}件</h2>
+    <section id="favorites" aria-label="お気に入り" className="mt-14 border-t-2 border-ink pt-4">
+      <h2 className="mb-1 font-serif text-[20px] tracking-[.04em]">お気に入り {favorites.length}件</h2>
       <p className="mb-3 text-[13px] text-ink2">☆で保存した案はこのブラウザに残ります。2〜{MAX_COMPARE}案にチェックを入れると横並びで比べられます。</p>
-      {message && <p role="status" className="mb-3 rounded-[10px] border border-warn-line bg-warn-bg px-3.5 py-2.5 text-[13px] text-warn-ink">{message}</p>}
+      {message && <p role="status" className="mb-3 rounded-none border-0 border-l-2 border-warn-line bg-warn-bg py-1 pl-3.5 text-[13px] text-warn-ink">{message}</p>}
       {favorites.length === 0 ? (
         <p className="text-sm text-ink2">まだありません。気に入った案の☆を押すと、ここに並びます。</p>
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(210px,100%),1fr))] gap-x-5 gap-y-6">
           {favorites.map((f, i) => {
             const checked = picked.includes(idOf(f))
             const name = planName(f.cfg, f.plan)
             return (
-              <li key={idOf(f)} className="rounded-xl border border-line bg-surface p-2.5">
-                <button type="button" onClick={() => onOpen(f)} aria-label={`${name}を拡大表示`} className="block w-full cursor-pointer rounded-lg border border-[#e3e0d2] bg-paper p-1.5">
+              <li key={idOf(f)} className="border-t border-ink pt-2.5">
+                <button type="button" onClick={() => onOpen(f)} aria-label={`${name}を拡大表示`} className="block w-full cursor-pointer rounded-none border border-plan-line bg-paper p-1.5">
                   <FloorSvg plan={f.plan} floorIdx={0} uid={`fav${i}`} kitchenFace={f.cfg.feats.includes('kitchenFace')} />
                 </button>
                 <p className="mt-1.5 text-[13px] leading-snug font-bold">{name}</p>
                 <p className="text-[11.5px] text-ink2">{f.cfg.area}坪・{f.cfg.floors === 2 ? '2階建て' : '平屋'}・{f.cfg.rooms}個室・スコア {f.plan.score.total}</p>
-                {isOldVersion(f) && <span className="mt-1 inline-block rounded-full bg-warn-bg px-2 py-0.5 text-[11px] font-bold text-warn-ink">旧バージョン</span>}
+                {isOldVersion(f) && <span className="mt-1 inline-block border border-warn-line px-1.5 py-px text-[11px] font-bold text-warn-ink">旧バージョン</span>}
                 <div className="mt-1.5 flex items-center justify-between gap-2">
                   <label className="inline-flex min-h-9 cursor-pointer select-none items-center gap-1.5 text-[12.5px] font-bold">
                     <input type="checkbox" className="size-[17px]" checked={checked} disabled={!checked && selected.length >= MAX_COMPARE} onChange={() => toggle(f)} />
                     比較
                   </label>
-                  <button type="button" onClick={() => onRemove(f)} className="min-h-9 cursor-pointer rounded-[7px] border border-line bg-surface px-2.5 text-xs font-bold text-ink2">削除</button>
+                  <button type="button" onClick={() => onRemove(f)} className="min-h-9 cursor-pointer rounded-[1px] border border-ink2 bg-transparent px-2.5 text-xs font-bold text-ink">削除</button>
                 </div>
               </li>
             )
@@ -66,7 +66,7 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
       {selected.length >= 2 && (
         <div className="mt-5" aria-label="比較">
           <div className="mb-2 flex items-center gap-3">
-            <h3 className="text-[15px] font-bold">比較（同一縮尺）</h3>
+            <h3 className="font-serif text-[16px] tracking-[.06em]">比較（同一縮尺）</h3>
             {floorCount === 2 && <FloorTabs value={floor} onChange={setFloor} />}
           </div>
           <div className="overflow-x-auto">
@@ -82,7 +82,7 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
                   <th scope="row" className="p-1.5 text-left align-top text-ink2">間取り図</th>
                   {selected.map((f, i) => (
                     <td key={idOf(f)} className="p-1.5 align-top">
-                      <div className="rounded-lg border border-[#e3e0d2] bg-paper p-1.5">
+                      <div className="border border-plan-line bg-paper p-1.5">
                         <FloorSvg plan={f.plan} floorIdx={floor} uid={`cmp${i}f${floor}`} kitchenFace={f.cfg.feats.includes('kitchenFace')} scale={scale} />
                       </div>
                     </td>

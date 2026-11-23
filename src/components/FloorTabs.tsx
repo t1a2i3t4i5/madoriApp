@@ -6,7 +6,7 @@ interface Props {
 export function FloorTabs({ value, onChange }: Props) {
   return (
     <div
-      className="mt-2.5 flex gap-1.5"
+      className="mt-2.5 flex gap-2"
       onClick={(e) => e.stopPropagation()}
     >
       {['1F', '2F'].map((label, i) => (
@@ -15,8 +15,8 @@ export function FloorTabs({ value, onChange }: Props) {
           type="button"
           aria-pressed={value === i}
           onClick={() => onChange(i)}
-          className={`min-h-9 cursor-pointer rounded-[7px] border px-3.5 py-1 text-[12.5px] font-bold ${
-            value === i ? 'border-ink bg-ink text-bg' : 'border-line bg-surface text-ink2'
+          className={`min-h-9 min-w-10 cursor-pointer rounded-none border-0 border-b-2 bg-transparent px-2 py-1 font-serif text-[14px] tracking-[.08em] ${
+            value === i ? 'border-accent font-bold text-ink' : 'border-transparent text-ink2'
           }`}
         >
           {label}
