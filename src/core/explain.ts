@@ -79,13 +79,13 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   if (ldk) {
     // LDK は1F前提のため、南判定は plan.H（1Fの板）のまま。部分二階でも 1F は plan.W × plan.H
     const south = ldk.y + ldk.h === plan.H
-    // キッチンが独立している案は、LDK の畳数にキッチンを含める（LDK として使う広さ）
+    // キッチンが独立している案は、LDK の帖数にキッチンを含める（LDK として使う広さ）
     const kitchen = plan.floors[ldkFloor]?.rooms.find((r) => r.type === 'kitchen')
     const tatami = Math.round((ldk.area + (kitchen?.area ?? 0)) / 8)
     const where = plan.floors.length === 2 ? `${plan.floors[ldkFloor]?.label ?? ''}の` : ''
     s1.push(south
-      ? clause(`${where}LDKは南側で日当たりがよく約${tatami}畳あり`, `${where}LDKは南側で日当たりがよく、約${tatami}畳です。`)
-      : clause(`${where}LDKは約${tatami}畳で`, `${where}LDKは約${tatami}畳です。`))
+      ? clause(`${where}LDKは南側で日当たりがよく約${tatami}帖あり`, `${where}LDKは南側で日当たりがよく、約${tatami}帖です。`)
+      : clause(`${where}LDKは約${tatami}帖で`, `${where}LDKは約${tatami}帖です。`))
   }
   if (hasVoid) s1.push(clause('吹抜で縦の広がりもあり', '吹抜で縦の広がりもあります。'))
   else if (plan.floors.length === 1) s1.push(clause('ワンフロアで生活が完結し', 'ワンフロアで生活が完結します。'))

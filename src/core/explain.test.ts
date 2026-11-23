@@ -116,7 +116,7 @@ describe('explainPlan', () => {
     expect(weakPlans).toBeGreaterThan(50)
   })
 
-  it('キッチン独立案: LDK の畳数はキッチンを含む。割合はしきい値と食い違わない（小数1桁・切り捨て）', () => {
+  it('キッチン独立案: LDK の帖数はキッチンを含む。割合はしきい値と食い違わない（小数1桁・切り捨て）', () => {
     let kitchenPlans = 0
     for (const { cfg } of CONDITIONS) {
       for (const p of enumeratePlans(cfg)) {
@@ -126,14 +126,14 @@ describe('explainPlan', () => {
           const k = f.rooms.find((r) => r.type === 'kitchen')
           if (!ldk || !k) continue
           kitchenPlans++
-          expect(text).toContain(`約${Math.round((ldk.w * ldk.h + k.w * k.h) / 8)}畳`)
+          expect(text).toContain(`約${Math.round((ldk.w * ldk.h + k.w * k.h) / 8)}帖`)
         }
         // 「廊下は延床の約X%と短め」の X は 7.0 未満、「収納室が延床の約X%」の X は 7.0 以上
         const hallM = /廊下は延床の約([\d.]+)%と短め/.exec(text)
         if (hallM) expect(Math.round(Number(hallM[1]) * 10)).toBeLessThan(Math.round(EXPLAIN_TH.hallShort * 1000))
         const storeM = /収納室が延床の約([\d.]+)%/.exec(text)
         if (storeM) expect(Math.round(Number(storeM[1]) * 10)).toBeGreaterThanOrEqual(Math.round(EXPLAIN_TH.storeHigh * 1000))
-        expect(text).not.toMatch(/畳）、/)
+        expect(text).not.toMatch(/帖）、/)
       }
     }
     expect(kitchenPlans).toBeGreaterThan(0)
