@@ -44,14 +44,16 @@ describe('URLハッシュ', () => {
     expect(parseHash('#c=%7Bbroken').versionMismatch).toBe(false)
   })
 
-  it('旧URL（v=3）: 警告つきで開き、条件は復元し、p は捨てる（GEN_VERSION 4 への移行）', () => {
+  it('旧URL（v=3・v=4）: 警告つきで開き、条件は復元し、p は捨てる（GEN_VERSION 5 への移行）', () => {
     const c = encodeURIComponent('{"area":34,"floors":1,"rooms":4,"parking":1,"garden":1,"feats":["laundry"],"seed":7,"v":3}')
     const r = parseHash(`#c=${c}&p=1-18x15-E0000m`)
     expect(r.versionMismatch).toBe(true)
     expect(r.planKey).toBeUndefined()
     expect(r.state).toMatchObject({ area: 34, floors: 1, rooms: 4, feats: ['laundry'], seed: 7 })
     // 現行バージョンなら p は残る
-    const cur = encodeURIComponent('{"area":34,"floors":1,"rooms":4,"parking":1,"garden":1,"feats":["laundry"],"seed":7,"v":4}')
+    const v4 = encodeURIComponent('{"area":34,"floors":1,"rooms":4,"parking":1,"garden":1,"feats":["laundry"],"seed":7,"v":4}')
+    expect(parseHash(`#c=${v4}&p=1-18x15-E0000m`).versionMismatch).toBe(true)
+    const cur = encodeURIComponent('{"area":34,"floors":1,"rooms":4,"parking":1,"garden":1,"feats":["laundry"],"seed":7,"v":5}')
     const r3 = parseHash(`#c=${cur}&p=1-18x15-E0000m`)
     expect(r3.versionMismatch).toBe(false)
     expect(r3.planKey).toBe('1-18x15-E0000m')

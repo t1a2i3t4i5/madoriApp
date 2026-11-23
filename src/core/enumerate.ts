@@ -11,6 +11,9 @@ function variantSuffix(v: Variant): string {
   return v.stairEnd + v.rev.map((r) => (r ? '1' : '0')).join('') + (v.bedShift === -1 ? 'm' : String(v.bedShift))
 }
 
+/** 強モード（クローゼットを必ず付ける）の案だけ末尾に付く印 */
+const HARD_SUFFIX = '-k'
+
 /**
  * 案の key。variant なし（GEN_VERSION 1 の案）は従来の "a-WxH"、v2 は "a-WxH-" + 変種。
  * 部分二階（2F に fp がある案）は末尾に "-p<W2>x<H2>"（2Fの板の寸法。オフセットは配置ルールから復元できるので入れない）。
@@ -22,10 +25,11 @@ export function planKey(plan: Pick<Plan, 'arch' | 'W' | 'H' | 'variant'> & { flo
   if (!plan.variant) return base
   const fp2 = plan.floors?.[1]?.fp
   const v = `${base}-${variantSuffix(plan.variant)}` as const
-  return fp2 ? `${v}-p${fp2.W}x${fp2.H}` : v
+  const withFp = fp2 ? (`${v}-p${fp2.W}x${fp2.H}` as const) : v
+  return plan.variant.closet === 'hard' ? (`${withFp}${HARD_SUFFIX}` as PlanKey) : withFp
 }
 
-const KEY_RE = /^([0-2])-(\d{1,2})x(\d{1,2})(?:-([EW])([01]{4})([m012])(?:-p(\d{1,2})x(\d{1,2}))?)?$/
+const KEY_RE = /^([0-2])-(\d{1,2})x(\d{1,2})(?:-([EW])([01]{4})([m012])(?:-p(\d{1,2})x(\d{1,2}))?(-k)?)?$/
 
 /** 文字列が planKey の形式か（形式のみ。実在する案かは planFromKey で確かめる） */
 export function parsePlanKey(s: unknown): { arch: ArchId; W: number; H: number; variant?: Variant; fp2?: { W2: number; H2: number } } | null {
@@ -36,11 +40,11 @@ export function parsePlanKey(s: unknown): { arch: ArchId; W: number; H: number; 
   const W = Number(m[2])
   const H = Number(m[3])
   if (W < 1 || H < 1) return null
-  const [, , , , se, bits, sh, w2, h2] = m
+  const [, , , , se, bits, sh, w2, h2, hard] = m
   if (se === undefined || bits === undefined || sh === undefined) return { arch, W, H }
   const rev: Variant['rev'] = [bits[0] === '1', bits[1] === '1', bits[2] === '1', bits[3] === '1']
   const bedShift = (sh === 'm' ? -1 : Number(sh)) as Variant['bedShift']
-  const variant: Variant = { stairEnd: se as Variant['stairEnd'], rev, bedShift }
+  const variant: Variant = { stairEnd: se as Variant['stairEnd'], rev, bedShift, ...(hard ? { closet: 'hard' as const } : {}) }
   if (w2 === undefined || h2 === undefined) return { arch, W, H, variant }
   if (Number(w2) < 1 || Number(h2) < 1) return null
   return { arch, W, H, variant, fp2: { W2: Number(w2), H2: Number(h2) } }

@@ -49,6 +49,9 @@ function isFpInside(fp: unknown, W: number, H: number): boolean {
   )
 }
 
+/** 後の GEN_VERSION で足されたスコア項目（旧版のお気に入りには無い。無くても壊れたデータとしない。R-COMPAT-12） */
+const ADDED_PARTS: ReadonlySet<string> = new Set(['個室収納'])
+
 /** 描画で落ちない程度に、案データの形を確かめる（variant は GEN_VERSION 1 の旧データでは無い） */
 function isPlan(v: unknown): v is ScoredPlan {
   if (!isObj(v) || !isNum(v.W) || !isNum(v.H) || !isNum(v.totalArea) || !(v.arch === 0 || v.arch === 1 || v.arch === 2)) return false
@@ -57,7 +60,8 @@ function isPlan(v: unknown): v is ScoredPlan {
   const sc = v.score
   if (!isObj(sc) || !isNum(sc.total) || !isObj(sc.parts)) return false
   const parts = sc.parts
-  if (!Object.keys(SCORE_WEIGHTS).every((k) => isNum(parts[k]))) return false
+  // 版で足された項目（個室収納 など）は旧データにないので、無くてもよい。あるなら数値。それ以外の項目は必須
+  if (!Object.keys(SCORE_WEIGHTS).every((k) => (ADDED_PARTS.has(k) && parts[k] === undefined) || isNum(parts[k]))) return false
   const { W, H } = v
   if (!Array.isArray(v.floors) || v.floors.length < 1 || v.floors.length > 2) return false
   return v.floors.every(
@@ -73,26 +77,31 @@ function isPlan(v: unknown): v is ScoredPlan {
   )
 }
 
-/** of を付けられる種別（付属収納） */
-const OWNED_TYPES: ReadonlySet<string> = new Set(['closet', 'store'])
-/** 付属収納の持ち主になれる種別（個室: 主寝室・洋室・書斎・和室） */
-const OWNER_TYPES: ReadonlySet<string> = new Set(['master', 'bed', 'study', 'washitsu'])
+/**
+ * of を付けられる種別（付属収納）→ 持ち主になれる種別（GEN_VERSION 5 の生成と同じ）。
+ * クローゼット: 主寝室・洋室。収納（廊下収納・リネン庫など）: ホール・洗面・ランドリー・主寝室・洋室
+ */
+const OWNER_TYPES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['closet', new Set(['master', 'bed'])],
+  ['store', new Set(['hall', 'wash', 'laundry', 'master', 'bed'])],
+])
 
 /**
- * 付属収納の持ち主: of が整数で、自分が closet / store 系、同じ階にその位置（左上）の部屋がちょうど1つあり、
- * 自分自身ではなく、種別が個室で、辺を共有している
+ * 付属収納の持ち主: of が整数で、自分が closet / store、同じ階にその位置（左上）の部屋がちょうど1つあり、
+ * 自分自身ではなく、種別が OWNER_TYPES で許すもので、辺を共有している
  */
 function hasValidOwners(rooms: readonly Record<string, unknown>[]): boolean {
   return rooms.every((r) => {
     if (r.of === undefined) return true
     const o = r.of
     if (!isObj(o) || !Number.isInteger(o.dx) || !Number.isInteger(o.dy)) return false
-    if (typeof r.type !== 'string' || !OWNED_TYPES.has(r.type)) return false
+    const allowed = typeof r.type === 'string' ? OWNER_TYPES.get(r.type) : undefined
+    if (!allowed) return false
     const ox = (r.x as number) + (o.dx as number)
     const oy = (r.y as number) + (o.dy as number)
     const owners = rooms.filter((q) => q !== r && q.x === ox && q.y === oy)
     const owner = owners[0]
-    if (owners.length !== 1 || !owner || typeof owner.type !== 'string' || !OWNER_TYPES.has(owner.type)) return false
+    if (owners.length !== 1 || !owner || typeof owner.type !== 'string' || !allowed.has(owner.type)) return false
     return sharedEdge(r as unknown as Room, owner as unknown as Room) !== null
   })
 }

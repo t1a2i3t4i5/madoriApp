@@ -140,9 +140,76 @@ export function footprintViolations(plan: Plan): string[] {
   return out
 }
 
+/** 付属収納の持ち主の種別（rooms.ts・closets.ts・favorites.ts とは別に持つ独立実装） */
+const OWNER_OK: Record<string, string[]> = {
+  closet: ['master', 'bed'],
+  store: ['hall', 'wash', 'laundry', 'master', 'bed'],
+}
+
+/**
+ * 付属収納（Room.of）の独立検証: 持ち主は同じ階にちょうど1つ・辺を共有・種別が許すもの。
+ * クローゼットは奥行（短辺）2・長さ4〜8、持ち主のある収納は奥行2。WIC のある主寝室にはクローゼットを付けない
+ */
+export function ownerViolations(plan: Plan): string[] {
+  const out: string[] = []
+  for (const fl of plan.floors) {
+    for (const r of fl.rooms) {
+      if (r.type === 'closet' && !r.of) out.push(`${fl.label} ${r.name}: クローゼットに持ち主がない`)
+      if (!r.of) continue
+      const ox = r.x + r.of.dx
+      const oy = r.y + r.of.dy
+      const owners = fl.rooms.filter((q) => q !== r && q.x === ox && q.y === oy)
+      const owner = owners[0]
+      if (owners.length !== 1 || !owner) {
+        out.push(`${fl.label} ${r.name}: 持ち主が1つに定まらない(${owners.length})`)
+        continue
+      }
+      if (!(OWNER_OK[r.type] ?? []).includes(owner.type)) out.push(`${fl.label} ${r.name}(${r.type}) の持ち主の種別 ${owner.type} が不正`)
+      if (!sharesEdge(r, owner)) out.push(`${fl.label} ${r.name}: 持ち主と辺を共有していない`)
+      const short = Math.min(r.w, r.h)
+      const long = Math.max(r.w, r.h)
+      if (short !== 2) out.push(`${fl.label} ${r.name}: 奥行 ${short} が2でない`)
+      if (r.type === 'closet' && (long < 4 || long > 8)) out.push(`${fl.label} ${r.name}: クローゼットの長さ ${long} が 4〜8 の外`)
+      if (r.type === 'closet' && owner.type === 'master' && fl.rooms.some((q) => q.type === 'wic')) out.push(`${fl.label} WIC のある主寝室にクローゼットがある`)
+    }
+  }
+  return out
+}
+
+/** 個室（主寝室・洋室）のうち、2×4 以上の付属収納（持ち主がその個室のクローゼット・収納）か、主寝室の隣の WIC がある個室の数と個室の数（独立実装） */
+export function privateStorageIndependent(plan: Plan): { with: number; total: number } {
+  let w = 0
+  let total = 0
+  for (const fl of plan.floors) {
+    for (const p of fl.rooms) {
+      if (p.type !== 'master' && p.type !== 'bed') continue
+      total++
+      const ok = fl.rooms.some((s) => {
+        if (s === p || Math.min(s.w, s.h) < 2 || s.w * s.h < 8 || !sharesEdge(s, p)) return false
+        if (s.type === 'wic') return p.type === 'master'
+        return (s.type === 'closet' || s.type === 'store') && !!s.of && s.x + s.of.dx === p.x && s.y + s.of.dy === p.y
+      })
+      if (ok) w++
+    }
+  }
+  return { with: w, total }
+}
+
+/** 収納率（R-IDX-02）の独立実装: クローゼット・WIC・パントリー・収納のうち最小の短辺（SHORT_MIN）を満たすものの面積 ÷ 延床 */
+export function storageRatioIndependent(plan: Plan): number {
+  let sum = 0
+  for (const fl of plan.floors) {
+    for (const r of fl.rooms) {
+      if (!['closet', 'wic', 'pantry', 'store'].includes(r.type)) continue
+      if (Math.min(r.w, r.h) >= (SHORT_MIN[r.type] ?? 0)) sum += r.w * r.h
+    }
+  }
+  return sum / (plan.totalArea || 1)
+}
+
 /**
  * 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する／
- * クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
+ * 付属収納の持ち主の関係（ownerViolations）／階段とホールの辺の共有／クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
  */
 export function independentViolations(plan: Plan): string[] {
   const out: string[] = []
@@ -168,6 +235,13 @@ export function independentViolations(plan: Plan): string[] {
     }
   })
   out.push(...footprintViolations(plan))
+  out.push(...ownerViolations(plan))
+  // 階段はホールと辺を共有する（階段の前を塞がれていない）。carve の到達可能性は VIA を見ないので、ここで補う
+  plan.floors.forEach((fl) => {
+    const stair = fl.rooms.find((r) => r.type === 'stair')
+    const hall = fl.rooms.find((r) => r.type === 'hall')
+    if (stair && hall && !sharesEdge(stair, hall)) out.push(`${fl.label} 階段がホールと辺を共有していない`)
+  })
   plan.floors.forEach((fl) => {
     for (const [ta, tb, label] of CLUSTER_PAIRS) {
       const a = fl.rooms.find((r) => r.type === ta)

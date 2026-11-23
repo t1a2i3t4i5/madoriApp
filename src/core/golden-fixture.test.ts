@@ -6,7 +6,7 @@ import { GEN_VERSION, candidatePool, generatePlans } from './generate'
 import { feasibility } from './program'
 import { planName, planTags } from './describe'
 import { planKey } from './enumerate'
-import { BOUNDARY, CONDITIONS, SEEDS } from './testing'
+import { BOUNDARY, CONDITIONS, PARTIAL_CONDITIONS, SEEDS } from './testing'
 import { shortSideViolations } from './validate'
 import type { PlanConfig, Room, ScoredPlan } from './types'
 
@@ -16,11 +16,16 @@ import type { PlanConfig, Room, ScoredPlan } from './types'
  *   UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts
  * fixture の genVersion が現在の GEN_VERSION と同じで中身だけ違う場合は、書き込みを拒否する
  * （GEN_VERSION を上げずに出力を黙って書き換えないため。どうしても必要なら UPDATE_GOLDEN=force）。
- * 旧バージョンの fixture（gen-v3.json）は消さず、移行検証（v3 → v4）に使う。
+ * 旧バージョンの fixture（gen-v3.json、gen-v4.json）は消さず、移行検証（v3 → v4、v4 → v5）に使う。
  * v1 の正解は legacy/index.html（golden.test.ts）。
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.url)
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
+const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
+const FIXTURE_V4_PARTIAL = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
+/** v4 の提示案が v5 のプールに残る割合と、骨格が一致する割合の下限（GEN_VERSION 5 の実測の少し下） */
+const MIN_KEPT = 0.99
+const MIN_SKELETON = 0.75
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 const ALL = [...CONDITIONS, ...BOUNDARY]
@@ -154,6 +159,66 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
     })
     it('grid: 条件の集合（feasibility が ok のキー）は v3 と同一（feasibility 不変）', () => {
       expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v3.grid).sort())
+    })
+  })
+
+  // 移行検証: GEN_VERSION 5 はクローゼット（弱・強のモード）と収納化を足した。成立条件・プールは v4 以上、境界は不変
+  describe('v4 からの移行（クローゼット）', () => {
+    let v4: Fixture
+    beforeAll(() => {
+      v4 = JSON.parse(readFileSync(FIXTURE_V4, 'utf8')) as Fixture
+    })
+    it('grid: v4 で3案が出た条件は v5 でも3案が出る（3案条件の集合が縮まない）。条件の集合（feasibility）も同一', () => {
+      expect(v4.genVersion).toBe(4)
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v4.grid).sort())
+      const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
+      const lost = three(v4.grid).filter((k) => now.grid[k]?.length !== 3)
+      expect(lost).toEqual([])
+      expect(three(now.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
+    })
+    it('候補プールの件数は、全 CONDITIONS・BOUNDARY で v4 以上（弱モードが v4 の成立を保つ）', () => {
+      expect(v4.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
+      for (const [i, p] of now.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
+    })
+    it('BOUNDARY の提示案の件数は v4 と同じ（0案・3案の境界が動かない）', () => {
+      for (const { name, expected } of BOUNDARY) {
+        const cs = now.cases.filter((c) => c.name === name)
+        expect(cs).toHaveLength(SEEDS.length)
+        for (const c of cs) expect(c.plans.length, `${name} seed=${c.seed}`).toBe(expected)
+        expect(v4.cases.filter((c) => c.name === name).every((c) => c.plans.length === expected)).toBe(true)
+      }
+    })
+    it('v4 の提示案の骨格（階段・LDK・玄関/土間の矩形とホールの y・高さ）が、同じ key の v5 の案でも一致する割合', () => {
+      // 骨格は階ごとに stair・ldk・entry・doma の矩形と、hall の y・高さ（ホールの x・幅は行き止まりの収納化で変わるので比べない）
+      const skeleton = (rs: string[]) =>
+        rs
+          .filter((r) => /^(stair|ldk|entry|doma|hall):/.test(r))
+          .map((r) => r.replace(/^hall:\d+,(\d+),\d+,(\d+)$/, 'hall:$1,$2'))
+          .sort()
+          .join('|')
+      const partial = JSON.parse(readFileSync(FIXTURE_V4_PARTIAL, 'utf8')) as { cases: { name: string; plans: { key: string; floors: { rooms: string[] }[] }[] }[] }
+      let total = 0
+      let inPool = 0
+      let same = 0
+      const check = (cfg: PlanConfig, plans: { key: string; floors: string[][] }[]) => {
+        const pool = new Map<string, ScoredPlan>(candidatePool(copy(cfg)).map((p) => [planKey(p), p]))
+        for (const p of plans) {
+          total++
+          const q = pool.get(p.key)
+          if (!q) continue
+          inPool++
+          if (JSON.stringify(p.floors.map(skeleton)) === JSON.stringify(rooms(q).map(skeleton))) same++
+        }
+      }
+      for (const { name, cfg } of ALL) check(cfg, v4.cases.filter((x) => x.name === name).flatMap((c) => c.plans))
+      for (const { name, cfg } of PARTIAL_CONDITIONS) {
+        check(cfg, partial.cases.filter((x) => x.name === name).flatMap((c) => c.plans.map((p) => ({ key: p.key, floors: p.floors.map((f) => f.rooms) }))))
+      }
+      expect(total).toBeGreaterThan(200)
+      // 実測（GEN_VERSION 5）: プールに残る 306/306（100%）、骨格が一致 241/306（78.8%）。一致しない案は、個室セルのクローゼット分を帯の高さの目標に足す
+      // （layoutFloor）ことで帯の高さが動き、LDK の幅などが1〜2セル変わったもの。外すと 286/306（93.5%）になるが、洋室の家具配置率が 18.6% → 8.2% に落ちるので残した
+      expect(inPool / total, `プールに残る ${inPool}/${total}`).toBeGreaterThanOrEqual(MIN_KEPT)
+      expect(same / total, `骨格が一致 ${same}/${total}`).toBeGreaterThanOrEqual(MIN_SKELETON)
     })
   })
 })

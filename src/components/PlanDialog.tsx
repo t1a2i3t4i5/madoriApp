@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PlanConfig, ScoredPlan } from '../core/types'
+import { SCORE_WEIGHTS } from '../core/score'
 import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
@@ -124,13 +125,17 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
           </div>
           <div>
             <h3 className="mb-2 text-[13px] font-bold">スコア内訳</h3>
-            {Object.entries(plan.score.parts).map(([k, v]) => (
+            {Object.keys(SCORE_WEIGHTS).map((k) => {
+              // 旧版のお気に入りには後の版で足された項目（個室収納 など）がない。その場合は「—」で表す
+              const v: number | undefined = (plan.score.parts as Partial<Record<string, number>>)[k]
+              return (
               <div key={k} className="mb-1.5 grid grid-cols-[86px_1fr_30px] items-center gap-2 text-[12.5px]">
                 <span>{k}</span>
-                <span className="h-1.5 overflow-hidden rounded-full bg-surface2"><i className="block h-full rounded-full bg-accent" style={{ width: `${Math.round(v * 100)}%` }} /></span>
-                <b className="text-right font-bold tabular-nums">{Math.round(v * 100)}</b>
+                <span className="h-1.5 overflow-hidden rounded-full bg-surface2"><i className="block h-full rounded-full bg-accent" style={{ width: `${Math.round((v ?? 0) * 100)}%` }} /></span>
+                <b className="text-right font-bold tabular-nums">{v === undefined ? '—' : Math.round(v * 100)}</b>
               </div>
-            ))}
+              )
+            })}
             <h3 className="mt-[18px] mb-2 text-[13px] font-bold">敷地のイメージ（南道路）</h3>
             <div className="rounded-xl border border-plan-line bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} /></div>
           </div>

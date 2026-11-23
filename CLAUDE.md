@@ -33,22 +33,24 @@ npm test      # vitest
   - `types.ts`: 部屋・プラン・入力などの型定義
   - `rng.ts`: seed付き乱数（mulberry32系）。再現性の要
   - `rooms.ts`: 部屋種別の定義（目標/最小/最大面積）、居室（HABITABLE）・通り抜け可否（VIA）、cell ヘルパ、`findEntry`（玄関として扱う部屋。結合セル doma は玄関を兼ねる。FloorSvg の外開きドアと flow の来客動線の起点が共有）
-  - `slicing.ts`: 固定3帯構成の割り付け。`waterfill`（clamp付き二分探索 + 最大剰余法）、`layoutBand`（帯内の幅配分。余りは吸収セルへ、溢れたら結合できるクラスタ（玄関+土間 → キッチン+パントリー）を順に結合して再試行）、`layoutFloor`（帯の高さ配分。`{ rooms, heights }` を返し、`capH` で帯の高さの上限を指定できる）、`footprintList`（外形候補。既定は上位10件）。GEN_VERSION 4 から帯内の幅の下限と帯の高さの下限に `minShort`（最小の短辺）を使う。`ignoreMinShort` は診断専用で、生成では使わない。汎用のスライシング木（H/V再帰分割・measure/allocate/solve）は**未実装**
+  - `slicing.ts`: 固定3帯構成の割り付け。`waterfill`（clamp付き二分探索 + 最大剰余法）、`layoutBand`（帯内の幅配分。余りは吸収セルへ、溢れたら結合できるクラスタ（玄関+土間 → キッチン+パントリー）を順に結合して再試行）、`layoutFloor`（帯の高さ配分。個室セルにクローゼットを付けるときは、切り出し分（幅2×高さ8）を帯の高さの目標に足す。仕様書にない追加で、外すと洋室の家具配置率が 18.6% → 8.2% に落ち、骨格の一致は 79% → 93% に上がる。プール件数・3案の条件数は変わらない。`{ rooms, heights }` を返し、`capH` で帯の高さの上限を指定できる）、`footprintList`（外形候補。既定は上位10件）。GEN_VERSION 4 から帯内の幅の下限と帯の高さの下限に `minShort`（最小の短辺）を使う。GEN_VERSION 5 から、個室セル（`Cell.closet`）に幅2のクローゼットを切り出す（`LayoutFloorOpts.closet`: `'soft'`＝入るときだけ／`'hard'`＝個室の幅の下限に2を足して必ず。目標の幅と上限には両モードで2を足す。位置は帯の西端の個室は東側、それ以外は西側）。長さが8を超えるクローゼットは外壁側8セルだけをクローゼットに残し、ホール側の残り（2セル以上）をホールを持ち主とする収納（廊下収納）にする（`capClosets`）。吸収の優先順 `ABSORB_PRIORITY` は LDK→個室→収納系→玄関→キッチン→水回り、幅の上限は `max(3, floor(maxArea / h), 下限)`。`ignoreMinShort` は診断専用で、生成では使わない。汎用のスライシング木（H/V再帰分割・measure/allocate/solve）は**未実装**
   - `program.ts`: 実現可能性判定（`feasibility`）と、生成0案時の診断（`diagnoseEmpty`: どの階が崩れたかの理由（`ignoreMinShort` で組み直せるなら原因は短辺とし、短辺の理由文を出す）と、`generatePlans` が実際に3案を返すことを確かめた代替案を最大3件。1つの変更で1件も出ないときに限り、2つの変更の組み合わせ（例: 総二階にする＋吹抜を外す）を試す。短辺の理由文は階で出し分ける: 平屋・1階・2階・1階2階とも）。入力 → 部屋プログラムの変換は archetypes.ts の `bandsFor` が担う
   - `archetypes.ts`: アーキタイプ（`bandsFor` が帯ごとのクラスタ列を返す）、`applyVariant`（変種 `Variant` の適用。ユニット単位の並べ替え・階段の東西・2F個室の南北配分）、`buildPlan`（外形と変種に当てはめて1案を組み立てる。1F→2Fの順に組み、階段の1F/2F一致・吹抜がLDK直上（x・y とも。吹抜ありは2F南帯の高さを1F南帯以下に抑える）に収まるかをここで検査し、満たさなければ null）
   - `derive.ts`: 隣接グラフからのドア・窓の自動生成
     - ドアの形状は `doorSwing`（`Door.swing`）に集約。`computeDoors` は後処理 `separateSwings` で、同じ部屋に開く弧の矩形が重なるドアを、葉を共有区間の端へ寄せる → 開き先を反対の部屋に切り替える、の順で避ける（避けられなければ既定の形のまま）。開き先は片方だけ非VIAならその部屋、同条件なら面積の小さい方。葉は共有区間内（最大1.8セル、34%地点中心でクランプ）、半径は葉の長さと開き先の深さの小さい方で、弧の矩形は開き先に収まる。FloorSvg・furnish（`doorSwingRect`）・flow（`swing.center`）が共有。玄関の外開きは `entryDoor`（半径は玄関の幅以下）
     - ドア除外表 `NO_DOOR_PAIRS` / `PAIR_OK_PAIRS` は `[RoomType, RoomType]` のペア配列で、`pairKey`（アルファベット順に正規化）の Set で照合する。以前は文字列キーを手書きしており、`entry-bath` / `ldk-bath` / `master-bath` / `bed-bath` / `void-stair` が正規形（`bath-entry` 等）と一致せず、ドア除外が効いていなかった。このうち実際に `doorOK` の結果が変わるのは `bath-entry` と `bath-ldk` の2ペアだけ（entry・ldk が VIA のため、以前は true になっていた）で、固定3帯構成では hall 帯を挟むため隣接せず、生成結果は1件も変わらない潜在バグだった（修正前後で gen-v2 fixture 無変更）。残りの `bath-master` / `bath-bed` / `stair-void` は、VIA でも PAIR_OK でもない、または void を含むため、元々 false で結果は変わらない。将来スライシング木・L字外形を入れるとこれらのペアが隣接しうるので、その時点で表に出る。定義は `derive.test.ts` で正規形を検査している
   - `validate.ts`: ハード制約の検証（違反は棄却）。実装済みは、全室への到達可能性・居室の外壁接触・最低面積・最小の短辺（`shortSideViolations`: `MIN_SHORT` の閾値未満の短辺を棄却する安全網。割り付けが下限として満たすので実測0件）・水回りの隣接（`wetViolations`: 階ごとに辺共有2セル以上で、浴室→洗面、ランドリー→洗面、トイレ→同じ階の浴室/洗面/ランドリーのいずれか。キッチン・パントリーは対象外）。階段・吹抜の整合は buildPlan 側。GEN_VERSION 3 では水回りユニットを ランドリー→洗面→浴室 の順に並べるため、制約Cによる棄却は0件（実測）
-  - `score.ts`: ソフトスコア
+  - `carve.ts`（GEN_VERSION 5）: 割り付け後の収納化 `carveFloor`（階ごとの純関数）。順に (1) 付け替え（持ち主のない収納で奥行2・2×4 以上・面積16以下のものを、辺を共有する収納のない個室のクローゼットにする）、(2) ホール帯の行き止まり（両端を長さ 6→5→4 で試し、上下で接する収納のない個室のクローゼットにする。切る前に階段がホールと辺を共有していたなら、切った後も共有するときだけ。階段の前を塞ぐ端は切らない）、(3) 最大面積を超えた水回りの外壁側（ホールと反対側）2列を収納にする（持ち主は洗面・ランドリー自身、浴室・トイレは隣の洗面・ランドリー・個室）。各段は到達可能性（浴室等は短辺・最小面積・水回りの隣接も）を保つときだけ。作業は部屋の同一性で持ち主を持ち、最後に `Room.of` を書き直す。持ち主がなく奥行が2を超える `store`（吸収で太った収納）は、最後に表示名を「納戸」にする（種別は store のまま。`NANDO`）。`reachable()` と `validateFloor` はドアがあれば通れるとみなし VIA を見ないので、階段とホールの辺の共有は carve 側で保ち、`testing.ts` の独立検証でも確かめる
+  - `closets.ts`（GEN_VERSION 5）: 個室収納の判定の共有。`storageOf`（個室にドアでつながる 2×4 以上のクローゼット・持ち主のある収納・主寝室の WIC）、`privateStorageCount`、`storageRatio`（R-IDX-02: cat store のうち最小の短辺を満たすものの面積 ÷ 延床。score と explain が共有）
+  - `score.ts`: ソフトスコア（GEN_VERSION 5 で「個室収納」0.10 を追加し、既存7項目は ×0.9。面積適合・縦横比は付属収納（`Room.of` を持つ部屋）を除く）
   - `diversity.ts`: 3案の多様性選抜
   - `describe.ts`: プランの名前・特徴タグ生成
-  - `generate.ts`: パイプライン全体の統括。`candidatePool`（seed 非依存の全候補。メモ化。変種は適用後の帯構成が同一のものを列挙前に省く。readonly は配列レベルのみ）、`dedupeBySig`（反転込みの重複除去）、`selectPlans`（seed による選抜）、`generatePlansUncached`（診断用。キャッシュに入れない）。`GEN_VERSION` もここ
-  - `enumerate.ts`: 候補ギャラリー用。`enumeratePlans`（候補プールのコピー）、`galleryPlans`（多様性優先で上位24案）。`planKey`（v2 は `arch-WxH-<変種>`、変種なしは v1 の `arch-WxH`）の生成・解析と、key からの再構築（`planFromKey`。v1 の key は null）もここ
+  - `generate.ts`: パイプライン全体の統括。`candidatePool`（seed 非依存の全候補。メモ化。変種は適用後の帯構成が同一のものを列挙前に省く。readonly は配列レベルのみ）、`dedupeBySig`（反転込みの重複除去）。変種の列挙は最内側にクローゼットのモード（弱→強。`Variant.closet`。強は個室セルのある構成だけ）を持ち、同一配置は先着（弱）が残る、`selectPlans`（seed による選抜）、`generatePlansUncached`（診断用。キャッシュに入れない）。`GEN_VERSION` もここ
+  - `enumerate.ts`: 候補ギャラリー用。`enumeratePlans`（候補プールのコピー）、`galleryPlans`（多様性優先で上位24案）。`planKey`（v2 は `arch-WxH-<変種>`、強モードの案だけ末尾に `-k`（部分二階は `-p<W2>x<H2>-k`）、変種なしは v1 の `arch-WxH`）の生成・解析と、key からの再構築（`planFromKey`。v1 の key は null）もここ
   - `explain.ts`: 間取りの解説文 `explainPlan`（純関数）。スコア内訳・配置・入力だけから2〜3文を作り（部分二階は先頭に1文足す。最大4文）、当てはまらない特徴は書かない。階段と個室の関係は階ごとに `ROOM[type].cat === 'bed'`（書斎・和室を含む）で判定。弱点（廊下が長い・縦横比・面積適合）がある案は必ず触れる（枠が足りなければ階段の文と1文にまとめる）。LDK の畳数はキッチン独立案ではキッチンを含む。割合は小数1桁に切り捨て。しきい値は `EXPLAIN_TH`
   - `furnish.ts`: 家具の決定的な自動配置（純関数）。ドア開き・対面キッチンのカウンター・部屋名ラベル・既配置家具を避け、置けなければ置かない。ドアの弧は `Door.swing`（`doorSwing` が算出。葉の最大長 `DOOR_LEAF` = 1.8）の `rect` を避ける。FloorSvg・flow と共有する
 - `src/components/`: React UI（入力フォーム、PlanCard、SVG図面、拡大モーダル）
-- `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セットと独立検証（クラスタの辺共有・階段x一致・吹抜⊂LDK・最小の短辺を含む。短辺の閾値表 `SHORT_MIN` は `rooms.ts` の `MIN_SHORT` とは別に持つ）。`BOUNDARY` は0案・3案の境界条件で、先頭3件は短辺を入れても件数が変わらず、30坪/平屋/個室5だけが短辺で0案になる
+- `src/lib/`: URLハッシュ（`hash.ts`。`c` = 入力+seed+v、`p` = 開く案の planKey）、`seedNav.ts`（別の3案で組が変わる seed を探す）、`favorites.ts`（お気に入りの保存形式・上限30件・壊れたデータの復旧。版で足したスコア項目（個室収納）は旧データになくても受け付け、PlanDialog は「—」と表示する。ストレージは getItem/setItem を引数で受ける）、`metrics.ts`（比較表の指標）、`randomCondition.ts`（おまかせ条件。実現可能かつ `generatePlans` が3案を返す条件だけを返す）、`features.ts`（こだわり8種のキー・ラベルの唯一の定義）、フォーマット、階クランプなどUI補助。`src/core/testing.ts` はテスト共有の条件セットと独立検証（クラスタの辺共有・階段x一致・吹抜⊂LDK・最小の短辺を含む。短辺の閾値表 `SHORT_MIN` は `rooms.ts` の `MIN_SHORT` とは別に持つ）。`BOUNDARY` は0案・3案の境界条件で、先頭3件は短辺を入れても件数が変わらず、30坪/平屋/個室5だけが短辺で0案になる
   - `flow.ts`: 動線（来客: 玄関→LDK、生活: LDK→洗面・浴室）の計算 `computeFlows`（純関数、`src/core/` ではなく `src/lib/`）。ドアでつながる部屋の最短経路。中継は VIA 室だけを優先し、VIA だけで届かないときに限り `NON_VIA_PENALTY` を課して VIA 以外を通す。階をまたぐ区間は階段までを描く
   - `exportPng.ts`: SVG → PNG 書き出し。文字列処理（`buildExportSvg` など。置換は関数 replacer／slice 連結で `$` を壊さない）とブラウザ API（`svgElementToPng`・`downloadBlob`）を分けている。ObjectURL の解放は `REVOKE_DELAY_MS`（60秒）後
   - 追加UI: `Gallery`（候補。上位24案／全N案）、`FavoritesShelf`（お気に入り棚＋比較）、`StarButton`、`Furniture`（拡大表示のみ・「家具を表示」トグル）、`FlowOverlay`（動線の重ね表示。拡大表示のみ。部屋ラベルより下に描き、凡例は FloorSvg が viewBox 下端に足す専用の帯に置く）。印刷は PlanCard の print 専用ブロックが全階を並べ、ボタンを含む文は no-print で文ごと隠す
@@ -56,7 +58,7 @@ npm test      # vitest
 
 ## 生成ロジックの不変条件（安易に変えないこと）
 
-設計はClaude（Sonnet/Opus）との技術相談で確定済み。生成アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げ、ゴールデンテスト（`__fixtures__/gen-v<GEN_VERSION>.json`）を更新すること（手順は「テスト方針」節）。現在は GEN_VERSION 4。
+設計はClaude（Sonnet/Opus）との技術相談で確定済み。生成アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げ、ゴールデンテスト（`__fixtures__/gen-v<GEN_VERSION>.json`）を更新すること（手順は「テスト方針」節）。現在は GEN_VERSION 5。
 
 - 単位: **1セル = 455mm（半間）**。1畳 = 8セル²、1坪 = 16セル²。座標はすべて整数セル
 - 骨格: **現状は固定3帯構成**（北帯 / ホール帯 / 南帯の3本の水平帯。1Fの階段は北帯、LDK等は南帯）。帯の高さ・帯内の幅の配分は clamp付き water-filling（二分探索）+ 最大剰余法。910mm寄せはスコアで扱う（座標のスナップはしない）。汎用スライシング木は将来の課題。アーキタイプ内の変種（クラスタ列の逆順・階段の東西・2F個室の南北配分）で幅を出す
@@ -92,11 +94,12 @@ npm test      # vitest
 
 設計書は目標を含む。次の要件は未適合で、GEN_VERSION 手順に従った別の変更でだけ満たす（R-DOC-09、R-DOC-10）。ここにないものは未調査で、確認したら追記する。
 
-- 最大面積のハード制約: R-ROOM-01。GEN_VERSION 4 では最小の短辺を優先するため、固定3帯で部屋が帯の高さいっぱいに伸び、最大面積を超える部屋が増えた（玄関 5→201 室、WIC 2→17 室など。提示案での実測）。超過は棄却しない（v3 でもトイレ・収納で未適合）
+- 最大面積のハード制約: R-ROOM-01。GEN_VERSION 4 では最小の短辺を優先するため、固定3帯で部屋が帯の高さいっぱいに伸び、最大面積を超える部屋が増えた（玄関 5→201 室、WIC 2→17 室など。提示案での実測）。超過は棄却しない（v3 でもトイレ・収納で未適合）。GEN_VERSION 5 で、洗面・浴室・トイレ・ランドリーの超過分の外壁側2列を収納にし、幅の上限を `floor` にして減らしたが、未適合は残る（fixture と同じ条件グリッドの提示案240案での残数: 玄関156室・洗面91・トイレ72・浴室69・収納49・WIC16・パントリー9・洋室7・主寝室6・他数室）。玄関・土間は固定3帯では切れないので R-EXT-07 に回す
 - 収納の奥行（R-ROOM-09）: 収納は短辺の対象外。固定3帯では `min(w,h) ≤ 2` が押入型を表せないため課していない。R-EXT-06（個室付属のクローゼット・押入）で作り直す
 - 階段のy一致: R-STAIR-01、R-EVAL-18（x・幅のみ一致。下の「階段の高さの食い違い」）
 - 階段まわりの扉: R-DOOR-04（階段室に開く扉）。R-DOOR-13（階段から居室への扉）は未確認
-- 余剰面積の吸収先・個室のクローゼット: R-PROG-11、R-PROG-12、R-PROG-13、R-VERIFY-13（余りは帯の吸収セルへ入る）
+- 個室のクローゼット: R-VERIFY-13 は暫定適合（GEN_VERSION 5。全個室にクローゼット/WIC が付く案は人気6条件で約62%、個室への付属率は約85%。付かない個室は解説文の弱点で明示する。完全な適合（全案で全個室）は R-EXT-07）。R-PROG-11〜13 は v5 で適合（玄関収納・階段下収納は R-EXT-07）。書斎・和室の収納は対象外
+- 収納率の目標: R-IDX-02（収納率10%以上）。GEN_VERSION 5 で人気6条件×6 seed の中央値は 9.6%、10%未満の案は 55.6% で目標を割り込んだまま（仕様の試作の見込み 10.8% には届かず。階段の前を塞ぐ切り出しをやめた分、収納が減った）。グリッドの中央値は 8.6%。退行防止の下限は実測に合わせて closet.test.ts で 0.09・0.6 に緩めた。完全な適合は R-EXT-07
 - 廊下・ホール: R-SPACE-04、R-IDX-01（ホール帯が全幅で毎階ある固定3帯構成）
 - 駐車場・庭の生成への反映: R-IN-05、R-IN-06、R-IN-07
 - ドア弧: R-DOOR-12（wc・キッチンで器具と弧が重なる）
@@ -105,7 +108,7 @@ npm test      # vitest
 **階段室に扉が付いている現状の記録**: `stair` は VIA で、hall–stair のドアが常時付く（`derive.ts`。`NO_DOOR_PAIRS` に入っているのは stair–wc、stair–void だけ）。設計書は、階段を VIA としたうえで、出入りを扉のない開口とする（R-DOOR-14、R-DOOR-04）。VIA のタイブレークで hall が階段側へ開く組が出るのも同じ原因。直すと生成結果が変わるので GEN_VERSION を上げる。
 
 - **階段の高さの食い違い**: 1F と 2F で階段の x・幅は一致させているが、y（帯の高さ）は階ごとに決まるため一致しない（GEN_VERSION 1 の案の約84%で発生）。揃えると0案が激増するため別課題
-- **家具配置の見積もり（R-EXT-10 の前提課題）**: GEN_VERSION 4 で洋室（ベッド+机）を置ける率は 15%（79/522）、主寝室は 62.5%（160/256）まで下がった（v3 まで: 洋室 25% 超・主寝室 70% 超）。主因は部屋の形ではなく、(1) `labelRect`（部屋名ラベルの占有）の見積もりが大きめで置き場所を削ること、(2) 内開きのドア弧（開き先の部屋側に描く）が室内を塞ぐこと。以前の指標は細長い部屋ほど壁沿いに並べやすく有利だった。4.4帖以下の洋室は標本の 23%（121/522）で、1件も置けない。R-EXT-10（家具の見積もり）に取りかかる前に、`labelRect` の見積もりとドア弧の扱い（家具側の避け方）を見直す。`furnish.test.ts` は下限を実測近く（洋室 0.14・主寝室 0.6）に置き、短辺を満たす洋室に限った率と4.4帖以下の割合を別に固定している
+- **家具配置の見積もり（R-EXT-10 の前提課題）**: GEN_VERSION 4 で洋室（ベッド+机）を置ける率は 15%（79/522）、主寝室は 62.5%（160/256）まで下がった（v3 まで: 洋室 25% 超・主寝室 70% 超）。主因は部屋の形ではなく、(1) `labelRect`（部屋名ラベルの占有）の見積もりが大きめで置き場所を削ること、(2) 内開きのドア弧（開き先の部屋側に描く）が室内を塞ぐこと。以前の指標は細長い部屋ほど壁沿いに並べやすく有利だった。4.4帖以下の洋室は標本の 23%（121/522）で、1件も置けない。R-EXT-10（家具の見積もり）に取りかかる前に、`labelRect` の見積もりとドア弧の扱い（家具側の避け方）を見直す。GEN_VERSION 5（個室にクローゼットを切り出す）の実測は、洋室 18.6%（97/522）、主寝室 64.1%（164/256）、4.4帖以下の洋室は 29.3%（153/522）。洋室の率が v4（15.1%）より上がったのは、4.4帖以下の洋室の割合が増えた（23.2% → 29.3%）にもかかわらず、4.4帖超の洋室の置ける率が上がった（19.7% → 26.3%）ため。この上昇の理由は特定していない（`layoutFloor` の帯の高さの目標にクローゼット分を足す処理を外すと洋室は 8.2% に落ちるので、その加算が効いている）。`furnish.test.ts` は下限を実測近く（洋室 0.17・主寝室 0.6）に置き、短辺を満たす洋室に限った率と4.4帖以下の割合を別に固定している
 - **ドア弧の残課題**: (1) wc・キッチンで、器具と弧の重なりが増えた（wc は外開き特例の検討。R-DOOR-16）。(2) VIA どうしのタイブレーク（面積 → y → x。R-DOOR-15）で、hall-stair が階段側に開くなど不自然な組がある（上の階段室の扉と同じ原因）
 - 汎用スライシング木、3案が揃わない条件（0案になる境界条件が一定数ある。診断と代替案は `diagnoseEmpty`）の根本改善
 
@@ -127,7 +130,7 @@ npm test      # vitest
 
 ## テスト方針
 
-- golden は2本立て。**v1 の正解は `legacy/index.html`**（`src/core/golden.test.ts` が vm で実行し、`planName` / `planTags` / `feasibility` を比較する。`generatePlans` は GEN_VERSION 2 で生成方式が変わったため比較しない）。**版別の出力は `src/core/__fixtures__/gen-v<GEN_VERSION>.json`**（現行は gen-v4.json。gen-v3.json は v3→v4 の移行検証用に残す。`golden-fixture.test.ts`: 生成案84件（14条件×6 seed）・候補プールの件数/上位10件/ハッシュ・feasibility グリッド192条件の3案）
+- golden は2本立て。**v1 の正解は `legacy/index.html`**（`src/core/golden.test.ts` が vm で実行し、`planName` / `planTags` / `feasibility` を比較する。`generatePlans` は GEN_VERSION 2 で生成方式が変わったため比較しない）。**版別の出力は `src/core/__fixtures__/gen-v<GEN_VERSION>.json`**（現行は gen-v5.json（部分二階は gen-v5-partial.json）。gen-v4.json・gen-v4-partial.json は v4→v5 の移行検証用、gen-v3.json は v3→v4 の移行検証用に残す。`golden-fixture.test.ts`: 生成案84件（14条件×6 seed）・候補プールの件数/上位10件/ハッシュ・feasibility グリッド192条件の3案）
 - アルゴリズムを意図して変える場合は、`GEN_VERSION` を上げたうえで `UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts` で fixture を書き出す。fixture の genVersion が現在の `GEN_VERSION` と同じまま中身だけ変わる更新は拒否される（`UPDATE_GOLDEN=force` のときだけ許可）
 - core のテストを vitest で書く。最低限:
   - 人気条件（30坪/2階/個室3、30坪/平屋/個室3、35坪/2階/個室4）で複数 seed とも3案生成できる

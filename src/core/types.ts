@@ -45,6 +45,8 @@ export interface Cell {
   minArea: number
   maxArea: number
   fixedW?: number
+  /** 個室セルのクローゼット切り出し対象（bandsFor が付ける。生成のモード次第で切り出す） */
+  closet?: boolean
 }
 
 export interface Band {
@@ -100,6 +102,8 @@ export interface Variant {
   stairEnd: 'E' | 'W'
   rev: [boolean, boolean, boolean, boolean]
   bedShift: -1 | 0 | 1 | 2
+  /** クローゼットのモード（GEN_VERSION 5）。'hard' = 強（個室の幅の下限を上げて必ず付ける）。省略 = 弱（入るときだけ付ける） */
+  closet?: 'hard'
 }
 
 /** i 階の板の矩形。fp がなければ建物全体（Plan.W × Plan.H） */
@@ -146,7 +150,7 @@ export interface ScoredPlan extends Plan {
  * v2: 末尾に変種 "-" + stairEnd + rev4桁 + shift（例: "1-16x14-E01000"）。同じ条件なら1つの案に対応する
  */
 export type PlanKey = `${ArchId}-${number}x${number}` | `${ArchId}-${number}x${number}-${string}`
-// 部分二階は末尾に -p<W2>x<H2>（例: "1-18x14-E01000-p12x14"）
+// 部分二階は末尾に -p<W2>x<H2>（例: "1-18x14-E01000-p12x14"）。強モード（Variant.closet）の案は末尾に -k
 
 export interface Edge {
   dir: 'v' | 'h'

@@ -107,15 +107,25 @@ describe('部分二階の生成', () => {
     for (const { cfg } of [...POPULAR, defined(PARTIAL_CONDITIONS[3])]) {
       const st = poolBuildStats(cfg)
       expect(st.poolSize).toBeGreaterThan(0)
-      // 外形の組12 × アーキタイプ3 × 変種（distinct 後。2階建ての全変種は 2×16×4=128）が上限
-      expect(st.assembled).toBeLessThanOrEqual(12 * 3 * 128)
-      expect(st.assembled).toBeLessThanOrEqual(3600)
+      // 外形の組12 × アーキタイプ3 × 変種（distinct 後。2階建ての全変種は 2×16×4=128 に、クローゼットのモード（弱・強）で ×2）が上限
+      expect(st.assembled).toBeLessThanOrEqual(12 * 3 * 128 * 2)
+      expect(st.assembled).toBeLessThanOrEqual(7200) // v5 の実測最大 6144（v4 は 3072）
       // 1Fの割り付け: (arch, 1Fの板, stairEnd, rev[0], rev[1]) の個数が上限 = 12 × 3 × 2 × 4
       expect(st.f1Layouts).toBeLessThanOrEqual(12 * 3 * 2 * 4)
       expect(st.f1Validations).toBeLessThanOrEqual(st.f1Layouts)
       // メモが効いている（組み立てに対して 1F の割り付けは桁違いに少ない）
       expect(st.f1Layouts * 5).toBeLessThan(st.assembled)
     }
+  })
+
+  it('部分二階の1Fの割り付けの回数（f1Layouts・f1Validations）は v4 から変わらない（クローゼットのモードは1Fのメモに入らない）', () => {
+    // v4（コミット d865fd4）の実測。assembled は変種のモード（弱・強）で2倍になるが、1Fは個室セルがないのでモードで増えない
+    const v4: [number, number][] = [[264, 120], [240, 72], [240, 216], [144, 24], [264, 128], [264, 168]]
+    expect(PARTIAL_CONDITIONS).toHaveLength(v4.length)
+    PARTIAL_CONDITIONS.forEach(({ name, cfg }, i) => {
+      const st = poolBuildStats(cfg)
+      expect([name, st.f1Layouts, st.f1Validations]).toEqual([name, v4[i]?.[0], v4[i]?.[1]])
+    })
   })
 
   it('総二階の cfg（story 省略・full）とはキャッシュが混ざらず、平屋では story は無視される', () => {

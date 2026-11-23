@@ -3,6 +3,7 @@ import type { ArchId, Band, Cell, FeatureKey, Plan, PlanConfig, Room, RoomType, 
 import type { Rng } from './rng'
 import { cell } from './rooms'
 import { layoutFloor } from './slicing'
+import { carveFloor } from './carve'
 
 export type { Rng }
 
@@ -17,9 +18,9 @@ export function bandsFor(cfg: PlanConfig, arch: ArchId, floor: number, W?: numbe
     if (floor !== 1) return null
     if (arch === 0) {
       // 北に個室+水回り、南にLDK
-      const north = [cell('master')]
+      const north = [cell('master', { closet: !has('wic') })]
       if (has('wic')) north.push(cell('wic'))
-      for (let i = 0; i < kids; i++) north.push(cell('bed', { label: '洋室' + (i + 1) }))
+      for (let i = 0; i < kids; i++) north.push(cell('bed', { closet: true, label: '洋室' + (i + 1) }))
       north.push(cell('wash'), cell('bath'), cell('wc'))
       if (has('laundry')) north.push(cell('laundry'))
       const south = [cell('entry')]
@@ -39,9 +40,9 @@ export function bandsFor(cfg: PlanConfig, arch: ArchId, floor: number, W?: numbe
     const north = [cell('wash'), cell('bath')]
     if (has('laundry')) north.push(cell('laundry'))
     north.push(cell('wc'))
-    for (let i = 0; i < kids; i++) north.push(cell('bed', { label: '洋室' + (i + 1) }))
+    for (let i = 0; i < kids; i++) north.push(cell('bed', { closet: true, label: '洋室' + (i + 1) }))
     north.push(cell('store'))
-    const south = [cell('master')]
+    const south = [cell('master', { closet: !has('wic') })]
     if (has('wic')) south.push(cell('wic'))
     south.push(cell('ldk'))
     if (!has('kitchenFace')) south.push(cell('kitchen'))
@@ -89,11 +90,11 @@ export function bandsFor(cfg: PlanConfig, arch: ArchId, floor: number, W?: numbe
   /* 2階 */
   if (has('void') && arch === 2) {
     // 吹抜アーキタイプ: 主寝室を北へ逃がし、南は吹抜+個室
-    const northV = [cell('master')]
+    const northV = [cell('master', { closet: !has('wic') })]
     if (has('wic')) northV.push(cell('wic'))
     northV.push(cell('wc'), cell('stair', { fixedW: 4 }))
     const southV = [cell('void', { fixedW: voidW })]
-    for (let i = 0; i < kids; i++) southV.push(cell('bed', { label: '洋室' + (i + 1) }))
+    for (let i = 0; i < kids; i++) southV.push(cell('bed', { closet: true, label: '洋室' + (i + 1) }))
     if (has('study')) southV.push(cell('study'))
     return [
       { cells: northV, minH: 7, maxH: 9 },
@@ -103,16 +104,16 @@ export function bandsFor(cfg: PlanConfig, arch: ArchId, floor: number, W?: numbe
   }
   const south = []
   if (has('void')) south.push(cell('void', { fixedW: voidW }))
-  south.push(cell('master'))
+  south.push(cell('master', { closet: !has('wic') }))
   if (has('wic')) south.push(cell('wic'))
   let southKids =
     arch === 1 ? kids : arch === 2 ? (kids <= 1 ? 0 : Math.floor((kids - 1) / 2)) : Math.ceil(kids / 2)
   if (has('void') && arch === 1) southKids = Math.max(0, kids - 1)
-  for (let i = 0; i < southKids; i++) south.push(cell('bed', { label: '洋室' + (i + 1) }))
+  for (let i = 0; i < southKids; i++) south.push(cell('bed', { closet: true, label: '洋室' + (i + 1) }))
   const north = [cell('wc')]
   if (kids <= 2 && !has('void')) north.push(cell('store'))
   const northKids = kids - southKids
-  for (let i = 0; i < northKids; i++) north.push(cell('bed', { label: '洋室' + (southKids + i + 1) }))
+  for (let i = 0; i < northKids; i++) north.push(cell('bed', { closet: true, label: '洋室' + (southKids + i + 1) }))
   if (has('study') && arch !== 2) north.push(cell('study'))
   north.push(cell('stair', { fixedW: 4 }))
   return [
@@ -235,7 +236,9 @@ export type F1Memo = Map<string, F1Layout>
 
 /** 1F の割り付けが依存するもの: (cfg, arch, 1Fの板, stairEnd, rev[0], rev[1])。cfg が違う memo の使い回しで取り違えないよう cfgId を先頭に含める */
 export function f1MemoKey(cfg: PlanConfig, arch: ArchId, W: number, H: number, v: Variant): string {
-  return `${cfgId(cfg)}|${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}`
+  // 平屋の1F には個室があり、クローゼットのモードで割り付けが変わる（2階建ての1F には個室がないのでモードを含めない）
+  const mode = cfg.floors === 1 && v.closet === 'hard' ? 'k' : ''
+  return `${cfgId(cfg)}|${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}${mode}`
 }
 
 /** 外形にアーキタイプを当てはめて1案を組み立てる。構造検査に落ちたら null。variant 省略は正規形（plan.variant は付けない） */
@@ -265,6 +268,7 @@ export function buildPlanStage(
   const { W, H } = fp
   const ignoreMinShort = opts?.ignoreMinShort ?? false
   const v = variant ?? CANONICAL
+  const closet = v.closet === 'hard' ? 'hard' : 'soft'
   const hasVoid = cfg.feats.indexOf('void') >= 0
   const partial = isPartial(cfg)
   if (partial && (fp.W2 === undefined || fp.H2 === undefined)) return fail('variant')
@@ -276,7 +280,8 @@ export function buildPlanStage(
   if (f1 === undefined) {
     const b1 = bandsFor(cfg, arch, 1, W)
     const f1bands = b1 && applyVariant(b1, 1, v, hasVoid)
-    f1 = !f1bands ? 'variant' : (layoutFloor(W, H, f1bands, { ignoreMinShort }) ?? 'f1')
+    const l1 = f1bands ? layoutFloor(W, H, f1bands, { ignoreMinShort, closet }) : null
+    f1 = !f1bands ? 'variant' : l1 ? { rooms: ignoreMinShort ? l1.rooms : carveFloor(l1.rooms), heights: l1.heights } : 'f1'
     memo?.set(memoKey, f1)
   }
   if (typeof f1 === 'string') return fail(f1)
@@ -292,9 +297,10 @@ export function buildPlanStage(
     const southH = f1.heights[2]
     if (southH === undefined) return fail('f1')
     const capSouth = southH - (H - H2)
-    const f2 = layoutFloor(W2, H2, f2bands, { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort })
+    const f2 = layoutFloor(W2, H2, f2bands, { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort, closet })
     if (!f2) return fail('f2')
-    const f2rooms = ox === 0 ? f2.rooms : f2.rooms.map((r) => ({ ...r, x: r.x + ox }))
+    const carved2 = ignoreMinShort ? f2.rooms : carveFloor(f2.rooms)
+    const f2rooms = ox === 0 ? carved2 : carved2.map((r) => ({ ...r, x: r.x + ox }))
     const floor2: Plan['floors'][number] = { label: '2F', rooms: relabelBeds(f2rooms) }
     if (partial) {
       floor2.fp = { x: ox, y: 0, W: W2, H: H2 }
@@ -318,6 +324,6 @@ export function buildPlanStage(
     }
   }
   const plan: Plan = { W, H, floors, arch, totalArea: area }
-  if (variant) plan.variant = { stairEnd: variant.stairEnd, rev: [...variant.rev], bedShift: variant.bedShift }
+  if (variant) plan.variant = { stairEnd: variant.stairEnd, rev: [...variant.rev], bedShift: variant.bedShift, ...(variant.closet ? { closet: variant.closet } : {}) }
   return { plan }
 }
