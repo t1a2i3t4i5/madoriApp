@@ -26,10 +26,11 @@ export const HALL_RULES = {
   entryMaxOnly: true,
   /**
    * 主寝室・洋室は、ホール・玄関・土間からだけ入れる（和室・書斎は LDK からも可）。false = 個室すべてに LDK からの入口を許す。
-   * 仕様の推奨は true だが、実測（GEN_VERSION 6）で true は平屋の候補プールを減らし（30坪/平屋/個室3: 36 → 31）v5 未満になるため false を採る。
+   * 仕様の推奨どおり true。実測（レビュー時）: true にしても3案が出る条件は 69 → 69 で変わらず、人気6条件の提示案も不変
+   * （平屋 30坪/個室3 の候補プールは 36 → 31 に減る）。false だと LDK を通らないと入れない寝室が出る（グリッド提示案207件のうち24件）。
    * 2階建ては LDK が1Fだけ・個室が2Fだけなので影響しない（平屋だけ）
    */
-  strictBed: false,
+  strictBed: true,
 }
 
 const CIRC: ReadonlySet<string> = new Set(['hall', 'entry', 'doma'])

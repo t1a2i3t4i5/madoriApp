@@ -249,11 +249,14 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       expect(lost).toBe(3)
       expect(Object.keys(renamed).every((k) => v5.cases.some((c) => c.name === k))).toBe(true)
     })
-    it('人気3条件（総二階・平屋）の候補プールは v5 以上。BOUNDARY の件数は期待どおり', () => {
-      for (const name of ['30坪/2階/個室3', '30坪/平屋/個室3', '35坪/2階/個室4']) {
+    it('人気3条件の候補プール: 総二階は v5 以上。平屋は strictBed（G3）で 36 → 31 に減るが、3案は出る。BOUNDARY の件数は期待どおり', () => {
+      for (const name of ['30坪/2階/個室3', '35坪/2階/個室4']) {
         const before = v5.pools.find((p) => p.name === name)?.count ?? Infinity
         expect(now.pools.find((p) => p.name === name)?.count ?? 0, name).toBeGreaterThanOrEqual(before)
       }
+      // 平屋は主寝室・洋室を LDK 経由で入れる案が落ちる（strictBed=true。レビュー実測 36 → 31）。提示案は不変
+      expect(now.pools.find((p) => p.name === '30坪/平屋/個室3')?.count).toBe(31)
+      expect(now.cases.filter((c) => c.name === '30坪/平屋/個室3').every((c) => c.plans.length === 3)).toBe(true)
       for (const { name, expected } of BOUNDARY) {
         const cs = now.cases.filter((c) => c.name === name)
         expect(cs).toHaveLength(SEEDS.length)
