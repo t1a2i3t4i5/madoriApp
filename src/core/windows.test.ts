@@ -117,7 +117,7 @@ describe('windowStats: 提示案の不変条件と実測', () => {
   })
 })
 
-/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 918室）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 918室は仕様の 916室と 2室違う。生成に ~90 秒かかるので1度だけ作る */
+/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 917室。GEN_VERSION 7 までは 918室。v8 の寄せで2階のスコアが変わり選抜される案が入れ替わったため。案数は同じ 207）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 917室は仕様の 916室と 1室違う。生成に ~90 秒かかるので1度だけ作る */
 let gridCache: { full: Plan[]; part: Plan[] } | null = null
 function grid(): { full: Plan[]; part: Plan[] } {
   if (gridCache) return gridCache
@@ -157,9 +157,9 @@ const rate = (plans: Plan[]) => {
 const GRID_TIMEOUT = 600_000
 
 describe('windowStats: feasibility グリッド（seed 1）の実測と退行防止', () => {
-  it('総二階・平屋（207案・居室918室）: 二面採光率 ≥0.51（GEN_VERSION 7 の実測 53.1%。v6 は 45.3%）、通風 C ≤1.5%（実測 7室 = 0.8%。v6 は 10室）', () => {
+  it('総二階・平屋（207案・居室917室）: 二面採光率 ≥0.51（GEN_VERSION 7 の実測 53.1%。v6 は 45.3%）、通風 C ≤1.5%（実測 7室 = 0.8%。v6 は 10室）', () => {
     const r = rate(grid().full)
-    expect(r.n).toBe(918)
+    expect(r.n).toBe(917)
     expect(r.two).toBeGreaterThanOrEqual(0.51)
     expect(r.c).toBeLessThanOrEqual(0.015)
   }, GRID_TIMEOUT)

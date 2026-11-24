@@ -119,7 +119,104 @@ function mergePair(
   return out
 }
 
-function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort = false, closet?: ClosetMode): Room[] | null {
+/** 帯内の切断線の寄せ（GEN_VERSION 8）。xs = 揃えたい x（昇順。板の座標）、d = 寄せの幅（セル） */
+export interface BandAlign {
+  xs: readonly number[]
+  d: number
+}
+
+/**
+ * 可変セルの幅を、割り付け（water-filling）の幅 w0 から ±d の範囲で動かし、セル境界とクローゼットの内壁の x が
+ * align.xs に一致する数を最大にする（DP。合計幅は変えない。固定幅のセルは動かさない）。
+ * 同点は、ずれ Σ|w−w0| が小さい方 → 左のセルから小さい幅（決定性）。
+ * C1′: 弱モードで切り出せていたクローゼットを、寄せた結果切り出せなくなる幅は候補から外す。
+ * 入力は書き換えず、新しい幅の配列（flex と同じ並び）を返す
+ */
+function alignWidths(
+  cells: readonly Cell[],
+  flexIdx: readonly number[],
+  items: readonly WaterfillItem[],
+  alloc: readonly number[],
+  h: number,
+  closet: ClosetMode | undefined,
+  align: BandAlign,
+): number[] {
+  const xs = new Set(align.xs)
+  const n = cells.length
+  const W = cells.reduce((s, c, i) => s + (c.fixedW || alloc[flexIdx.indexOf(i)] || 0), 0)
+  const slot = new Map(flexIdx.map((ci, k) => [ci, k]))
+  const fits = (c: Cell, w: number) => w - CLOSET_W >= Math.max(minShort(c.type), Math.ceil(c.minArea / h))
+  // セル i を幅 w で x から置いたときの一致数（右端の境界。最後のセルの右端は板の端なので数えない）
+  const gain = (i: number, x: number, w: number): number => {
+    const c = cells[i] as Cell
+    let g = 0
+    if (closet && c.closet && (closet === 'hard' || fits(c, w))) {
+      const inner = x !== 0 ? x + CLOSET_W : x + w - CLOSET_W
+      if (xs.has(inner)) g++
+    }
+    if (i < n - 1 && xs.has(x + w)) g++
+    return g
+  }
+  // 候補の幅（セルごと）
+  const options = (i: number): number[] => {
+    const c = cells[i] as Cell
+    const k = slot.get(i)
+    if (k === undefined) return [c.fixedW || 0]
+    const it = items[k] as WaterfillItem
+    const w0 = alloc[k] as number
+    const lost = closet === 'soft' && !!c.closet && fits(c, w0)
+    const out: number[] = []
+    // 寄せで最大面積を新たに破らない: 上限は割り付けの幅 w0 か、最大面積に収まる幅（クローゼット分を足す）の大きい方
+    const cap = Math.max(w0, Math.floor(c.maxArea / h) + (closet && c.closet ? CLOSET_W : 0))
+    for (let w = Math.max(it.min, w0 - align.d); w <= Math.min(it.max, cap, w0 + align.d); w++) {
+      if (lost && !fits(c, w)) continue
+      out.push(w)
+    }
+    return out.length ? out : [w0]
+  }
+  type Score = { m: number; dev: number }
+  const better = (a: Score, b: Score) => a.m > b.m || (a.m === b.m && a.dev < b.dev)
+  // best[i].get(x) = セル i 以降を x から置いたときの最良（置けなければ undefined）
+  const best: Map<number, Score>[] = Array.from({ length: n + 1 }, () => new Map())
+  best[n]?.set(W, { m: 0, dev: 0 })
+  for (let i = n - 1; i >= 0; i--) {
+    const opts = options(i)
+    const k = slot.get(i)
+    for (let x = 0; x <= W; x++) {
+      let top: Score | undefined
+      for (const w of opts) {
+        const next = best[i + 1]?.get(x + w)
+        if (!next) continue
+        const sc: Score = { m: next.m + gain(i, x, w), dev: next.dev + (k === undefined ? 0 : Math.abs(w - (alloc[k] as number))) }
+        if (!top || better(sc, top)) top = sc
+      }
+      if (top) best[i]?.set(x, top)
+    }
+  }
+  // 復元: 同点なら左のセルから小さい幅（opts は昇順）
+  const out = alloc.slice()
+  let x = 0
+  for (let i = 0; i < n; i++) {
+    const want = best[i]?.get(x)
+    if (!want) return alloc.slice()
+    const k = slot.get(i)
+    let chosen = (cells[i] as Cell).fixedW || 0
+    for (const w of options(i)) {
+      const next = best[i + 1]?.get(x + w)
+      if (!next) continue
+      const sc: Score = { m: next.m + gain(i, x, w), dev: next.dev + (k === undefined ? 0 : Math.abs(w - (alloc[k] as number))) }
+      if (sc.m === want.m && sc.dev === want.dev) {
+        chosen = w
+        break
+      }
+    }
+    if (k !== undefined) out[k] = chosen
+    x += chosen
+  }
+  return out
+}
+
+function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort = false, closet?: ClosetMode, align?: BandAlign): Room[] | null {
   // 帯の高さが、帯内の幅可変セルの最小の短辺に満たなければ成立しない
   if (!ignoreMinShort && cells.some((c) => !c.fixedW && h < minShort(c.type))) return null
   const fixedTotal = cells.reduce((s, c) => s + (c.fixedW || 0), 0)
@@ -155,8 +252,11 @@ function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort 
       const absorber = items[best]
       if (absorber) absorber.max = avail
     }
-    const alloc = waterfill(avail, items)
-    if (!alloc) return null
+    const base = waterfill(avail, items)
+    if (!base) return null
+    // GEN_VERSION 8: 2F の切断線を 1F の壁の x に寄せる（診断の ignoreMinShort では寄せない）
+    const flexIdx = cells.flatMap((c, i) => (c.fixedW ? [] : [i]))
+    const alloc = align && !ignoreMinShort && align.xs.length ? alignWidths(cells, flexIdx, items, base, h, closet, align) : base
     for (const [i, c] of flex.entries()) {
       const w = alloc[i]
       if (w === undefined) return null
@@ -215,8 +315,8 @@ function capClosets(rooms: Room[]): Room[] {
 }
 
 /** 帯（バンド）1本を横に割り付ける。fixedWセルは固定幅、それ以外はwater-filling */
-export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMinShort = false, closet?: ClosetMode): Room[] | null {
-  const first = tryBand(band.cells, W, y, h, ignoreMinShort, closet)
+export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMinShort = false, closet?: ClosetMode, align?: BandAlign): Room[] | null {
+  const first = tryBand(band.cells, W, y, h, ignoreMinShort, closet, align)
   if (first) return first
   // 小物セルが多すぎてmin合計が溢れる場合はクラスタを結合して再試行する。結合できるペアがなければ次の結合へ進む
   let cells = band.cells
@@ -228,7 +328,7 @@ export function layoutBand(band: Band, W: number, y: number, h: number, ignoreMi
     const merged = mergePair(cells, t1, t2, label, keep)
     if (!merged) continue
     cells = merged
-    const res = tryBand(cells, W, y, h, ignoreMinShort, closet)
+    const res = tryBand(cells, W, y, h, ignoreMinShort, closet, align)
     if (res) return res
   }
   return null
@@ -241,6 +341,10 @@ export interface LayoutFloorOpts {
   ignoreMinShort?: boolean
   /** クローゼットのモード。省略 = 切り出さない（v4 の割り付け）。ignoreMinShort のときは無効 */
   closet?: ClosetMode
+  /** GEN_VERSION 8: 帯番号 → 揃えたい x の昇順配列（板の座標。0 と板の幅は含めない）。各帯の切断線を ±alignD セルで寄せる。省略 = 寄せない */
+  align?: Record<number, readonly number[]>
+  /** 寄せの幅（セル）。既定 1 */
+  alignD?: number
 }
 
 /** 1フロア分: 帯の高さをwater-fillingで決めてから各帯を割り付ける。帯の高さ（帯番号順）も返す */
@@ -304,7 +408,8 @@ export function layoutFloor(
   for (const [i, b] of bands.entries()) {
     const h = b.fixedH || heights[i]
     if (h === undefined) return null
-    const rs = layoutBand(b, W, y, h, ignoreMinShort, closet)
+    const xs = opts?.align?.[i]
+    const rs = layoutBand(b, W, y, h, ignoreMinShort, closet, xs && xs.length ? { xs, d: opts?.alignD ?? 1 } : undefined)
     if (!rs) return null
     rs.forEach((r) => rooms.push(r))
     hs.push(h)

@@ -20,6 +20,8 @@ import type { PlanConfig, ScoredPlan } from './types'
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}-partial.json`, import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
 const FIXTURE_V6 = new URL('./__fixtures__/gen-v6-partial.json', import.meta.url)
+const FIXTURE_V7 = new URL('./__fixtures__/gen-v7-partial.json', import.meta.url)
+const FIXTURE_V7_F1 = new URL('./__fixtures__/gen-v7-f1sig.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5-partial.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-partial-grid-stairs.json', import.meta.url)
 
@@ -126,14 +128,14 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
   })
 
   // 退行防止の指標（hall-stair-spec §10.3）。しきい値は GEN_VERSION 6 の実測（括弧内）に余裕を持たせた値
-  it('部分二階グリッド: 廊下率の中央値 ≤ 9.0%（実測 7.6）、8%以下の案 ≥ 35%（実測 60.6%）。階段は上下一致の 4×5 / 4×6。3案が出る条件は 33 以上。直下率の中央値 ≥ 40%', () => {
+  it('部分二階グリッド: 廊下率の中央値 ≤ 9.0%（実測 7.6）、8%以下の案 ≥ 35%（実測 60.6%）。階段は上下一致の 4×5 / 4×6。3案が出る条件は 33 以上。直下率の中央値 ≥ 55%（GEN_VERSION 8 の実測 60.0%。v7 は 54.3%）', () => {
     const hall = gridPlans.map((p) => hallRatioIndependent(p) * 100)
     expect(hall.length).toBeGreaterThan(80)
     expect(quantile(hall, 0.5)).toBeLessThanOrEqual(9.0)
     expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.35)
     for (const p of gridPlans) expect(stairViolations(p), planKey(p)).toEqual([])
     expect(Object.keys(now.grid).filter((k) => now.grid[k]?.length === 3).length).toBeGreaterThanOrEqual(33)
-    expect(quantile(gridPlans.map((p) => chokkaRate(p) * 100), 0.5)).toBeGreaterThanOrEqual(40)
+    expect(quantile(gridPlans.map((p) => chokkaRate(p) * 100), 0.5)).toBeGreaterThanOrEqual(55)
   })
 
   // 移行検証（v4 → v5。fixture どうしの記録）: 成立条件・プールは v4 以上、0案の境界は不変（旧 fixture は消さずに残す）
@@ -165,7 +167,11 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
   // 移行検証: GEN_VERSION 7 はスコアの置き換えだけ（棄却しない）。プールの件数・3案が出る条件は v6 と同一
   describe('v6 → v7 の移行（二面採光）', () => {
     let v6: Fixture
-    beforeAll(() => { v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture })
+    let now: Fixture
+    beforeAll(() => {
+      v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture
+      now = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture // v7 の記録どうしの比較（現行は v8）
+    })
     it('候補プールの sig の集合は、全条件で v6 と一致する（スコア以外の生成が不変であることの固定）', () => {
       expect(v6.pools.every((p) => p.sigSha256.length === 64)).toBe(true)
       expect(now.pools.map((p) => [p.name, p.sigSha256])).toEqual(v6.pools.map((p) => [p.name, p.sigSha256]))
@@ -175,6 +181,34 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
       expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v6.grid).sort())
       for (const [k, v] of Object.entries(v6.grid)) expect(now.grid[k]?.length, k).toBe(v.length)
       expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v6.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+  })
+
+  // 移行検証: GEN_VERSION 8 は 2F の帯内の切断線を 1F の壁に寄せる（R-SPACE-35）。1F は不変（総二階側の golden-fixture.test.ts が v7 のコードで記録したハッシュで固定。ここは部分二階）
+  describe('v7 → v8 の移行（2F の切断線の寄せ）', () => {
+    let v7: Fixture
+    let f1sig: Record<string, string>
+    beforeAll(() => {
+      v7 = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture
+      f1sig = JSON.parse(readFileSync(FIXTURE_V7_F1, 'utf8')) as typeof f1sig
+    })
+    it('1F の部屋は、候補プールのすべての案で v7 と同一（key の集合も同一）', () => {
+      for (const { name, cfg } of PARTIAL_CONDITIONS) {
+        const lines = candidatePool(copy(cfg)).map((p) => `${planKey(p)}|${(p.floors[0]?.rooms ?? []).map((r) => `${r.type}:${r.x},${r.y},${r.w},${r.h}`).join(';')}`).sort()
+        expect(createHash('sha256').update(JSON.stringify(lines)).digest('hex'), name).toBe(f1sig[name])
+      }
+    }, 120_000)
+    it('候補プールの件数は条件ごとに v7 と完全一致', () => {
+      expect(v7.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
+      for (const [i, p] of now.pools.entries()) {
+        const before = v7.pools[i]?.count ?? 0
+        expect(p.count, p.name).toBe(before)
+      }
+    })
+    it('grid: 条件の集合と、3案が出る条件の集合・件数は v7 と同一。named 条件の提示案の件数も同一', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v7.grid).sort())
+      for (const [k, v] of Object.entries(v7.grid)) expect(now.grid[k]?.length, k).toBe(v.length)
+      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v7.cases.map((c) => [c.name, c.seed, c.plans.length]))
     })
   })
 
