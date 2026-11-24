@@ -24,6 +24,9 @@ const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.u
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
 const FIXTURE_V6 = new URL('./__fixtures__/gen-v6.json', import.meta.url)
+const FIXTURE_V7 = new URL('./__fixtures__/gen-v7.json', import.meta.url)
+/** v7 のコードで記録した、候補プールの条件ごとの「key|1F の部屋」の sha256（v7 → v8 で 1F が不変であることの固定） */
+const FIXTURE_V7_F1 = new URL('./__fixtures__/gen-v7-f1sig.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-grid-stairs.json', import.meta.url)
 
@@ -197,10 +200,46 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
     })
   })
 
-  // 移行検証: GEN_VERSION 7 はスコア「採光」を「二面採光」に置き換えた（棄却はしないので、プールの件数・3案が出る条件は不変。順位だけが変わる）
+  // 移行検証: GEN_VERSION 8 は 2F の帯内の切断線を 1F の壁に寄せる（R-SPACE-35）。1F・平屋は不変で、2F の幅だけが変わる
+  describe('v7 → v8 の移行（2F の切断線の寄せ）', () => {
+    let v7: Fixture
+    let f1sig: Record<string, string>
+    beforeAll(() => {
+      v7 = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture
+      f1sig = JSON.parse(readFileSync(FIXTURE_V7_F1, 'utf8')) as typeof f1sig
+    })
+    it('1F の部屋は、候補プールのすべての案で v7 と同一（key の集合も同一。v7 のコードで記録した条件ごとのハッシュと一致）', () => {
+      for (const { name, cfg } of [...CONDITIONS, ...BOUNDARY]) {
+        const lines = candidatePool(copy(cfg)).map((p) => `${planKey(p)}|${(p.floors[0]?.rooms ?? []).map((r) => `${r.type}:${r.x},${r.y},${r.w},${r.h}`).join(';')}`).sort()
+        expect(createHash('sha256').update(JSON.stringify(lines)).digest('hex'), name).toBe(f1sig[name])
+      }
+    }, 120_000)
+    it('候補プールの件数の差は条件ごとに ±1% 以内（実測は全条件で 0）', () => {
+      expect(v7.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
+      for (const [i, p] of now.pools.entries()) {
+        const before = v7.pools[i]?.count ?? 0
+        expect(Math.abs(p.count - before), p.name).toBeLessThanOrEqual(Math.ceil(before * 0.01))
+      }
+    })
+    it('grid: 条件の集合と、3案が出る条件の集合は v7 と同一。named 条件の提示案の件数も同一', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v7.grid).sort())
+      for (const [k, v] of Object.entries(v7.grid)) expect(now.grid[k]?.length, k).toBe(v.length)
+      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v7.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+    it('平屋の提示案の配置は v7 と同一（寄せは 2F だけ）', () => {
+      const flat = (f: Fixture) => f.cases.filter((c) => c.name.includes('平屋')).map((c) => [c.name, c.seed, c.plans.map((p) => p.floors)])
+      expect(flat(now)).toEqual(flat(v7))
+    })
+  })
+
+  // 移行検証（fixture どうしの記録。現行の生成は v8）: GEN_VERSION 7 はスコア「採光」を「二面採光」に置き換えた（棄却はしないので、プールの件数・3案が出る条件は不変。順位だけが変わる）
   describe('v6 → v7 の移行（二面採光）', () => {
     let v6: Fixture
-    beforeAll(() => { v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture })
+    let now: Fixture
+    beforeAll(() => {
+      v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture
+      now = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture // v7 の記録どうしの比較（現行は v8）
+    })
     it('候補プールの条件ごとの件数は v6 と同一', () => {
       expect(now.pools.map((p) => [p.name, p.count])).toEqual(v6.pools.map((p) => [p.name, p.count]))
     })
@@ -312,7 +351,7 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
   })
 
   // 退行防止の指標（hall-stair-spec §10.3）。しきい値は GEN_VERSION 6 の実測（括弧内）に余裕を持たせた値
-  describe('v6 の退行防止の指標（廊下率・直下率・LDK・階段）', () => {
+  describe('退行防止の指標（v6 の廊下率・LDK・階段、v8 の直下率）', () => {
     const pct = (xs: readonly number[]) => xs.map((x) => x * 100)
     it('グリッド（総二階・平屋 seed 1 の提示案）: 廊下率の中央値 ≤ 8.0%（実測 7.9）、8%以下の案 ≥ 50%（実測 54.1%）', () => {
       const hall = pct(gridPlans.map(hallRatioIndependent))
@@ -320,10 +359,12 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       expect(quantile(hall, 0.5)).toBeLessThanOrEqual(8.0)
       expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.5)
     })
-    it('グリッド2階建て: 直下率の中央値 ≥ 42%（実測 46.5%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
+    it('グリッド2階建て: 直下率の中央値 ≥ 52%（GEN_VERSION 8 の実測 54.5%。v7 は 47.5%）、40%未満の案 ≤ 10%（実測 7.5%。v7 は 18.3%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
       const two = gridPlans.filter((p) => p.floors.length === 2)
       expect(two.length).toBeGreaterThan(80)
-      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(42)
+      const rates = pct(two.map(chokkaRate))
+      expect(quantile(rates, 0.5)).toBeGreaterThanOrEqual(52)
+      expect(rates.filter((r) => r < 40).length / rates.length).toBeLessThanOrEqual(0.10)
       expect(quantile(two.map((p) => p.floors[0]?.rooms.find((r) => r.type === 'ldk')?.area ?? 0), 0.5)).toBeGreaterThanOrEqual(90)
     })
     it('グリッドの提示案: 階段の矩形が上下で一致し、4×5 / 4×6 の折り返しのみ（4×4 はゼロ）。3案が出る条件は 69 以上', () => {
@@ -333,13 +374,13 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       expect([...sizes].sort()).toEqual(['4x5', '4x6'])
       expect(Object.keys(now.grid).filter((k) => now.grid[k]?.length === 3).length).toBeGreaterThanOrEqual(69)
     })
-    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 11.0%（実測 10.3）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 50%（実測 55.9%）', () => {
+    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 11.0%（実測 10.3）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 56%（GEN_VERSION 8 の実測 58.8%。v7 は 55.9%）', () => {
       const plans = [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)].flatMap(({ cfg }) => SEEDS.flatMap((s) => generatePlans(copy(cfg), s)))
       expect(plans).toHaveLength(6 * SEEDS.length * 3)
       expect(quantile(pct(plans.map(hallRatioIndependent)), 0.5)).toBeLessThanOrEqual(11.0)
       const two = plans.filter((p) => p.floors.length === 2)
       expect(two.filter(fullWidthHall2F).length / two.length).toBeLessThanOrEqual(0.45)
-      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(50)
+      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(56)
     })
   })
 })

@@ -64,7 +64,7 @@ function build() {
 const TIMEOUT = 600_000
 const pct = (ps: Plan[]) => ps.map((p) => (chokkaRate(p) ?? NaN) * 100).filter((x) => !Number.isNaN(x))
 
-describe('直下率: 独立実装との一致と、実測（GEN_VERSION 7）', () => {
+describe('直下率: 独立実装との一致と、実測（GEN_VERSION 8）', () => {
   it('core と testing.ts の独立実装が全標本で一致する', () => {
     build()
     const all = [...popular, ...gridFull, ...gridPart].filter((p) => p.floors.length === 2)
@@ -87,27 +87,28 @@ describe('直下率: 独立実装との一致と、実測（GEN_VERSION 7）', (
       expect(cs.reduce((a, c) => a + c.total, 0)).toBe(b.total)
     }
   }, TIMEOUT)
-  it('人気6: 中央値 ≥ 55%（R-IDX-05 の暫定目標。実測 55.9）、40%未満 ≤ 10%（実測 2.2%）', () => {
+  // GEN_VERSION 8（2F の切断線の寄せ。R-SPACE-35）の実測。暫定目標（R-IDX-05）は人気6 の中央値 ≥ 55%、グリッド総二階の中央値 ≥ 50%・40%未満 ≤ 10%。
+  // 退行防止の下限は、目標より少し高く、実測に余裕を持たせた値（人気6 ≥ 56%、グリッド総二階 ≥ 52%・40%未満 ≤ 10%、部分二階 ≥ 55%）
+  it('人気6: 中央値 ≥ 56%（GEN_VERSION 8 の実測 58.8。v7 は 55.9）、40%未満 ≤ 10%（実測 2.2%）', () => {
     build()
     const xs = pct(popular)
     expect(xs).toHaveLength(90)
-    expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(55)
+    expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(56)
     expect(xs.filter((x) => x < 40).length / xs.length).toBeLessThanOrEqual(0.1)
   }, TIMEOUT)
-  // グリッド総二階は暫定目標（中央値 ≥ 50%・40%未満 ≤ 10%）に未達。GEN_VERSION 8（切断線の寄せ）で達成する予定なので、現状の実測を記録として固定する
-  it('グリッド総二階（seed 1・93案）: 現状の実測を記録（中央値 47.5%・40%未満 18.3%。暫定目標には未達）', () => {
+  it('グリッド総二階（seed 1・93案）: 中央値 ≥ 52%（実測 54.5。v7 は 47.5）、40%未満 ≤ 10%（実測 7.5%。v7 は 18.3%）', () => {
     build()
     const xs = pct(gridFull)
     expect(xs).toHaveLength(93)
-    expect(quantile(xs, 0.5)).toBeCloseTo(47.5, 0)
-    expect(xs.filter((x) => x < 40).length / xs.length).toBeCloseTo(0.183, 2)
+    expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(52)
+    expect(xs.filter((x) => x < 40).length / xs.length).toBeLessThanOrEqual(0.1)
   }, TIMEOUT)
-  it('グリッド部分二階（seed 1・99案）: 現状の実測を記録（中央値 54.3%・40%未満 7.1%）', () => {
+  it('グリッド部分二階（seed 1・99案）: 中央値 ≥ 55%（v7 は 54.3）、40%未満 ≤ 10%', () => {
     build()
     const xs = pct(gridPart)
     expect(xs).toHaveLength(99)
-    expect(quantile(xs, 0.5)).toBeCloseTo(54.3, 0)
-    expect(xs.filter((x) => x < 40).length / xs.length).toBeCloseTo(0.071, 2)
+    expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(55)
+    expect(xs.filter((x) => x < 40).length / xs.length).toBeLessThanOrEqual(0.1)
   }, TIMEOUT)
   // R-IDX-10: 載らない壁片のうち南帯の縦（vS）が占める割合。実測は人気6 55.0%・グリッド総二階 45.7%（上限・下限は実測±2.5pt）
   const vSShare = (ps: Plan[]) => {
@@ -121,12 +122,12 @@ describe('直下率: 独立実装との一致と、実測（GEN_VERSION 7）', (
     }
     return offVS / off
   }
-  it('内訳（R-IDX-10）: 載らない壁片に占める南帯の縦の割合を記録（人気6 55%・グリッド総二階 46%）', () => {
+  it('内訳（R-IDX-10）: 載らない壁片に占める南帯の縦の割合を記録（人気6 58%・グリッド総二階 46%）', () => {
     build()
     const pp = vSShare(popular)
     const gf = vSShare(gridFull)
-    expect(pp).toBeGreaterThanOrEqual(0.525)
-    expect(pp).toBeLessThanOrEqual(0.575)
+    expect(pp).toBeGreaterThanOrEqual(0.552)
+    expect(pp).toBeLessThanOrEqual(0.602)
     expect(gf).toBeGreaterThanOrEqual(0.432)
     expect(gf).toBeLessThanOrEqual(0.482)
   }, TIMEOUT)

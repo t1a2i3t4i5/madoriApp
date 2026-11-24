@@ -224,3 +224,42 @@ describe('最小の短辺（GEN_VERSION 4）', () => {
     expect(r === null || (r.heights[0] ?? 0) >= 5).toBe(true)
   })
 })
+
+describe('layoutBand の切断線の寄せ（GEN_VERSION 8）', () => {
+  const band = (): Band => ({ cells: [cell('bed'), cell('bed'), cell('master')] })
+  const edges = (rs: { x: number; w: number }[]) => rs.map((r) => r.x + r.w).slice(0, -1)
+
+  it('寄せなしと合計幅は同じで、境界を ±1 セルの範囲で揃えたい x に寄せる。入力は書き換えない', () => {
+    const b = band()
+    const snapshot = JSON.stringify(b)
+    const base = layoutBand(b, 24, 0, 8)
+    expect(base).not.toBeNull()
+    if (!base) return
+    const e0 = edges(base)
+    const want = (e0[0] ?? 0) + 1
+    const al = layoutBand(b, 24, 0, 8, false, undefined, { xs: [want], d: 1 })
+    expect(al).not.toBeNull()
+    if (!al) return
+    expect(sum(al.map((r) => r.w))).toBe(24)
+    expect(edges(al)).toContain(want)
+    al.forEach((r, i) => expect(Math.abs(r.w - (base[i]?.w ?? 0))).toBeLessThanOrEqual(2))
+    expect(JSON.stringify(b)).toBe(snapshot)
+  })
+  it('一致を増やせないとき（揃えたい x が範囲外）は寄せない。決定的', () => {
+    const base = layoutBand(band(), 24, 0, 8)
+    const far = layoutBand(band(), 24, 0, 8, false, undefined, { xs: [1], d: 1 })
+    expect(far).toEqual(base)
+    const a = layoutBand(band(), 24, 0, 8, false, 'soft', { xs: [9, 15], d: 1 })
+    expect(layoutBand(band(), 24, 0, 8, false, 'soft', { xs: [9, 15], d: 1 })).toEqual(a)
+  })
+  it('弱モードで切り出せていたクローゼットを、寄せた結果切り出せなくなる幅は採らない', () => {
+    const cells = (): Band => ({ cells: [cell('bed', { closet: true }), cell('master', { closet: true }), cell('bed', { closet: true })] })
+    const base = layoutBand(cells(), 24, 0, 8, false, 'soft')
+    expect(base).not.toBeNull()
+    const closets0 = base?.filter((r) => r.type === 'closet').length ?? 0
+    for (const x of [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]) {
+      const al = layoutBand(cells(), 24, 0, 8, false, 'soft', { xs: [x, x + 6], d: 1 })
+      expect(al?.filter((r) => r.type === 'closet').length ?? 0, `x=${x}`).toBeGreaterThanOrEqual(closets0)
+    }
+  })
+})

@@ -3,8 +3,10 @@ import type { ArchId, Band, Cell, FeatureKey, Plan, PlanConfig, Room, RoomType, 
 import type { Rng } from './rng'
 import { cell } from './rooms'
 import { layoutFloor } from './slicing'
+import type { LayoutFloorOpts } from './slicing'
 import { carveFloor } from './carve'
 import { trimHall } from './hall'
+import { validateRooms } from './validate'
 import { STAIR_HS } from './stair'
 
 export type { Rng }
@@ -316,10 +318,38 @@ export function buildPlanStage(
     const southH = f1.heights[2]
     if (southH === undefined) return fail('f1')
     const capSouth = southH - (H - H2)
-    const f2 = layoutFloor(W2, H2, withNorthH(f2bands, hN), { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort, closet })
-    if (!f2) return fail('f2')
-    const carved2 = ignoreMinShort ? f2.rooms : carveFloor(trimHall(f2.rooms, { x: 0, y: 0, W: W2, H: H2 }))
-    const f2rooms = ox === 0 ? carved2 : carved2.map((r) => ({ ...r, x: r.x + ox }))
+    const f2bandsN = withNorthH(f2bands, hN)
+    const f2opts: LayoutFloorOpts = { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort, closet }
+    const f2base = layoutFloor(W2, H2, f2bandsN, f2opts)
+    if (!f2base) return fail('f2')
+    const finish = (rooms: Room[]): { carved: Room[]; shifted: Room[] } => {
+      const carved = ignoreMinShort ? rooms : carveFloor(trimHall(rooms, { x: 0, y: 0, W: W2, H: H2 }))
+      return { carved, shifted: ox === 0 ? carved : carved.map((r) => ({ ...r, x: r.x + ox })) }
+    }
+    let { shifted: f2rooms } = finish(f2base.rooms)
+    // GEN_VERSION 8: 2F の北帯・南帯の切断線を、1F の壁の x に寄せる（直下率。R-SPACE-35）。
+    // 帯の高さは寄せに依存しないので、寄せない割り付けの高さから各帯の y 範囲を決める。寄せた 2F が検証に落ちたら寄せない 2F を使う
+    if (!ignoreMinShort) {
+      const align: Record<number, number[]> = {}
+      let by = 0
+      f2base.heights.forEach((bh, bi) => {
+        if (bi === 0 || bi === 2) {
+          const xs = new Set<number>()
+          for (const r of f1.rooms) {
+            if (r.y >= by + bh || r.y + r.h <= by) continue
+            for (const x of [r.x - ox, r.x + r.w - ox]) if (x > 0 && x < W2) xs.add(x)
+          }
+          align[bi] = [...xs].sort((a, b) => a - b)
+        }
+        by += bh
+      })
+      const f2al = layoutFloor(W2, H2, f2bandsN, { ...f2opts, align, alignD: 1 })
+      if (f2al) {
+        const alRooms = finish(f2al.rooms).shifted
+        const sig = (rs: Room[]) => rs.map((r) => `${r.type},${r.x},${r.y},${r.w},${r.h}`).join(';')
+        if (sig(alRooms) !== sig(f2rooms) && validateRooms(alRooms, { x: ox, y: 0, W: W2, H: H2 })) f2rooms = alRooms
+      }
+    }
     const floor2: Plan['floors'][number] = { label: '2F', rooms: relabelBeds(f2rooms) }
     if (partial) {
       floor2.fp = { x: ox, y: 0, W: W2, H: H2 }
