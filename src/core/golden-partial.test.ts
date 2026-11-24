@@ -198,11 +198,11 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
         expect(createHash('sha256').update(JSON.stringify(lines)).digest('hex'), name).toBe(f1sig[name])
       }
     }, 120_000)
-    it('候補プールの件数の差は条件ごとに ±1% 以内', () => {
+    it('候補プールの件数は条件ごとに v7 と完全一致', () => {
       expect(v7.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
       for (const [i, p] of now.pools.entries()) {
         const before = v7.pools[i]?.count ?? 0
-        expect(Math.abs(p.count - before), p.name).toBeLessThanOrEqual(Math.ceil(before * 0.01))
+        expect(p.count, p.name).toBe(before)
       }
     })
     it('grid: 条件の集合と、3案が出る条件の集合・件数は v7 と同一。named 条件の提示案の件数も同一', () => {

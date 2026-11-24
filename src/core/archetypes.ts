@@ -8,6 +8,7 @@ import { carveFloor } from './carve'
 import { trimHall } from './hall'
 import { validateRooms } from './validate'
 import { STAIR_HS } from './stair'
+import { isPrivateRoom, storageOf } from './closets'
 
 export type { Rng }
 
@@ -328,7 +329,7 @@ export function buildPlanStage(
     }
     let { shifted: f2rooms } = finish(f2base.rooms)
     // GEN_VERSION 8: 2F の北帯・南帯の切断線を、1F の壁の x に寄せる（直下率。R-SPACE-35）。
-    // 帯の高さは寄せに依存しないので、寄せない割り付けの高さから各帯の y 範囲を決める。寄せた 2F が検証に落ちたら寄せない 2F を使う
+    // 帯の高さは寄せに依存しないので、寄せない割り付けの高さから各帯の y 範囲を決める。寄せた 2F が検証に落ちる・個室収納が減るときは寄せない 2F を使う（フォールバック）
     if (!ignoreMinShort) {
       const align: Record<number, number[]> = {}
       let by = 0
@@ -347,7 +348,10 @@ export function buildPlanStage(
       if (f2al) {
         const alRooms = finish(f2al.rooms).shifted
         const sig = (rs: Room[]) => rs.map((r) => `${r.type},${r.x},${r.y},${r.w},${r.h}`).join(';')
-        if (sig(alRooms) !== sig(f2rooms) && validateRooms(alRooms, { x: ox, y: 0, W: W2, H: H2 })) f2rooms = alRooms
+        // 寄せた 2F を採るのは、検証に通り、かつ個室収納（収納のある個室の数）が減らないときだけ（trimHall の keepStorage と同じ考え方）。
+        // 北帯だけ・南帯だけの寄せへの段階的なフォールバックは、実測で直下率が回復しなかったので採らない
+        const stored = (rs: Room[]) => rs.filter((r) => isPrivateRoom(r) && storageOf(rs, r)).length
+        if (sig(alRooms) !== sig(f2rooms) && validateRooms(alRooms, { x: ox, y: 0, W: W2, H: H2 }) && stored(alRooms) >= stored(f2rooms)) f2rooms = alRooms
       }
     }
     const floor2: Plan['floors'][number] = { label: '2F', rooms: relabelBeds(f2rooms) }

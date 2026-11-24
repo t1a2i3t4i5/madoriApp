@@ -166,7 +166,9 @@ function alignWidths(
     const w0 = alloc[k] as number
     const lost = closet === 'soft' && !!c.closet && fits(c, w0)
     const out: number[] = []
-    for (let w = Math.max(it.min, w0 - align.d); w <= Math.min(it.max, w0 + align.d); w++) {
+    // 寄せで最大面積を新たに破らない: 上限は割り付けの幅 w0 か、最大面積に収まる幅（クローゼット分を足す）の大きい方
+    const cap = Math.max(w0, Math.floor(c.maxArea / h) + (closet && c.closet ? CLOSET_W : 0))
+    for (let w = Math.max(it.min, w0 - align.d); w <= Math.min(it.max, cap, w0 + align.d); w++) {
       if (lost && !fits(c, w)) continue
       out.push(w)
     }

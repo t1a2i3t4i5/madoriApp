@@ -214,11 +214,11 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
         expect(createHash('sha256').update(JSON.stringify(lines)).digest('hex'), name).toBe(f1sig[name])
       }
     }, 120_000)
-    it('候補プールの件数の差は条件ごとに ±1% 以内（実測は全条件で 0）', () => {
+    it('候補プールの件数は条件ごとに v7 と完全一致', () => {
       expect(v7.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
       for (const [i, p] of now.pools.entries()) {
         const before = v7.pools[i]?.count ?? 0
-        expect(Math.abs(p.count - before), p.name).toBeLessThanOrEqual(Math.ceil(before * 0.01))
+        expect(p.count, p.name).toBe(before)
       }
     })
     it('grid: 条件の集合と、3案が出る条件の集合は v7 と同一。named 条件の提示案の件数も同一', () => {
@@ -353,13 +353,13 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
   // 退行防止の指標（hall-stair-spec §10.3）。しきい値は GEN_VERSION 6 の実測（括弧内）に余裕を持たせた値
   describe('退行防止の指標（v6 の廊下率・LDK・階段、v8 の直下率）', () => {
     const pct = (xs: readonly number[]) => xs.map((x) => x * 100)
-    it('グリッド（総二階・平屋 seed 1 の提示案）: 廊下率の中央値 ≤ 8.0%（実測 7.9）、8%以下の案 ≥ 50%（実測 54.1%）', () => {
+    it('グリッド（総二階・平屋 seed 1 の提示案）: 廊下率の中央値 ≤ 8.2%（実測 8.1。v8 の寄せの前は 7.9）、8%以下の案 ≥ 45%（実測 47.8%。v6 は 54.1%）', () => {
       const hall = pct(gridPlans.map(hallRatioIndependent))
       expect(hall.length).toBeGreaterThan(150)
-      expect(quantile(hall, 0.5)).toBeLessThanOrEqual(8.0)
-      expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.5)
+      expect(quantile(hall, 0.5)).toBeLessThanOrEqual(8.2)
+      expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.45)
     })
-    it('グリッド2階建て: 直下率の中央値 ≥ 52%（GEN_VERSION 8 の実測 54.5%。v7 は 47.5%）、40%未満の案 ≤ 10%（実測 7.5%。v7 は 18.3%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
+    it('グリッド2階建て: 直下率の中央値 ≥ 52%（GEN_VERSION 8 の実測 54.4%。v7 は 47.5%）、40%未満の案 ≤ 10%（実測 8.6%。v7 は 18.3%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
       const two = gridPlans.filter((p) => p.floors.length === 2)
       expect(two.length).toBeGreaterThan(80)
       const rates = pct(two.map(chokkaRate))
@@ -374,13 +374,13 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       expect([...sizes].sort()).toEqual(['4x5', '4x6'])
       expect(Object.keys(now.grid).filter((k) => now.grid[k]?.length === 3).length).toBeGreaterThanOrEqual(69)
     })
-    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 11.0%（実測 10.3）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 56%（GEN_VERSION 8 の実測 58.8%。v7 は 55.9%）', () => {
+    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 11.0%（実測 10.3）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 55%（GEN_VERSION 8 の実測 55.6%。v7 は 55.9%。個室収納を減らさない条件を足す前は 58.8%）', () => {
       const plans = [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)].flatMap(({ cfg }) => SEEDS.flatMap((s) => generatePlans(copy(cfg), s)))
       expect(plans).toHaveLength(6 * SEEDS.length * 3)
       expect(quantile(pct(plans.map(hallRatioIndependent)), 0.5)).toBeLessThanOrEqual(11.0)
       const two = plans.filter((p) => p.floors.length === 2)
       expect(two.filter(fullWidthHall2F).length / two.length).toBeLessThanOrEqual(0.45)
-      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(56)
+      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(55)
     })
   })
 })
