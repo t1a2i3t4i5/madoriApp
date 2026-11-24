@@ -449,3 +449,101 @@ export function quantile(xs: readonly number[], p: number): number {
   const s = xs.slice().sort((a, b) => a - b)
   return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1) + 0.5))] ?? NaN
 }
+
+/**
+ * 居室ごとの、窓（main）がある方位の独立実装（windows.ts の computeWindows とは別に、セルの外側が板の外かで素朴に数える）。
+ * 外壁に接するセルが2つ以上ある面に窓が付く（R-WIN-07）。返り値は階ごと・居室ごとの方位の文字列（例 'NE'）
+ */
+export function windowSidesIndependent(plan: Plan): { floor: number; room: Room; sides: string }[] {
+  const out: { floor: number; room: Room; sides: string }[] = []
+  plan.floors.forEach((fl, f) => {
+    const rc = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
+    for (const r of fl.rooms) {
+      if (!LIVING.has(r.type)) continue
+      let n = 0, s = 0, e = 0, w = 0
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+          if (y - 1 < rc.y) n++
+          if (y + 1 >= rc.y + rc.H) s++
+          if (x - 1 < rc.x) w++
+          if (x + 1 >= rc.x + rc.W) e++
+        }
+      }
+      out.push({ floor: f, room: r, sides: `${n >= 2 ? 'N' : ''}${s >= 2 ? 'S' : ''}${e >= 2 ? 'E' : ''}${w >= 2 ? 'W' : ''}` })
+    }
+  })
+  return out
+}
+
+/**
+ * 居室ごとの通風レベル（A/B/C）の独立実装（windows.ts の windowStats とは別に書く）。
+ * A = 居室の main の窓が2方位以上／B = そうでなくても、ドア・開口でつながる共用部（ホール・玄関・土間・階段・LDK）をたどって、
+ * 居室自身にない方位の窓（共用部は main・小窓）に届く／C = どちらもない。
+ * 窓の有無は、外壁に接するセルが2つ以上ある面（R-WIN-07）。玄関（findEntry と同じ順: 玄関 → 土間 → 階段）の南の小窓は、
+ * 外開きドアの区間を除いた残りが 1.4 セル以上ないと消える（place の l = 残り − 0.4 ≥ 1）。
+ * ドアのつながり（doorsOf）と玄関ドアの矩形（entryDoorX）は呼び出し側が渡す（derive.ts を core/testing に依存させない）
+ */
+export function ventLevelsIndependent(
+  plan: Plan,
+  doorsOf: (rooms: Room[]) => { a: Room; b: Room }[],
+  entryDoorX: (entry: Room, bottom: number) => { x: number; w: number },
+): { floor: number; room: Room; level: 'A' | 'B' | 'C' }[] {
+  const shared = new Set(['hall', 'entry', 'doma', 'stair', 'ldk'])
+  const out: { floor: number; room: Room; level: 'A' | 'B' | 'C' }[] = []
+  plan.floors.forEach((fl, f) => {
+    const rc = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
+    const entry = fl.rooms.find((r) => r.type === 'entry') ?? fl.rooms.find((r) => r.type === 'doma') ?? fl.rooms.find((r) => r.type === 'stair')
+    /** 部屋 r の、窓（main または共用部の小窓）がある方位 */
+    const sidesOf = (r: Room, includeSmall: boolean): Set<string> => {
+      const s = new Set<string>()
+      const cnt = { N: 0, S: 0, E: 0, W: 0 }
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+          if (y - 1 < rc.y) cnt.N++
+          if (y + 1 >= rc.y + rc.H) cnt.S++
+          if (x - 1 < rc.x) cnt.W++
+          if (x + 1 >= rc.x + rc.W) cnt.E++
+        }
+      }
+      const main = LIVING.has(r.type)
+      if (!main && !includeSmall) return s
+      for (const k of ['N', 'S', 'E', 'W'] as const) {
+        if (cnt[k] < 2) continue
+        if (!main && r === entry && k === 'S') {
+          const d = entryDoorX(r, rc.y + rc.H)
+          const left = d.x - r.x
+          const right = r.x + r.w - (d.x + d.w)
+          if (Math.max(left, right) < 1.4) continue
+        }
+        s.add(k)
+      }
+      return s
+    }
+    const adj = new Map<Room, Room[]>()
+    for (const d of doorsOf(fl.rooms)) {
+      adj.set(d.a, [...(adj.get(d.a) ?? []), d.b])
+      adj.set(d.b, [...(adj.get(d.b) ?? []), d.a])
+    }
+    for (const r of fl.rooms) {
+      if (!LIVING.has(r.type)) continue
+      const own = sidesOf(r, false)
+      let level: 'A' | 'B' | 'C' = own.size >= 2 ? 'A' : 'C'
+      if (level === 'C') {
+        const seen = new Set<Room>([r])
+        const stack = [r]
+        const reach = new Set(own)
+        for (let cur = stack.pop(); cur; cur = stack.pop()) {
+          for (const nb of adj.get(cur) ?? []) {
+            if (seen.has(nb) || !shared.has(nb.type)) continue
+            seen.add(nb)
+            stack.push(nb)
+            sidesOf(nb, true).forEach((s) => reach.add(s))
+          }
+        }
+        if (reach.size > own.size) level = 'B'
+      }
+      out.push({ floor: f, room: r, level })
+    }
+  })
+  return out
+}

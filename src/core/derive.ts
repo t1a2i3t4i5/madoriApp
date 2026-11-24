@@ -1,5 +1,5 @@
-import type { Door, DoorSwing, Edge, Pt, FloorRect, Room, RoomType } from './types'
-import { HABITABLE, VIA } from './rooms'
+import type { Door, DoorSwing, Edge, Pt, Room, RoomType } from './types'
+import { VIA } from './rooms'
 
 /** 2部屋の共有辺。ドアは辺の中央でなく端寄り（34%地点）に置き、部屋中央のラベルと開き弧を分離する */
 export function sharedEdge(a: Room, b: Room): Edge | null {
@@ -256,24 +256,4 @@ export function computeDoors(rooms: Room[]): Door[] {
   // 折れ戸・開口は弧を出さないので、開き戸どうしの弧の分離の対象外（先頭に並べず、後ろへ回して開き戸の順序を保つ）
   const noArc = (d: Door) => d.kind === 'fold' || d.kind === 'open'
   return [...separateSwings(doors.filter((d) => !noArc(d))), ...doors.filter((d) => d.kind === 'fold'), ...doors.filter((d) => d.kind === 'open')]
-}
-
-export interface WindowSeg {
-  /** 窓が付く外壁側 */
-  side: 'N' | 'S'
-  cx: number
-  len: number
-}
-
-/** 居室の北・南外壁に窓を自動配置する */
-export function computeWindows(rooms: Room[], fp: FloorRect): WindowSeg[] {
-  const out: WindowSeg[] = []
-  for (const r of rooms) {
-    if (!HABITABLE[r.type]) continue
-    const len = Math.min(6, Math.max(2.4, r.w - 2.4))
-    const cx = r.x + r.w / 2
-    if (r.y + r.h === fp.y + fp.H) out.push({ side: 'S', cx, len })
-    if (r.y === fp.y) out.push({ side: 'N', cx, len })
-  }
-  return out
 }
