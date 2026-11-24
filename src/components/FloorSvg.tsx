@@ -4,6 +4,7 @@ import { ROOM, findEntry } from '../core/rooms'
 import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
+import { stairGeom, type StairGeom } from '../core/stair'
 import { Furniture } from './Furniture'
 import { Fixtures, STAIR_LABEL_MIN_H } from './Fixtures'
 import { tatami } from '../lib/format'
@@ -72,7 +73,14 @@ function FoldDoor({ d }: { d: Door }) {
   )
 }
 
-function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean }) {
+/** 扉のない開口（階段の口）の記号。共有区間の壁を背景色で抜く（壁より後に描く）。弧も葉もない */
+function OpeningGap({ d }: { d: Door }) {
+  const { edge } = d
+  const [x1, y1, x2, y2] = edge.dir === 'h' ? [edge.lo + 0.1, edge.at, edge.hi - 0.1, edge.at] : [edge.at, edge.lo + 0.1, edge.at, edge.hi - 0.1]
+  return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fdfcf8" strokeWidth={0.4} />
+}
+
+function RoomLabel({ r, kitchenFace, furnished, halo, geom }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean; geom?: StairGeom | null }) {
   // クローゼットは「CL」と短く表示し、畳数は出さない
   if (r.type === 'closet') {
     const lo = Math.min(r.w, r.h), hi = Math.max(r.w, r.h)
@@ -91,6 +99,10 @@ function RoomLabel({ r, kitchenFace, furnished, halo }: { r: Room; kitchenFace?:
   const haloProps = halo ? outline : {}
   const common = { fontWeight: 700, fill: LABEL_FILL, textAnchor: 'middle' as const, ...haloProps }
   const len = Math.max(1, r.name.length)
+  if (r.type === 'stair' && geom) {
+    // 折り返し階段: 名前は口の反対側（踊り場の側。上端）に置く。U 字の矢印の折り返しは踊り場の下寄りなので重ならない。4×5 でも踊り場が2セルあるので入る
+    return <text x={cx} y={r.y + 0.95} fontSize={Math.min(0.95, (r.w - 0.5) / len)} {...common} {...outline}>{r.name}</text>
+  }
   if (r.type === 'stair') {
     // 階段は矢印と重ならない上端に置く。矢印を逃がせない低い階段は名前を省く（段と矢印で階段と分かる）
     if (r.h < STAIR_LABEL_MIN_H || r.w < 2.2) return null
@@ -192,6 +204,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
     () => (showFurniture ? furnish(rooms, doors, { kitchenFace: !!kitchenFace }) : []),
     [showFurniture, rooms, doors, kitchenFace],
   )
+  const geom = useMemo(() => stairGeom(plan, floorIdx), [plan, floorIdx])
   const flows = useMemo(() => (showFlow ? computeFlows(plan, floorIdx) : []), [showFlow, plan, floorIdx])
   // 存在しない階を指された場合は何も描かない（フックの後で判定する）
   if (!fl) return null
@@ -260,7 +273,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
           <rect x={ldk.x + ldk.w - Math.min(8, ldk.w - 3) + 0.1} y={ldk.y + 1.45} width={1.7} height={1.0} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
         </>
       )}
-      {fl.rooms.map((r, i) => <Fixtures key={i} r={r} />)}
+      {fl.rooms.map((r, i) => <Fixtures key={i} r={r} geom={geom} floorIdx={floorIdx} />)}
       {furniture.length > 0 && <Furniture items={furniture} />}
       {/* 窓: 壁を抜いてから、読み取れる太さ・色の二重線 */}
       <g stroke="#fdfcf8" strokeWidth={0.75}>
@@ -282,7 +295,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       </g>
       {/* ドアの開き弧 */}
       <g stroke="#5a5a5a" strokeWidth={0.13} fill="rgba(90,90,90,0.07)">
-        {doors.map((d, i) => (d.kind === 'fold' ? null : <path key={i} d={doorPath(d)} />))}
+        {doors.map((d, i) => (d.kind === 'fold' || d.kind === 'open' ? null : <path key={i} d={doorPath(d)} />))}
       </g>
       {/* 壁（外壁は内壁の約2倍強の太さ） */}
       <g fill="none" stroke={INK}>
@@ -293,9 +306,13 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       {doors.some((d) => d.kind === 'fold') && (
         <g>{doors.map((d, i) => (d.kind === 'fold' ? <FoldDoor key={i} d={d} /> : null))}</g>
       )}
+      {/* 階段の開口（扉なし）: 壁を抜く */}
+      {doors.some((d) => d.kind === 'open') && (
+        <g>{doors.map((d, i) => (d.kind === 'open' ? <OpeningGap key={i} d={d} /> : null))}</g>
+      )}
       {/* 動線は部屋名ラベルより下 */}
       {showFlow && <FlowOverlay flows={flows} legendY={legendY} legendX={vbX + 1.2} />}
-      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} />)}
+      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} geom={geom} />)}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === fpBottom && (() => {
         const ed = entryDoor(entry, fpBottom)
