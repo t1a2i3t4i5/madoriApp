@@ -20,16 +20,24 @@ export const EXPLAIN_TH = {
   weak: 0.55,
   /** 「二面に窓がある」と書く最小の窓の方位数（R-WIN-02） */
   windowFaces: 2,
+  /** LDK の二面採光を書く階数（平屋のみ。2階建ては主寝室だけ。人気条件の 2階建てで LDK は二面がほぼ 100% のため） */
+  windowLdkMaxFloors: 1,
+  /** 主寝室の二面採光を書く階数（2階建てのみ。平屋の主寝室は二面がほぼ常に成り立つため書かない） */
+  windowMasterMinFloors: 2,
 } as const
 
-/** LDK・主寝室の二面採光の事実の文（どちらも二面でなければ null。弱点としては扱わない） */
-function windowSentence(plan: Plan): string | null {
+/**
+ * 二面採光の節（1文目に足す。文の総数は変えない）。出し分け（案ごとに差が出る事実だけを書く）:
+ * 平屋は LDK だけ（二面は珍しい）、2階建ては主寝室だけ（LDK は人気条件でほぼ常に二面、平屋の主寝室もほぼ常に二面で、常套句になるため）。
+ * 該当する部屋がどれも二面でなければ null（弱点としては扱わない）
+ */
+function windowClause(plan: Plan): Clause | null {
   const rs = windowStats(plan).rooms
   const two = (t: string) => { const l = rs.filter((x) => x.room.type === t); return l.length > 0 && l.every((x) => x.sides.length >= EXPLAIN_TH.windowFaces) }
-  const ldk = two('ldk'), master = two('master')
-  if (ldk && master) return 'LDK と主寝室は二面に窓があり、風が抜けます。'
-  if (ldk) return 'LDK は二面に窓があり、風が抜けます。'
-  if (master) return '主寝室は二面に窓があり、風が抜けます。'
+  const ldk = plan.floors.length <= EXPLAIN_TH.windowLdkMaxFloors && two('ldk')
+  const master = plan.floors.length >= EXPLAIN_TH.windowMasterMinFloors && two('master')
+  if (ldk) return clause('二面に窓があって風が抜け', '二面に窓があり、風が抜けます。')
+  if (master) return clause('主寝室は二面に窓があって風が抜け', '主寝室は二面に窓があり、風が抜けます。')
   return null
 }
 
@@ -127,6 +135,8 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
       ? clause(`${where}LDKは南側で日当たりがよく約${tatami}帖あり`, `${where}LDKは南側で日当たりがよく、約${tatami}帖です。`)
       : clause(`${where}LDKは約${tatami}帖で`, `${where}LDKは約${tatami}帖です。`))
   }
+  const win = windowClause(plan)
+  if (win) s1.push(win)
   if (hasVoid) s1.push(clause('吹抜で縦の広がりもあり', '吹抜で縦の広がりもあります。'))
   else if (plan.floors.length === 1) s1.push(clause('ワンフロアで生活が完結し', 'ワンフロアで生活が完結します。'))
 
@@ -175,9 +185,7 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
 
   // --- 補い: 2文に満たないときは事実だけを足す ---
   if (sentences.length < 2) {
-    const win = windowSentence(plan)
-    if (win) sentences.push(win)
-    else sentences.push(`${cfg.floors === 2 ? '2階建て' : '平屋'}・個室${cfg.rooms}室の構成です。`)
+    sentences.push(`${cfg.floors === 2 ? '2階建て' : '平屋'}・個室${cfg.rooms}室の構成です。`)
   }
   // 部分二階は、割合と下屋の文を先頭に足す（本体の2〜3文は総二階と同じ判定。弱点の文が押し出されないよう別枠）
   const head = partialSentence(plan)

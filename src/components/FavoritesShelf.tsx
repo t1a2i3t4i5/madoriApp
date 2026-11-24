@@ -96,7 +96,7 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
                   ['個室の平均', (f: Favorite) => fmt(planMetrics(f.plan).roomAvgTatami, '帖')],
                   ['廊下率', (f: Favorite) => `${(planMetrics(f.plan).hallRatio * 100).toFixed(1)}%`],
                   ['収納率', (f: Favorite) => pctFloor(planMetrics(f.plan).storageRatio)],
-                  ['スコア', (f: Favorite) => String(f.plan.score.total)],
+                  ['スコア', (f: Favorite) => (isOldVersion(f) ? `${f.plan.score.total}（旧版）` : String(f.plan.score.total))],
                 ] as const).map(([label, get]) => (
                   <tr key={label}>
                     <th scope="row" className="border-t border-line p-1.5 text-left text-ink2">{label}</th>
@@ -106,6 +106,9 @@ export function FavoritesShelf({ favorites, message, onOpen, onRemove }: Props) 
               </tbody>
             </table>
           </div>
+          {selected.some(isOldVersion) && (
+            <p className={`mt-2 ${NOTE}`}>（旧版）のスコアは、現行版と採点の式が違うため、現行版の案と直接は比べられません（旧版の「採光」は常に満点で、同じ案でも現行版より高く出ます）。</p>
+          )}
         </div>
       )}
     </section>

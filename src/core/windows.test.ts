@@ -95,6 +95,8 @@ describe('windowStats: 提示案の不変条件と実測', () => {
       expect(st.rooms.map((r) => [...r.sides].sort().join(''))).toEqual(ind.map((r) => [...r.sides].sort().join('')))
     }
   })
+  // 仕様の試算（F3）は 74.4% で、実測 75.8% は +1.4pt 高い。標本は同じ人気6条件×6 seed なので標本差ではなく、試算方法の差
+  // （試算は再スコア後の安定ソートと丸めで順位を決めており、本番の選抜〔Gumbel-top-k〕の同点・端数の扱いと違う）
   it('二面採光率の退行防止の下限（人気6条件 ≥0.70。GEN_VERSION 7 の実測 75.8%。v6 は 66.7%）', () => {
     let two = 0, n = 0
     for (const p of plans) { const st = windowStats(p); two += st.rooms.filter((r) => r.sides.length >= 2).length; n += st.rooms.length }
@@ -115,7 +117,7 @@ describe('windowStats: 提示案の不変条件と実測', () => {
   })
 })
 
-/** 提示案の標本（feasibility グリッド・seed 1）。仕様の標本と同じ: 総二階・平屋 207案（居室 916室）／部分二階 132案（543室）。生成に ~90 秒かかるので1度だけ作る */
+/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 918室）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 918室は仕様の 916室と 2室違う。生成に ~90 秒かかるので1度だけ作る */
 let gridCache: { full: Plan[]; part: Plan[] } | null = null
 function grid(): { full: Plan[]; part: Plan[] } {
   if (gridCache) return gridCache

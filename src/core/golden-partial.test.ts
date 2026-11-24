@@ -36,7 +36,7 @@ const rooms = (p: ScoredPlan) => p.floors.map((f) => ({ fp: f.fp ?? null, rooms:
 interface Fixture {
   genVersion: number
   cases: { name: string; seed: number; plans: { key: string; score: number; name: string; tags: string[]; explain: string; floors: ReturnType<typeof rooms> }[] }[]
-  pools: { name: string; count: number; top: string[]; sha256: string }[]
+  pools: { name: string; count: number; top: string[]; sha256: string; /** プールの sig（sig|sigM）の集合のハッシュ（スコアを含まない） */ sigSha256: string }[]
   grid: Record<string, string[]>
   /** 0案の境界条件の診断（理由と代替案のラベル）。生成結果には影響しない */
   diagnoses: { name: string; reason: string; alts: string[] }[]
@@ -58,7 +58,7 @@ function build(): Fixture {
   }
   const pools = ALL.map(({ name, cfg }) => {
     const pool = candidatePool(copy(cfg))
-    return { name, count: pool.length, top: pool.slice(0, 10).map(planKey), sha256: createHash('sha256').update(canon(pool)).digest('hex') }
+    return { name, count: pool.length, top: pool.slice(0, 10).map(planKey), sha256: createHash('sha256').update(canon(pool)).digest('hex'), sigSha256: createHash('sha256').update(JSON.stringify(pool.map((p) => `${p.sig}|${p.sigM}`).sort())).digest('hex') }
   })
   // feasibility グリッド（部分二階。可能な条件 × seed 1 の3案の key）
   const grid: Fixture['grid'] = {}
@@ -166,6 +166,10 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
   describe('v6 → v7 の移行（二面採光）', () => {
     let v6: Fixture
     beforeAll(() => { v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture })
+    it('候補プールの sig の集合は、全条件で v6 と一致する（スコア以外の生成が不変であることの固定）', () => {
+      expect(v6.pools.every((p) => p.sigSha256.length === 64)).toBe(true)
+      expect(now.pools.map((p) => [p.name, p.sigSha256])).toEqual(v6.pools.map((p) => [p.name, p.sigSha256]))
+    })
     it('候補プールの件数・grid の条件と提示案の件数・named 条件の提示案の件数は v6 と同一', () => {
       expect(now.pools.map((p) => [p.name, p.count])).toEqual(v6.pools.map((p) => [p.name, p.count]))
       expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v6.grid).sort())
