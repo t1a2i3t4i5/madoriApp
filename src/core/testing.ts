@@ -449,3 +449,28 @@ export function quantile(xs: readonly number[], p: number): number {
   const s = xs.slice().sort((a, b) => a - b)
   return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1) + 0.5))] ?? NaN
 }
+
+/**
+ * 居室ごとの、窓（main）がある方位の独立実装（windows.ts の computeWindows とは別に、セルの外側が板の外かで素朴に数える）。
+ * 外壁に接するセルが2つ以上ある面に窓が付く（R-WIN-07）。返り値は階ごと・居室ごとの方位の文字列（例 'NE'）
+ */
+export function windowSidesIndependent(plan: Plan): { floor: number; room: Room; sides: string }[] {
+  const out: { floor: number; room: Room; sides: string }[] = []
+  plan.floors.forEach((fl, f) => {
+    const rc = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
+    for (const r of fl.rooms) {
+      if (!LIVING.has(r.type)) continue
+      let n = 0, s = 0, e = 0, w = 0
+      for (let y = r.y; y < r.y + r.h; y++) {
+        for (let x = r.x; x < r.x + r.w; x++) {
+          if (y - 1 < rc.y) n++
+          if (y + 1 >= rc.y + rc.H) s++
+          if (x - 1 < rc.x) w++
+          if (x + 1 >= rc.x + rc.W) e++
+        }
+      }
+      out.push({ floor: f, room: r, sides: `${n >= 2 ? 'N' : ''}${s >= 2 ? 'S' : ''}${e >= 2 ? 'E' : ''}${w >= 2 ? 'W' : ''}` })
+    }
+  })
+  return out
+}

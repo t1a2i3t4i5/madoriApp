@@ -2,7 +2,9 @@ import { useMemo } from 'react'
 import type { Door, Plan, Room, RoomCategory } from '../core/types'
 import { ROOM, findEntry } from '../core/rooms'
 import { floorRect, type FloorRect } from '../core/types'
-import { computeDoors, computeWindows, doorPath, entryDoor } from '../core/derive'
+import { computeDoors, doorPath, entryDoor } from '../core/derive'
+import { computeWindows } from '../core/windows'
+import type { WindowSeg } from '../core/windows'
 import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
 import { stairGeom, type StairGeom } from '../core/stair'
 import { Furniture } from './Furniture'
@@ -192,6 +194,16 @@ function Shimoya({ outer, fp, uid }: { outer: FloorRect; fp: FloorRect; uid: str
 
 const NO_ROOMS: Room[] = []
 
+/** 窓の線分（外壁上。南北は水平、東西は垂直） */
+function windowLine(wd: WindowSeg, fp: { x: number; y: number; W: number; H: number }) {
+  if (wd.side === 'N' || wd.side === 'S') {
+    const y = wd.side === 'S' ? fp.y + fp.H : fp.y
+    return { horizontal: true, main: { x1: wd.a, y1: y, x2: wd.b, y2: y } }
+  }
+  const x = wd.side === 'E' ? fp.x + fp.W : fp.x
+  return { horizontal: false, main: { x1: x, y1: wd.a, x2: x, y2: wd.b } }
+}
+
 export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, showFlow, scale }: FloorSvgProps) {
   const fl = plan.floors[floorIdx]
   const { W, H } = plan
@@ -275,20 +287,24 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       )}
       {fl.rooms.map((r, i) => <Fixtures key={i} r={r} geom={geom} floorIdx={floorIdx} />)}
       {furniture.length > 0 && <Furniture items={furniture} />}
-      {/* 窓: 壁を抜いてから、読み取れる太さ・色の二重線 */}
-      <g stroke="#fdfcf8" strokeWidth={0.75}>
+      {/* 窓: 壁を抜いてから、読み取れる太さ・色の二重線（4方位。小窓は細く、吹抜の高窓は破線） */}
+      <g strokeLinecap="butt">
         {windows.map((wd, i) => {
-          const yy = wd.side === 'S' ? fpBottom : fp.y
-          return <line key={i} x1={wd.cx - wd.len / 2} y1={yy} x2={wd.cx + wd.len / 2} y2={yy} />
+          const g = windowLine(wd, fp)
+          return <line key={i} {...g.main} stroke="#fdfcf8" strokeWidth={wd.kind === 'small' ? 0.6 : 0.75} />
         })}
       </g>
       <g stroke="#2f7fb0" strokeWidth={0.17}>
         {windows.map((wd, i) => {
-          const yy = wd.side === 'S' ? fpBottom : fp.y
+          const g = windowLine(wd, fp)
+          const o = wd.kind === 'small' ? 0.2 : 0.26
+          const dash = wd.kind === 'high' ? '0.5 0.3' : undefined
+          const shift = (l: typeof g.main, d: number) =>
+            g.horizontal ? { ...l, y1: l.y1 + d, y2: l.y2 + d } : { ...l, x1: l.x1 + d, x2: l.x2 + d }
           return (
-            <g key={i}>
-              <line x1={wd.cx - wd.len / 2} y1={yy - 0.26} x2={wd.cx + wd.len / 2} y2={yy - 0.26} />
-              <line x1={wd.cx - wd.len / 2} y1={yy + 0.26} x2={wd.cx + wd.len / 2} y2={yy + 0.26} />
+            <g key={i} strokeDasharray={dash}>
+              <line {...shift(g.main, -o)} />
+              <line {...shift(g.main, o)} />
             </g>
           )
         })}
