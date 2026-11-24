@@ -89,8 +89,18 @@ describe('buildPlan と variant', () => {
     const a = defined(buildPlan(cfg, 0, { W, H }))
     expect(a.variant).toBeUndefined()
     const b = defined(buildPlan(cfg, 0, { W, H }, CANONICAL))
-    expect(b.variant).toEqual(CANONICAL)
+    // 2階建ては、北帯の高さ hN（GEN_VERSION 6）が省略なら 5 として組み、plan.variant にも入る
+    expect(b.variant).toEqual({ ...CANONICAL, hN: 5 })
     expect(b.floors).toEqual(a.floors)
+  })
+  it('hN は北帯の高さ（= 階段の長さ）を両階で共通にする: 5 と 6 で階段が 4×5・4×6 で上下一致する', () => {
+    for (const hN of [5, 6] as const) {
+      const p = defined(buildPlan(cfg, 0, { W, H }, { ...CANONICAL, hN }))
+      expect(p.variant?.hN).toBe(hN)
+      const [s1, s2] = p.floors.map((f) => f.rooms.find((r) => r.type === 'stair'))
+      expect([s1?.x, s1?.y, s1?.w, s1?.h]).toEqual([s2?.x, s2?.y, s2?.w, s2?.h])
+      expect([s1?.w, s1?.h]).toEqual([4, hN])
+    }
   })
   it('平屋では1Fに関係しない変種は null', () => {
     const one: PlanConfig = { ...cfg, floors: 1 }

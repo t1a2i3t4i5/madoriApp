@@ -18,8 +18,13 @@ export const SCORE_WEIGHTS = {
   個室収納: 0.1,
 } as const
 
+/** 廊下の少なさ（R-EVAL-22）: 廊下率がこれ以下なら満点（目標 5〜8% の中では差を付けない。GEN_VERSION 6 で追加。［暫定］） */
+export const HALL_FULL = 0.08
+/** 廊下率がこれ以上なら0点 */
+export const HALL_ZERO = 0.14
+
 /**
- * ソフトスコア: 採光.18 面積適合.18 縦横比.135 廊下率.135 ドア.135 水回り集約.09 モジュール.045 個室収納.10。
+ * ソフトスコア: 採光.18 面積適合.18 縦横比.135 廊下率.135（8% 以下で満点）ドア.135（階段の開口もつながりとして数える） 水回り集約.09 モジュール.045 個室収納.10。
  * 面積適合・縦横比は付属収納（Room.of を持つクローゼット・収納）を除く（細長いクローゼットが案を不利にしないよう）
  */
 export function scorePlan(plan: Plan): ScoreResult {
@@ -64,7 +69,8 @@ export function scorePlan(plan: Plan): ScoreResult {
     採光: lightN ? light / lightN : 1,
     面積適合: fitN ? fit / fitN : 1,
     縦横比: aspN ? aspect / aspN : 1,
-    廊下の少なさ: clamp(1 - hallArea / plan.totalArea / 0.14, 0, 1),
+    // GEN_VERSION 6: 8% 以下で満点、14% で0点の折れ線（吸収でホールをぎりぎりまで縮めた案が有利になりすぎないように）
+    廊下の少なさ: clamp((HALL_ZERO - hallArea / plan.totalArea) / (HALL_ZERO - HALL_FULL), 0, 1),
     '動線・ドア': clamp(doorCount / Math.max(1, roomCount * 0.62), 0, 1),
     水回り集約: waterScore,
     '910モジュール': modN ? mod / modN : 1,

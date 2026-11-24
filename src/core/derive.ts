@@ -40,6 +40,9 @@ export function pairKey(a: RoomType, b: RoomType): string {
 const NO_DOOR = new Set(NO_DOOR_PAIRS.map(([a, b]) => pairKey(a, b)))
 const PAIR_OK = new Set(PAIR_OK_PAIRS.map(([a, b]) => pairKey(a, b)))
 
+/** 階段と扉のない開口でつながる部屋の種別（GEN_VERSION 6。R-DOOR-04・R-DOOR-13・R-DOOR-14）。これ以外の部屋と階段の間には何も付けない */
+export const STAIR_OPEN_TYPES: ReadonlySet<RoomType> = new Set<RoomType>(['hall', 'entry', 'doma', 'ldk'])
+
 /** owned の持ち主（Room.of が指す位置）が other か */
 function isOwnerOf(other: Room, owned: Room): boolean {
   return !!owned.of && other.x === owned.x + owned.of.dx && other.y === owned.y + owned.of.dy
@@ -57,6 +60,8 @@ export function doorOK(a: Room, b: Room): boolean {
     return (!isOwned(a) || isOwnerOf(b, a)) && (!isOwned(b) || isOwnerOf(a, b))
   }
   if (a.type === 'void' || b.type === 'void') return false
+  // 階段（GEN_VERSION 6）: 相手がホール・玄関・土間・LDK のときだけ（扉でなく開口。computeDoors が kind 'open' にする）
+  if (a.type === 'stair' || b.type === 'stair') return STAIR_OPEN_TYPES.has((a.type === 'stair' ? b : a).type)
   const key = pairKey(a.type, b.type)
   if (NO_DOOR.has(key)) return false
   // 浴室のドアは洗面とだけ付ける（ホール・階段などの VIA 室とも付けない）
@@ -138,6 +143,25 @@ function foldSwing(a: Room, b: Room, e: Edge): DoorSwing {
   return { ...base, rect }
 }
 
+/**
+ * 扉のない開口の前の通路（2×2 セル程度）。階段以外の側の部屋の中に、通行点 swing.center を中心に取る。
+ * 家具配置が避ける（開き戸の弧の矩形の代わり）。開口でなければ null
+ */
+export function openingPassage(d: Door): Rect | null {
+  if (d.kind !== 'open') return null
+  const PASS = 2
+  const room = d.a.type === 'stair' ? d.b : d.a
+  const { edge, swing } = d
+  if (edge.dir === 'h') {
+    const a = Math.max(edge.lo, swing.center.x - PASS / 2)
+    const b = Math.min(edge.hi, swing.center.x + PASS / 2)
+    return { x: a, y: room.y === edge.at ? edge.at : edge.at - PASS, w: b - a, h: PASS }
+  }
+  const a = Math.max(edge.lo, swing.center.y - PASS / 2)
+  const b = Math.min(edge.hi, swing.center.y + PASS / 2)
+  return { x: room.x === edge.at ? edge.at : edge.at - PASS, y: a, w: PASS, h: b - a }
+}
+
 /** 弧の外接矩形。FloorSvg の描画と一致する */
 export function doorSwingRect(d: Door): Rect {
   return d.swing.rect
@@ -204,6 +228,16 @@ function separateSwings(doors: Door[]): Door[] {
   return out
 }
 
+/**
+ * 扉のない開口（階段の口）。葉も弧もないので swing.rect は幅0・高さ0、swing.center は共有区間の中点
+ * （通行点。動線が通る）。r・hinge・closed・open も中点に置く
+ */
+function openingSwing(a: Room, e: Edge): DoorSwing {
+  const m = (e.lo + e.hi) / 2
+  const c: Pt = e.dir === 'v' ? { x: e.at, y: m } : { x: m, y: e.at }
+  return { opens: a.type === 'stair' ? 'b' : 'a', r: 0, hinge: c, closed: c, open: c, center: c, rect: { x: c.x, y: c.y, w: 0, h: 0 } }
+}
+
 export function computeDoors(rooms: Room[]): Door[] {
   const doors: Door[] = []
   for (const [i, a] of rooms.entries()) {
@@ -213,13 +247,15 @@ export function computeDoors(rooms: Room[]): Door[] {
       doors.push(
         isOwned(a) || isOwned(b)
           ? { a, b, edge: e, swing: foldSwing(a, b, e), kind: 'fold' }
-          : { a, b, edge: e, swing: doorSwing(a, b, e) },
+          : a.type === 'stair' || b.type === 'stair'
+            ? { a, b, edge: e, swing: openingSwing(a, e), kind: 'open' }
+            : { a, b, edge: e, swing: doorSwing(a, b, e) },
       )
     }
   }
-  // 折れ戸は弧を出さないので、開き戸どうしの弧の分離の対象外（先頭に並べず、後ろへ回して開き戸の順序を保つ）
-  const folds = doors.filter((d) => d.kind === 'fold')
-  return [...separateSwings(doors.filter((d) => d.kind !== 'fold')), ...folds]
+  // 折れ戸・開口は弧を出さないので、開き戸どうしの弧の分離の対象外（先頭に並べず、後ろへ回して開き戸の順序を保つ）
+  const noArc = (d: Door) => d.kind === 'fold' || d.kind === 'open'
+  return [...separateSwings(doors.filter((d) => !noArc(d))), ...doors.filter((d) => d.kind === 'fold'), ...doors.filter((d) => d.kind === 'open')]
 }
 
 export interface WindowSeg {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { candidatePool, dedupeBySig, generatePlans, generatePlansUncached, selectPlans } from './generate'
+import { candidatePool, dedupeBySig, generatePlans, generatePlansUncached, poolSizeWithoutStairUnify, selectPlans } from './generate'
 import { planSignature } from './diversity'
 import { planKey } from './enumerate'
 import { shortSideViolations, validatePlan } from './validate'
@@ -157,6 +157,20 @@ describe('0案の診断 diagnoseEmpty', () => {
     }
   })
 
+  it('階段が原因の0案（GEN_VERSION 6）: 理由は「階段が上下で同じ形に収まりません」。階段を上下で同じ形にする制約を外せば案が出る', () => {
+    const stairZeros = BOUNDARY.filter((b) => b.name.includes('0案: 階段'))
+    expect(stairZeros).toHaveLength(3)
+    for (const { name, cfg } of stairZeros) {
+      expect(candidatePool(cfg), name).toHaveLength(0)
+      expect(poolSizeWithoutStairUnify(cfg), name).toBeGreaterThan(0)
+      const d = diagnoseEmpty(cfg)
+      expect(d.reason.startsWith('階段が上下で同じ形に収まりません'), `${name}: ${d.reason}`).toBe(true)
+      expect(d.alts.length, name).toBeGreaterThan(0)
+    }
+    // 階段以外が原因の0案には出ない
+    expect(diagnoseEmpty(ZERO_PLAN).reason).not.toContain('階段が上下で')
+  }, 120_000)
+
   const zeros = [
     { name: 'ZERO_PLAN', cfg: ZERO_PLAN },
     ...BOUNDARY.filter((b) => b.expected === 0).map((b) => ({ name: b.name, cfg: b.cfg })),
@@ -182,7 +196,7 @@ describe('0案の診断 diagnoseEmpty', () => {
         expect(generatePlans(patched, 1), `${name} → ${a.label}`).toHaveLength(3)
       }
     }
-  })
+  }, 180_000)
 
   it('入力 cfg を破壊しない', () => {
     const before = JSON.stringify(ZERO_PLAN)
@@ -199,7 +213,7 @@ describe('0案の診断 diagnoseEmpty', () => {
   it('理由は1F/2Fのどちらが崩れたかを区別する（実測の条件で文面が変わる）', () => {
     const reasons = new Set(zeros.map(({ cfg }) => diagnoseEmpty(cfg).reason))
     expect(reasons.size).toBeGreaterThan(1)
-  })
+  }, 120_000)
 })
 
 describe('実現可能性', () => {

@@ -1,7 +1,9 @@
 import type { FloorRect, Plan, Room } from './types'
 import { floorRect } from './types'
-import { HABITABLE, minShort } from './rooms'
+import { HABITABLE, findEntry, minShort } from './rooms'
 import { computeDoors, sharedEdge } from './derive'
+import { HALL_RULES, guardViolations } from './circulation'
+import { stairMouthCovered } from './stair'
 
 /** 外壁に接しているか（採光） */
 export function touchesOuterWall(r: { x: number; y: number; w: number; h: number }, rect: FloorRect): boolean {
@@ -46,17 +48,21 @@ export function shortSideViolations(rooms: readonly Room[]): string[] {
 /** 1フロア分のハード制約の検証（validatePlan の階ごとの部分。階の板の矩形は floorRect） */
 export function validateFloor(plan: Plan, fi: number): boolean {
   const fl = plan.floors[fi]
-  if (!fl) return false
-  const rooms = fl.rooms
+  return !!fl && validateRooms(fl.rooms, floorRect(plan, fi))
+}
+
+/** 階の部屋の配列と板の矩形からの検証（ホール帯の端の吸収が、組み替えた後の階を検証するのにも使う） */
+export function validateRooms(rooms: readonly Room[], rect: FloorRect): boolean {
   if (wetViolations(rooms).length > 0) return false
   if (shortSideViolations(rooms).length > 0) return false
-  const doors = computeDoors(rooms)
-  const adj = new Map(rooms.map((r) => [r, [] as typeof rooms]))
+  const doors = computeDoors(rooms as Room[])
+  const adj = new Map(rooms.map((r) => [r, [] as Room[]]))
   for (const d of doors) {
     adj.get(d.a)!.push(d.b)
     adj.get(d.b)!.push(d.a)
   }
-  const start = rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'stair')
+  // 起点: 玄関（なければ土間。玄関+土間の結合セルは doma。GEN_VERSION 6 で修正: 以前は土間を見ず、平屋の結合セルの案が全部棄却されていた）→ 階段
+  const start = findEntry(rooms) ?? rooms.find((r) => r.type === 'stair')
   if (!start) return false
   const seen = new Set([start])
   const stack = [start]
@@ -72,14 +78,19 @@ export function validateFloor(plan: Plan, fi: number): boolean {
   for (const r of rooms) {
     if (r.type !== 'void' && !seen.has(r)) return false
   }
+  // ホールの長さ（GEN_VERSION 6）・階段の口の全幅・動線のガード（G1〜G4）
+  const hall = rooms.find((r) => r.type === 'hall')
+  if (hall && hall.w < HALL_RULES.minHallLen) return false
+  if (!stairMouthCovered(rooms)) return false
+  if (guardViolations(rooms, doors).length > 0) return false
   for (const r of rooms) {
-    if (HABITABLE[r.type] && !touchesOuterWall(r, floorRect(plan, fi))) return false
+    if (HABITABLE[r.type] && !touchesOuterWall(r, rect)) return false
     if (r.type !== 'hall' && r.type !== 'void' && r.area < (r.minArea || 0) - 1) return false
   }
   return true
 }
 
-/** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接 + 最小の短辺。違反は棄却 */
+/** ハード制約の検証: 全室への到達可能性 + 居室の外壁接触 + 最低面積 + 水回りの隣接 + 最小の短辺 + ホールの長さ・階段の口・動線のガード（GEN_VERSION 6）。違反は棄却 */
 export function validatePlan(plan: Plan): boolean {
   return plan.floors.every((_, fi) => validateFloor(plan, fi))
 }

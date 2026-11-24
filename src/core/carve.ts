@@ -3,6 +3,7 @@ import { ROOM, minShort } from './rooms'
 import { doorOK, sharedEdge } from './derive'
 import { isPrivateRoom, storageOf } from './closets'
 import { shortSideViolations, wetViolations } from './validate'
+import { mouthRuleOk } from './circulation'
 
 /**
  * 割り付け後の収納化（GEN_VERSION 5）。追加の面積を使わず、階ごとに次の順で収納を作る:
@@ -120,17 +121,15 @@ function reassignStores(st0: State): State {
   return sync(st)
 }
 
-/** 階段とホールが、切る前は辺を共有していたのに切った後は共有しなくなったか（階段の前を塞ぐ切り出しの検出） */
+/**
+ * 階段の口の辺の条件（HALL_RULES.mouth。GEN_VERSION 6）を、切る前は満たしていたのに切った後は満たさなくなったか（階段の前を塞ぐ切り出しの検出）。
+ * GEN_VERSION 5 までは「階段とホールが辺を共有する」だった
+ */
 function stairLost(before: Room[], after: Room[]): boolean {
-  const shared = (rs: Room[]) => {
-    const stair = rs.find((r) => r.type === 'stair')
-    const hall = rs.find((r) => r.type === 'hall')
-    return !stair || !hall || sharedEdge(stair, hall) !== null
-  }
-  return shared(before) && !shared(after)
+  return mouthRuleOk(before) && !mouthRuleOk(after)
 }
 
-/** 2. ホール帯の行き止まり（階段がホールと辺を共有し続けるときだけ。階段のある側の端は、階段の前を塞ぐなら切らない） */
+/** 2. ホール帯の行き止まり（階段の口の辺の条件を保つときだけ。階段のある側の端は、階段の前を塞ぐなら切らない） */
 function carveHallEnds(st0: State): State {
   let st = st0
   for (const end of ['W', 'E'] as const) {
@@ -157,7 +156,7 @@ function carveHallEnds(st0: State): State {
         nh.area = nh.w * nh.h
         next.rooms.push(cl)
         next.owner.set(cl, no)
-        // 階段の前を塞がない: 切る前に階段がホールと辺を共有していたなら、切った後も共有していること
+        // 階段の前を塞がない: 切る前に階段の口の辺の条件を満たしていたなら、切った後も満たすこと
         if (stairLost(st.rooms, next.rooms)) continue
         if (reachable(sync(next).rooms)) {
           st = next

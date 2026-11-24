@@ -1,7 +1,7 @@
 import { CANONICAL, isPartial } from './types'
 import type { Alt, ArchId, Feasibility, PlanConfig } from './types'
 import { bandsFor, buildPlanStage } from './archetypes'
-import { FOOTPRINT_LIMIT, candidatePool, generatePlansUncached } from './generate'
+import { FOOTPRINT_LIMIT, candidatePool, generatePlansUncached, poolSizeWithoutStairUnify } from './generate'
 import { footprintList, footprintPairs, PARTIAL_RATIO } from './slicing'
 import { validatePlan } from './validate'
 
@@ -78,9 +78,12 @@ function emptyReason(cfg: PlanConfig): string {
   const archs: ArchId[] = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
   const partial = isPartial(cfg)
   const shapes = partial ? footprintPairs(cfg.area * 16) : footprintList((cfg.area * 16) / cfg.floors, FOOTPRINT_LIMIT)
+  // 数えるのは「階段を上下で同じ形にする制約（北帯の高さ hN の共通化。GEN_VERSION 6）を外した」組み立て。階段以外の原因（短辺・吹抜など）を
+  // v5 までと同じ基準で切り分け、そのうえで、制約を外せば組める（検証も通る）のにプールが空なら、原因は階段とする
+  const noUnify = { ignoreStairUnify: true }
   for (const arch of archs) {
     for (const fp of shapes) {
-      const r = buildPlanStage(cfg, arch, fp, CANONICAL)
+      const r = buildPlanStage(cfg, arch, fp, CANONICAL, undefined, noUnify)
       if (r.plan) {
         if (!validatePlan(r.plan)) counts.validate++
       } else if (r.failed) counts[r.failed]++
@@ -90,17 +93,23 @@ function emptyReason(cfg: PlanConfig): string {
   // 1F/2F の割り付けが崩れたとき、最小の短辺の判定を外すと組めるなら原因は短辺
   const shortCause =
     (counts.f1 > 0 || counts.f2 > 0) &&
-    archs.some((arch) => shapes.some((fp) => buildPlanStage(cfg, arch, fp, CANONICAL, undefined, { ignoreMinShort: true }).plan !== null))
+    archs.some((arch) => shapes.some((fp) => buildPlanStage(cfg, arch, fp, CANONICAL, undefined, { ...noUnify, ignoreMinShort: true }).plan !== null))
+  // 制約を外した候補プール（全変種）が空でないのに、通常のプールは空 → 原因は階段（上下で同じ 4×5 / 4×6 の折り返しに収まらない）
+  const stairCause = cfg.floors === 2 && poolSizeWithoutStairUnify(cfg) > 0
   // どの階で崩れたか（平屋 / 1階 / 2階 / 両方）。2階は1階が組めたときだけ試すので、1階が崩れた形が1つでもあれば 1F も挙げる
   const where = cfg.floors === 1 ? '平屋では' : counts.f1 > 0 && counts.f2 > 0 ? '1階・2階とも' : counts.f2 > 0 ? '2階では' : '1階では'
   const shortMsg = `${where}、部屋の幅（短辺）の最低限 — 個室 2.3m・主寝室 2.7m・浴室と洗面 1.4m など — を確保すると、帯に部屋が収まりません。個室を減らすか、延床を広げてください。`
+  if (stairCause) {
+    const stairMsg = '階段が上下で同じ形に収まりません。階段は両階で同じ位置・同じ大きさ（幅1.8m×長さ2.3〜2.7m の折り返し階段）にそろえる必要がありますが、この条件では北側の帯に、階段と他の部屋の最低面積が両階とも収まりません。個室や設備を減らすか、延床を広げてください。'
+    return partial ? `${stairMsg}総二階にするか、条件を調整してください。` : stairMsg
+  }
   if (shortCause) return partial ? `${shortMsg}総二階にするか、条件を調整してください。` : shortMsg
   if (partial) {
     const tail = '総二階にするか、条件を調整してください。'
     // 吹抜ありで f2/void が崩れたとき、吹抜を除いても組めるなら原因は吹抜（fixedW のセルが狭い2階の南帯を占める）
     if (has('void') && (counts.f2 > 0 || counts.void > 0)) {
       const noVoid: PlanConfig = { ...cfg, feats: cfg.feats.filter((f) => f !== 'void') }
-      const fits = archs.some((arch) => shapes.some((fp) => buildPlanStage(noVoid, arch, fp, CANONICAL).plan !== null))
+      const fits = archs.some((arch) => shapes.some((fp) => buildPlanStage(noVoid, arch, fp, CANONICAL, undefined, noUnify).plan !== null))
       if (fits) {
         return `部分二階では吹抜が2階に収まりませんでした（2階の板が狭く、吹抜の幅が2階の南帯を占めて他の部屋が最低面積を満たせません）。吹抜を外すか、総二階にしてください。`
       }

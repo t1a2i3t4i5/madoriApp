@@ -107,24 +107,26 @@ describe('部分二階の生成', () => {
     for (const { cfg } of [...POPULAR, defined(PARTIAL_CONDITIONS[3])]) {
       const st = poolBuildStats(cfg)
       expect(st.poolSize).toBeGreaterThan(0)
-      // 外形の組12 × アーキタイプ3 × 変種（distinct 後。2階建ての全変種は 2×16×4=128 に、クローゼットのモード（弱・強）で ×2）が上限
-      expect(st.assembled).toBeLessThanOrEqual(12 * 3 * 128 * 2)
-      expect(st.assembled).toBeLessThanOrEqual(7200) // v5 の実測最大 6144（v4 は 3072）
-      // 1Fの割り付け: (arch, 1Fの板, stairEnd, rev[0], rev[1]) の個数が上限 = 12 × 3 × 2 × 4
-      expect(st.f1Layouts).toBeLessThanOrEqual(12 * 3 * 2 * 4)
+      // 外形の組12 × アーキタイプ3 × 変種（distinct 後。2階建ての全変種は 2×16×4=128 に、クローゼットのモード（弱・強）で ×2、北帯の高さ hN（5・6）で ×2）が上限
+      expect(st.assembled).toBeLessThanOrEqual(12 * 3 * 128 * 2 * 2)
+      expect(st.assembled).toBeLessThanOrEqual(13500) // v5 の実測最大 6144 × 2.2（GEN_VERSION 6 の実測最大 12288 = 2.0 倍。v4 は 3072）
+      // 1Fの割り付け: (arch, 1Fの板, stairEnd, rev[0], rev[1], hN) の個数が上限 = 12 × 3 × 2 × 4 × 2
+      expect(st.f1Layouts).toBeLessThanOrEqual(12 * 3 * 2 * 4 * 2)
       expect(st.f1Validations).toBeLessThanOrEqual(st.f1Layouts)
       // メモが効いている（組み立てに対して 1F の割り付けは桁違いに少ない）
       expect(st.f1Layouts * 5).toBeLessThan(st.assembled)
     }
   })
 
-  it('部分二階の1Fの割り付けの回数（f1Layouts・f1Validations）は v4 から変わらない（クローゼットのモードは1Fのメモに入らない）', () => {
-    // v4（コミット d865fd4）の実測。assembled は変種のモード（弱・強）で2倍になるが、1Fは個室セルがないのでモードで増えない
-    const v4: [number, number][] = [[264, 120], [240, 72], [240, 216], [144, 24], [264, 128], [264, 168]]
-    expect(PARTIAL_CONDITIONS).toHaveLength(v4.length)
+  it('部分二階の1Fの割り付けの回数（f1Layouts・f1Validations）は v5 の 2 倍（北帯の高さ hN で割り付けが変わる）。クローゼットのモードは1Fのメモに入らない', () => {
+    // v5（コミット 4452e74）の実測 [f1Layouts, f1Validations]（v4 と同じ値）。assembled は変種のモード（弱・強）と hN で増えるが、1Fは個室セルがないのでモードでは増えない
+    const v5: [number, number][] = [[264, 120], [240, 72], [240, 216], [144, 24], [264, 128], [264, 168]]
+    // GEN_VERSION 6 の実測（検証の回数は、1F の割り付けが hN で別になっても、吸収で同じ配置になる分だけ増え方が小さい）
+    const v6Validations = [168, 72, 384, 36, 184, 312]
+    expect(PARTIAL_CONDITIONS).toHaveLength(v5.length)
     PARTIAL_CONDITIONS.forEach(({ name, cfg }, i) => {
       const st = poolBuildStats(cfg)
-      expect([name, st.f1Layouts, st.f1Validations]).toEqual([name, v4[i]?.[0], v4[i]?.[1]])
+      expect([name, st.f1Layouts, st.f1Validations]).toEqual([name, (v5[i]?.[0] ?? 0) * 2, v6Validations[i]])
     })
   })
 
@@ -201,7 +203,8 @@ describe('部分二階の feasibility / 診断', () => {
   })
 
   it('部分二階で0案のとき、代替の先頭に総二階（3案が出ると確かめ済み）と部分二階向けの理由', () => {
-    const cfg = cfgOf(28, 3, ['void'], 'partial')
+    // GEN_VERSION 6: 28坪/個室3/吹抜 は総二階でも0案になった（階段を 4×5/4×6 にそろえる制約）ので、総二階が3案を出せる 34坪/個室4 を使う
+    const cfg = cfgOf(34, 4, ['void'], 'partial')
     expect(feasibility(cfg).ok).toBe(true)
     expect(candidatePool(cfg)).toHaveLength(0)
     const d = diagnoseEmpty(cfg)
@@ -231,7 +234,7 @@ describe('部分二階の feasibility / 診断', () => {
   // 1つで足りないときに限り、2つの変更の組み合わせを試して、3案が出ると確かめたものだけを出す
   it('部分二階＋吹抜で、1つの変更では3案にならない条件は、2つの変更の組み合わせを代替にする（以前は0件）', () => {
     const expected: Record<string, string[]> = {
-      '30/4': ['総二階にする＋吹抜を外す', '総二階にする＋延床を32坪にする', '総二階にする＋延床を34坪にする'],
+      '30/4': ['総二階にする＋吹抜を外す', '総二階にする＋延床を34坪にする', '吹抜を外す＋延床を32坪にする'],
       // 次の2条件は、1つの変更で足りるので組み合わせは使わない（出力は従来どおり）
       '34/5': ['吹抜を外す'],
       '26/3': ['吹抜を外す', '個室を2室にする'],

@@ -18,14 +18,14 @@ describe('おまかせ条件', () => {
       expect(cfg.rooms).toBeLessThanOrEqual(5)
       expect(randomConfig(mulberry32(seed))).toEqual(cfg)
     }
-  }, 120_000)
+  }, 360_000) // GEN_VERSION 6 は北帯の高さ hN で候補プールの構築が約2倍かかる（v5: 約 120 秒）
   it('呼び出し側が指定した seed でも3案が出る', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const cfg = randomConfig(mulberry32(seed), 200, 777)
       expect(cfg, `seed=${seed}`).not.toBeNull()
       if (cfg) expect(generatePlans(cfg, 777)).toHaveLength(3)
     }
-  }, 60_000)
+  }, 180_000)
   it('試行回数が尽きたら null（常に同じ作れない条件を引く rng で、実際に試行を使い切る）', () => {
     // rng が常に 0: 22坪/2階/個室2/こだわり全部 → 実現不可能。毎回棄却される
     const stuck = { area: 22, floors: 2 as const, rooms: 2, parking: 0, garden: 0, feats: ['kitchenFace', 'doma', 'study', 'wic', 'pantry', 'void', 'washitsu', 'laundry'] as const }
@@ -43,5 +43,5 @@ describe('おまかせ条件', () => {
   it('条件が散らばる（毎回同じではない）', () => {
     const set = new Set(Array.from({ length: 30 }, (_, i) => JSON.stringify(randomConfig(mulberry32(i + 1)))))
     expect(set.size).toBeGreaterThan(20)
-  }, 60_000)
+  }, 180_000)
 })

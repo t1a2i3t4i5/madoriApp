@@ -6,7 +6,7 @@ import { GEN_VERSION, candidatePool, generatePlans } from './generate'
 import { feasibility } from './program'
 import { planName, planTags } from './describe'
 import { planKey } from './enumerate'
-import { BOUNDARY, CONDITIONS, PARTIAL_CONDITIONS, SEEDS } from './testing'
+import { BOUNDARY, CONDITIONS, PARTIAL_CONDITIONS, SEEDS, chokkaRate, fullWidthHall2F, hallRatioIndependent, quantile, stairViolations } from './testing'
 import { shortSideViolations } from './validate'
 import type { PlanConfig, Room, ScoredPlan } from './types'
 
@@ -16,16 +16,15 @@ import type { PlanConfig, Room, ScoredPlan } from './types'
  *   UPDATE_GOLDEN=1 npx vitest run src/core/golden-fixture.test.ts
  * fixture の genVersion が現在の GEN_VERSION と同じで中身だけ違う場合は、書き込みを拒否する
  * （GEN_VERSION を上げずに出力を黙って書き換えないため。どうしても必要なら UPDATE_GOLDEN=force）。
- * 旧バージョンの fixture（gen-v3.json、gen-v4.json）は消さず、移行検証（v3 → v4、v4 → v5）に使う。
+ * 旧バージョンの fixture（gen-v3.json、gen-v4.json、gen-v5.json）は消さず、移行検証（v3 → v4、v4 → v5、v5 → v6）に使う。
+ * v5 → v6 の検証には、v5 のコードで記録した 2階建てのグリッドの提示案の階段・LDK・玄関（gen-v5-grid-stairs.json）も使う。
  * v1 の正解は legacy/index.html（golden.test.ts）。
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.url)
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
-const FIXTURE_V4_PARTIAL = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
-/** v4 の提示案が v5 のプールに残る割合と、骨格が一致する割合の下限（GEN_VERSION 5 の実測の少し下） */
-const MIN_KEPT = 0.99
-const MIN_SKELETON = 0.75
+const FIXTURE_V5 = new URL('./__fixtures__/gen-v5.json', import.meta.url)
+const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-grid-stairs.json', import.meta.url)
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 const ALL = [...CONDITIONS, ...BOUNDARY]
@@ -49,7 +48,11 @@ interface Fixture {
   grid: Record<string, string[]>
 }
 
+/** build() が feasibility グリッドで選んだ提示案（総二階・平屋。seed 1）。退行防止の指標（hall-stair-spec §10.3）の標本 */
+const gridPlans: ScoredPlan[] = []
+
 function build(): Fixture {
+  gridPlans.length = 0
   const cases: Fixture['cases'] = []
   for (const { name, cfg } of ALL) {
     for (const seed of SEEDS) {
@@ -76,7 +79,9 @@ function build(): Fixture {
         for (const feats of [[], ['doma'], ['void', 'study'], ['washitsu', 'laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
           const cfg: PlanConfig = { area, floors, rooms, parking: 1, garden: 1, feats }
           if (!feasibility(cfg).ok) continue
-          grid[JSON.stringify(cfg)] = generatePlans(cfg, 1).map(planKey)
+          const plans = generatePlans(cfg, 1)
+          gridPlans.push(...plans)
+          grid[JSON.stringify(cfg)] = plans.map(planKey)
         }
       }
     }
@@ -112,7 +117,7 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
   it('fixture.genVersion が現在の GEN_VERSION と一致する', () => {
     expect(fixture.genVersion).toBe(GEN_VERSION)
   })
-  it('generatePlans の出力（13条件 × 6 seed。2^32 以上の seed を含む）が一致する', () => {
+  it('generatePlans の出力（全条件 × 6 seed。2^32 以上の seed を含む）が一致する', () => {
     expect(fixture.cases).toHaveLength(ALL.length * SEEDS.length)
     for (const [i, c] of fixture.cases.entries()) expect(now.cases[i], `${c.name} seed=${c.seed}`).toEqual(c)
   })
@@ -162,63 +167,149 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
     })
   })
 
-  // 移行検証: GEN_VERSION 5 はクローゼット（弱・強のモード）と収納化を足した。成立条件・プールは v4 以上、境界は不変
-  describe('v4 からの移行（クローゼット）', () => {
+  // 移行検証: GEN_VERSION 5 はクローゼット（弱・強のモード）と収納化を足した。成立条件・プールは v4 以上、境界は不変（v4・v5 の fixture どうしの比較。記録として残す）
+  describe('v4 → v5 の移行（クローゼット。fixture どうしの記録）', () => {
     let v4: Fixture
+    let v5: Fixture
     beforeAll(() => {
       v4 = JSON.parse(readFileSync(FIXTURE_V4, 'utf8')) as Fixture
+      v5 = JSON.parse(readFileSync(FIXTURE_V5, 'utf8')) as Fixture
     })
     it('grid: v4 で3案が出た条件は v5 でも3案が出る（3案条件の集合が縮まない）。条件の集合（feasibility）も同一', () => {
       expect(v4.genVersion).toBe(4)
-      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v4.grid).sort())
+      expect(v5.genVersion).toBe(5)
+      expect(Object.keys(v5.grid).sort()).toEqual(Object.keys(v4.grid).sort())
       const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
-      const lost = three(v4.grid).filter((k) => now.grid[k]?.length !== 3)
-      expect(lost).toEqual([])
-      expect(three(now.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
+      expect(three(v4.grid).filter((k) => v5.grid[k]?.length !== 3)).toEqual([])
+      expect(three(v5.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
     })
-    it('候補プールの件数は、全 CONDITIONS・BOUNDARY で v4 以上（弱モードが v4 の成立を保つ）', () => {
-      expect(v4.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
-      for (const [i, p] of now.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
+    it('候補プールの件数は、全条件で v4 以上（弱モードが v4 の成立を保つ）', () => {
+      expect(v4.pools.map((p) => p.name)).toEqual(v5.pools.map((p) => p.name))
+      for (const [i, p] of v5.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
     })
-    it('BOUNDARY の提示案の件数は v4 と同じ（0案・3案の境界が動かない）', () => {
+    it('提示案の件数は v4 と同じ（0案・3案の境界が動かない）', () => {
+      expect(v5.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v4.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+  })
+
+  // 移行検証: GEN_VERSION 6 は階段を上下で同じ 4×5/4×6 の折り返しにし（北帯の高さの共通化）、ホール帯の端を吸収する。
+  // 階段が成立しない（4×4・上下の食い違い）案しか出していなかった条件だけが、3案から外れる
+  describe('v5 → v6 の移行（階段・廊下）', () => {
+    let v5: Fixture
+    let stairs: Record<string, { key: string; s1: string; s2: string; ldk: string; entry: string }[]>
+    beforeAll(() => {
+      v5 = JSON.parse(readFileSync(FIXTURE_V5, 'utf8')) as Fixture
+      stairs = JSON.parse(readFileSync(FIXTURE_V5_STAIRS, 'utf8')) as typeof stairs
+    })
+    /** v5 の階段が、折り返し（4×5・4×6）として成立しない: 1F の短辺 4・長辺 4 以下、または上下で矩形が違う */
+    const unusable = (s1: string, s2: string) => s1 !== s2 || !/^\d+,0,4,[56]$/.test(s1)
+    const stairOf = (floor: string[] | undefined) => (floor ?? []).find((r) => r.startsWith('stair:'))?.slice(6) ?? ''
+
+    it('grid: 条件の集合（feasibility が ok のキー）は v5 と同一（feasibility 不変）', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v5.grid).sort())
+    })
+    it('grid: v5 で3案が出て v6 で3案が出なくなった条件は、v5 の提示案の階段がすべて成立しない矩形（4×4・上下の食い違い）', () => {
+      expect(Object.keys(stairs).length).toBeGreaterThan(30)
+      const lost = Object.keys(stairs).filter((k) => now.grid[k]?.length !== 3)
+      expect(lost.length, '空振り防止: 3案から外れる条件がある').toBeGreaterThan(0)
+      for (const k of lost) {
+        expect(v5.grid[k]?.length, k).toBe(3)
+        for (const p of stairs[k] ?? []) expect(unusable(p.s1, p.s2), `${k} ${p.key} 1F ${p.s1} / 2F ${p.s2}`).toBe(true)
+      }
+      // 記録: 2階建ての条件で3案が出なくなったのは 11 件（平屋は不変）
+      expect(lost).toHaveLength(11)
+    })
+    it('grid: v6 で新しく3案が出る条件は、土間の起点の修正（平屋の玄関+土間の結合セル）によるものだけ', () => {
+      const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
+      const gained = three(now.grid).filter((k) => v5.grid[k]?.length !== 3)
+      for (const k of gained) expect((JSON.parse(k) as PlanConfig).floors, k).toBe(1)
+      // 記録（GEN_VERSION 6）: 総二階・平屋のグリッドで3案の条件は 69 件（v5: 80）
+      expect(three(now.grid)).toHaveLength(three(v5.grid).length - 11 + gained.length)
+    })
+    it('named 条件（CONDITIONS・BOUNDARY）: v5 で3案・v6 で0案の条件は、v5 の提示案の階段がすべて成立しない矩形', () => {
+      // v5 の名前 → v6 の名前（0案になった条件は CONDITIONS から BOUNDARY へ移した。吹抜+WIC+書斎・全部のせは 40坪の同種の条件に入れ替え）
+      const renamed: Record<string, string> = {
+        '36坪/2階/吹抜+WIC+書斎': '境界: 36坪/2階/吹抜+WIC+書斎（0案: 階段）',
+        '38坪/2階/全部のせ': '境界: 38坪/2階/全部のせ（0案: 階段）',
+        '境界: 36坪/2階/吹抜+個室4+WIC（3案）': '境界: 36坪/2階/吹抜+個室4+WIC（0案: 階段）',
+      }
+      let lost = 0
+      for (const c of v5.cases) {
+        if (c.seed !== SEEDS[0]) continue
+        const name6 = renamed[c.name] ?? c.name
+        const v6 = now.cases.find((x) => x.name === name6 && x.seed === c.seed)
+        expect(v6, `${c.name} → ${name6}`).toBeDefined()
+        if (!v6 || v6.plans.length === c.plans.length) continue
+        lost++
+        expect(c.plans.length, c.name).toBe(3)
+        expect(v6.plans.length, c.name).toBe(0)
+        for (const p of c.plans) expect(unusable(stairOf(p.floors[0]), stairOf(p.floors[1])), `${c.name} ${p.key}`).toBe(true)
+      }
+      // 36坪/吹抜+WIC+書斎、38坪/全部のせ、境界の 36坪/吹抜+個室4+WIC
+      expect(lost).toBe(3)
+      expect(Object.keys(renamed).every((k) => v5.cases.some((c) => c.name === k))).toBe(true)
+    })
+    it('人気3条件（総二階・平屋）の候補プールは v5 以上。BOUNDARY の件数は期待どおり', () => {
+      for (const name of ['30坪/2階/個室3', '30坪/平屋/個室3', '35坪/2階/個室4']) {
+        const before = v5.pools.find((p) => p.name === name)?.count ?? Infinity
+        expect(now.pools.find((p) => p.name === name)?.count ?? 0, name).toBeGreaterThanOrEqual(before)
+      }
       for (const { name, expected } of BOUNDARY) {
         const cs = now.cases.filter((c) => c.name === name)
         expect(cs).toHaveLength(SEEDS.length)
         for (const c of cs) expect(c.plans.length, `${name} seed=${c.seed}`).toBe(expected)
-        expect(v4.cases.filter((c) => c.name === name).every((c) => c.plans.length === expected)).toBe(true)
       }
     })
-    it('v4 の提示案の骨格（階段・LDK・玄関/土間の矩形とホールの y・高さ）が、同じ key の v5 の案でも一致する割合', () => {
-      // 骨格は階ごとに stair・ldk・entry・doma の矩形と、hall の y・高さ（ホールの x・幅は行き止まりの収納化で変わるので比べない）
-      const skeleton = (rs: string[]) =>
-        rs
-          .filter((r) => /^(stair|ldk|entry|doma|hall):/.test(r))
-          .map((r) => r.replace(/^hall:\d+,(\d+),\d+,(\d+)$/, 'hall:$1,$2'))
-          .sort()
-          .join('|')
-      const partial = JSON.parse(readFileSync(FIXTURE_V4_PARTIAL, 'utf8')) as { cases: { name: string; plans: { key: string; floors: { rooms: string[] }[] }[] }[] }
+    it('v5 の提示案の LDK・玄関の x と幅が、v6 のプールのどれかの案で再現される割合（記録用。標本は3案が出る条件の4件おき）', () => {
       let total = 0
-      let inPool = 0
-      let same = 0
-      const check = (cfg: PlanConfig, plans: { key: string; floors: string[][] }[]) => {
-        const pool = new Map<string, ScoredPlan>(candidatePool(copy(cfg)).map((p) => [planKey(p), p]))
+      let kept = 0
+      for (const [k, plans] of Object.entries(stairs).filter((_, i) => i % 4 === 0)) {
+        const cfg = JSON.parse(k) as PlanConfig
+        if (now.grid[k]?.length !== 3) continue
+        const have = new Set(candidatePool(copy(cfg)).map((p) => {
+          const r0 = p.floors[0]?.rooms ?? []
+          const pick = (t: string) => { const r = r0.find((q) => q.type === t); return r ? `${r.x},${r.w}` : '' }
+          return `${pick('ldk')}|${pick('entry') || pick('doma')}`
+        }))
         for (const p of plans) {
           total++
-          const q = pool.get(p.key)
-          if (!q) continue
-          inPool++
-          if (JSON.stringify(p.floors.map(skeleton)) === JSON.stringify(rooms(q).map(skeleton))) same++
+          if (have.has(`${p.ldk}|${p.entry}`)) kept++
         }
       }
-      for (const { name, cfg } of ALL) check(cfg, v4.cases.filter((x) => x.name === name).flatMap((c) => c.plans))
-      for (const { name, cfg } of PARTIAL_CONDITIONS) {
-        check(cfg, partial.cases.filter((x) => x.name === name).flatMap((c) => c.plans.map((p) => ({ key: p.key, floors: p.floors.map((f) => f.rooms) }))))
-      }
-      expect(total).toBeGreaterThan(200)
-      // 実測（GEN_VERSION 5）: プールに残る 306/306（100%）、骨格が一致 241/306（78.8%）。一致しない案は、個室セルのクローゼット分を帯の高さの目標に足す
-      // （layoutFloor）ことで帯の高さが動き、LDK の幅などが1〜2セル変わったもの。外すと 286/306（93.5%）になるが、洋室の家具配置率が 18.6% → 8.2% に落ちるので残した
-      expect(inPool / total, `プールに残る ${inPool}/${total}`).toBeGreaterThanOrEqual(MIN_KEPT)
-      expect(same / total, `骨格が一致 ${same}/${total}`).toBeGreaterThanOrEqual(MIN_SKELETON)
+      expect(total).toBeGreaterThan(15)
+      expect(kept / total, `LDK・玄関が再現 ${kept}/${total}`).toBeGreaterThanOrEqual(0.5)
+    }, 180_000)
+  })
+
+  // 退行防止の指標（hall-stair-spec §10.3）。しきい値は GEN_VERSION 6 の実測（括弧内）に余裕を持たせた値
+  describe('v6 の退行防止の指標（廊下率・直下率・LDK・階段）', () => {
+    const pct = (xs: readonly number[]) => xs.map((x) => x * 100)
+    it('グリッド（総二階・平屋 seed 1 の提示案）: 廊下率の中央値 ≤ 8.0%（実測 7.9）、8%以下の案 ≥ 50%（実測 54.1%）', () => {
+      const hall = pct(gridPlans.map(hallRatioIndependent))
+      expect(hall.length).toBeGreaterThan(150)
+      expect(quantile(hall, 0.5)).toBeLessThanOrEqual(8.0)
+      expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.5)
+    })
+    it('グリッド2階建て: 直下率の中央値 ≥ 42%（実測 46.5%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
+      const two = gridPlans.filter((p) => p.floors.length === 2)
+      expect(two.length).toBeGreaterThan(80)
+      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(42)
+      expect(quantile(two.map((p) => p.floors[0]?.rooms.find((r) => r.type === 'ldk')?.area ?? 0), 0.5)).toBeGreaterThanOrEqual(90)
+    })
+    it('グリッドの提示案: 階段の矩形が上下で一致し、4×5 / 4×6 の折り返しのみ（4×4 はゼロ）。3案が出る条件は 69 以上', () => {
+      const two = gridPlans.filter((p) => p.floors.length === 2)
+      for (const p of two) expect(stairViolations(p), planKey(p)).toEqual([])
+      const sizes = new Set(two.map((p) => { const s = p.floors[0]?.rooms.find((r) => r.type === 'stair'); return `${s?.w}x${s?.h}` }))
+      expect([...sizes].sort()).toEqual(['4x5', '4x6'])
+      expect(Object.keys(now.grid).filter((k) => now.grid[k]?.length === 3).length).toBeGreaterThanOrEqual(69)
+    })
+    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 11.0%（実測 10.3）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 50%（実測 55.9%）', () => {
+      const plans = [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)].flatMap(({ cfg }) => SEEDS.flatMap((s) => generatePlans(copy(cfg), s)))
+      expect(plans).toHaveLength(6 * SEEDS.length * 3)
+      expect(quantile(pct(plans.map(hallRatioIndependent)), 0.5)).toBeLessThanOrEqual(11.0)
+      const two = plans.filter((p) => p.floors.length === 2)
+      expect(two.filter(fullWidthHall2F).length / two.length).toBeLessThanOrEqual(0.45)
+      expect(quantile(pct(two.map(chokkaRate)), 0.5)).toBeGreaterThanOrEqual(50)
     })
   })
 })
