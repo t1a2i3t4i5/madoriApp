@@ -195,7 +195,7 @@ function Shimoya({ outer, fp, uid }: { outer: FloorRect; fp: FloorRect; uid: str
 const NO_ROOMS: Room[] = []
 
 /** 窓の線分（外壁上。南北は水平、東西は垂直） */
-function windowLine(wd: WindowSeg, fp: { x: number; y: number; W: number; H: number }) {
+function windowLine(wd: WindowSeg, fp: FloorRect) {
   if (wd.side === 'N' || wd.side === 'S') {
     const y = wd.side === 'S' ? fp.y + fp.H : fp.y
     return { horizontal: true, main: { x1: wd.a, y1: y, x2: wd.b, y2: y } }
@@ -287,11 +287,21 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       )}
       {fl.rooms.map((r, i) => <Fixtures key={i} r={r} geom={geom} floorIdx={floorIdx} />)}
       {furniture.length > 0 && <Furniture items={furniture} />}
-      {/* 窓: 壁を抜いてから、読み取れる太さ・色の二重線（4方位。小窓は細く、吹抜の高窓は破線） */}
+      {/* ドアの開き弧 */}
+      <g stroke="#5a5a5a" strokeWidth={0.13} fill="rgba(90,90,90,0.07)">
+        {doors.map((d, i) => (d.kind === 'fold' || d.kind === 'open' ? null : <path key={i} d={doorPath(d)} />))}
+      </g>
+      {/* 壁（外壁は内壁の約2倍強の太さ） */}
+      <g fill="none" stroke={INK}>
+        {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.19} />)}
+        <rect x={fp.x} y={fp.y} width={fp.W} height={fp.H} strokeWidth={0.42} />
+      </g>
+      {/* 窓: 外壁を白抜きしてから二重線（4方位。小窓は細く、吹抜の高窓は破線）。白抜きの太さは外壁の線（0.42）に合わせ、
+          室内側への食い込みを約0.02に抑える（器具・カウンター・階段の段線を削らない）。壁より後に描かないと壁が抜けない */}
       <g strokeLinecap="butt">
         {windows.map((wd, i) => {
           const g = windowLine(wd, fp)
-          return <line key={i} {...g.main} stroke="#fdfcf8" strokeWidth={wd.kind === 'small' ? 0.6 : 0.75} />
+          return <line key={i} {...g.main} stroke="#fdfcf8" strokeWidth={0.46} />
         })}
       </g>
       <g stroke="#2f7fb0" strokeWidth={0.17}>
@@ -308,15 +318,6 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
             </g>
           )
         })}
-      </g>
-      {/* ドアの開き弧 */}
-      <g stroke="#5a5a5a" strokeWidth={0.13} fill="rgba(90,90,90,0.07)">
-        {doors.map((d, i) => (d.kind === 'fold' || d.kind === 'open' ? null : <path key={i} d={doorPath(d)} />))}
-      </g>
-      {/* 壁（外壁は内壁の約2倍強の太さ） */}
-      <g fill="none" stroke={INK}>
-        {fl.rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} strokeWidth={0.19} />)}
-        <rect x={fp.x} y={fp.y} width={fp.W} height={fp.H} strokeWidth={0.42} />
       </g>
       {/* 付属収納の折れ戸／引戸（弧なし）。壁を抜くので壁より後に描く。折れ戸があるときだけ */}
       {doors.some((d) => d.kind === 'fold') && (
