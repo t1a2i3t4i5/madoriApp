@@ -49,42 +49,128 @@ export function isVerticalLabel(r: Room): boolean {
   return r.w <= 2.6 && r.h >= r.name.length * 1.15 + 0.6
 }
 
+/** 部屋名の文字サイズ（幅に収まらないときだけ縮める）と畳数行の文字サイズ。FloorSvg の RoomLabel と共有する */
+export const LABEL_FS = 1.2
+export const AREA_FS = 1.0
+
 /**
- * 部屋名ラベルが占める領域の保守的な見積もり。FloorSvg の RoomLabel は現在、室名を全室 fontSize 1.2（幅に収まらないときだけ縮小）で描くが、
- * ここでは中心を揃えたうえで大きい部屋 1.55・それ以外 1.25 の文字サイズで見積もるため、実際のラベルを内包する（やや広め）。
- * 縦積みラベル（幅の狭い部屋）は、1文字ずつ 1.08 間隔で積む描画に合わせて縦長の矩形にする。
- * 見積もりは配置結果を変えないよう据え置いており、描画寸法を変えてもこの矩形が実際のラベルを覆っていれば回避は有効。
- * 畳数行は含めない（含めると標準的な主寝室にベッドが置けなくなるため）。畳数行は areaLabelRect で別に見積もり、furnish が2段階で避ける。
+ * 部屋名ラベルの置き場所（labelSpot の結果）。cx・cy は FloorSvg の RoomLabel の中心（既定は部屋の中央。対面キッチンの LDK は 1.5 下）、
+ * s は既定の文字サイズに対する倍率（縮小は 0.75 倍まで）、layout は横書き（row）か縦積み（stack）、area は畳数行を描くか
  */
-export function labelRect(r: Room, kitchenFace: boolean): Rect {
-  const cx = r.x + r.w / 2
-  const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
-  if (isVerticalLabel(r)) {
-    const fs = Math.min(1.0, r.w - 0.5)
-    const y0 = cy - ((r.name.length - 1) * 1.08) / 2 + 0.35 // 先頭文字のベースライン
-    const w = Math.min(r.w, fs + 0.4)
-    return { x: cx - w / 2, y: y0 - fs, w, h: (r.name.length - 1) * 1.08 + fs + 0.3 }
-  }
-  const big = r.w >= 5 && r.h >= 4.5
-  const fs = Math.min(big ? 1.55 : 1.25, (r.w - 0.25) / Math.max(1, r.name.length))
-  const w = Math.min(r.w, r.name.length * fs + 0.4)
-  const h = fs + 0.5
-  return { x: cx - w / 2, y: cy - (big ? 0.35 : -0.5) - fs - 0.1, w, h }
+export interface LabelSpot {
+  cx: number
+  cy: number
+  s: number
+  layout: 'row' | 'stack'
+  area: boolean
 }
 
 /**
- * 帖数行（「7.9帖」等の補助行）が占める領域の保守的な見積もり。FloorSvg の RoomLabel と同じ条件（縦積みでなく、幅5以上かつ高さ4.5以上の部屋）でのみ描かれる。
- * 実際の描画は fontSize 1.0（AREA_FS）、ベースライン cy+1.25、中央揃え。ここでは fontSize 1.2・ベースライン cy+1.55 相当の
- * やや大きく下寄りの矩形（幅は 数字0.65・小数点0.35・「帖」1.2 で見積もる。余裕込み）にしてあり、実際の行を内包する。
+ * 従来の描画（家具を表示しないとき）が選ぶ形。縦積みの部屋は縦積み、幅が足りない（fit < 0.75）部屋は縦積みに収まれば縦積み、収まらなければ省略（null）、
+ * それ以外は横書き（小さすぎる部屋は省略）。FloorSvg の従来のフォールバックと同じ
  */
-export function areaLabelRect(r: Room, kitchenFace: boolean): Rect | null {
-  if (isVerticalLabel(r) || !(r.w >= 5 && r.h >= 4.5)) return null
-  const cx = r.x + r.w / 2
-  const cy = r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0)
-  const text = tatami(r.w, r.h)
-  const w = Math.min(r.w, Array.from(text).reduce((a, ch) => a + (ch === '.' ? 0.35 : 0.65), 0) + 1.2 + 0.4)
-  const fs = 1.2
-  return { x: cx - w / 2, y: cy + 1.55 - fs, w, h: fs + 0.3 }
+function legacyLayout(r: Room): LabelSpot['layout'] | null {
+  if (isVerticalLabel(r)) return 'stack'
+  if ((r.w - 0.5) / Math.max(1, r.name.length) < 0.75) return stackFits(r) ? 'stack' : null
+  if (r.w >= 5 && r.h >= 4.5) return 'row'
+  return r.w >= 2 && r.h >= 2.4 ? 'row' : null
+}
+
+/** 縦積み（既定の大きさ）が幅・高さに収まるか（幅に収まらない非縦積みの部屋用。従来の条件） */
+function stackFits(r: Room): boolean {
+  const { fs, step } = stackMetrics(r, 1)
+  return r.w >= 1.6 && fs >= 0.75 && r.h >= Math.max(1, r.name.length) * step + 0.6
+}
+
+/** ラベルの既定の形（中央・既定の大きさ・畳数行あり）。FloorSvg の従来の描画と同じ */
+function defaultSpot(r: Room, kitchenFace: boolean, layout: LabelSpot['layout']): LabelSpot {
+  return {
+    cx: r.x + r.w / 2,
+    cy: r.y + r.h / 2 + (r.type === 'ldk' && kitchenFace ? 1.5 : 0),
+    s: 1,
+    layout,
+    area: layout === 'row' && r.w >= 5 && r.h >= 4.5,
+  }
+}
+
+/** 縦積みの文字サイズと行送り（isVerticalLabel の部屋は 1.0 / 1.08、幅に収まらず縦積みに切り替える部屋は 0.95 / fs+0.15。FloorSvg と同じ） */
+export function stackMetrics(r: Room, s: number): { fs: number; step: number } {
+  if (isVerticalLabel(r)) return { fs: Math.min(1.0, r.w - 0.5) * s, step: 1.08 * s }
+  const fs = Math.min(0.95, r.w - 0.5) * s
+  return { fs, step: fs + 0.15 }
+}
+
+/** 横書きの室名の文字サイズ（幅に収まらないときは縮める） */
+export function rowFs(r: Room, s: number): number {
+  return Math.min(LABEL_FS, (r.w - 0.5) / Math.max(1, r.name.length)) * s
+}
+
+/** ラベルが実際に描かれる領域（実寸）。室名と畳数行を別々の矩形で返す */
+export function labelRects(r: Room, spot: LabelSpot): Rect[] {
+  const n = Math.max(1, r.name.length)
+  if (spot.layout === 'stack') {
+    const { fs, step } = stackMetrics(r, spot.s)
+    const y0 = spot.cy - ((n - 1) * step) / 2 + fs * 0.35
+    return [{ x: spot.cx - fs / 2 - 0.1, y: y0 - fs * 0.85, w: fs + 0.2, h: (n - 1) * step + fs }]
+  }
+  const fs = rowFs(r, spot.s)
+  const big = r.w >= 5 && r.h >= 4.5
+  const base = big ? spot.cy - 0.25 : spot.cy + fs * 0.35
+  const out: Rect[] = [{ x: spot.cx - (n * fs) / 2, y: base - fs * 0.85, w: n * fs, h: fs }]
+  if (big && spot.area) {
+    const afs = AREA_FS * spot.s
+    const b2 = spot.cy - 0.25 + 1.5 * spot.s
+    const w = Array.from(tatami(r.w, r.h)).reduce((a, ch) => a + (ch === '.' ? 0.3 : 0.55), 0) * afs + afs
+    out.push({ x: spot.cx - w / 2, y: b2 - afs * 0.85, w, h: afs })
+  }
+  return out
+}
+
+/**
+ * 部屋名ラベルの置き場所を決める（純関数。家具を置いた後に呼ぶ）。
+ * 中央 → 中央からの上下左右のずらし（近い順）→ 縮小（下限 0.75 倍。畳数行ありのまま全倍率）→ 畳数行を省く（なしで全倍率）→ 縦積み（文字は 0.75 未満にしない）の順に試し、
+ * obstacles（家具・ドアの弧・カウンター）と重ならず部屋に収まる最初の位置を返す。置けなければ null（ラベルを省く）。
+ * 既定の位置で重ならないとき（障害物がないときを含む）は既定をそのまま返す。
+ */
+export function labelSpot(r: Room, kitchenFace: boolean, obstacles: readonly Rect[]): LabelSpot | null {
+  const base = legacyLayout(r)
+  if (!base) return null // 従来の描画も省く部屋（幅・高さが足りない）
+  const def = defaultSpot(r, kitchenFace, base)
+  const hit = (sp: LabelSpot) => labelRects(r, sp).some((q) => obstacles.some((o) => overlaps(q, o)))
+  if (!hit(def)) return def
+  const inside = (sp: LabelSpot) => labelRects(r, sp).every((q) => q.x >= r.x + 0.1 && q.y >= r.y + 0.1 && q.x + q.w <= r.x + r.w - 0.1 && q.y + q.h <= r.y + r.h - 0.1)
+  const offsets: [number, number][] = []
+  for (let dy = -6; dy <= 6; dy += 0.5) for (let dx = -6; dx <= 6; dx += 0.5) offsets.push([dx, dy])
+  offsets.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) - (Math.abs(b[0]) + Math.abs(b[1])) || a[1] - b[1] || a[0] - b[0])
+  const tryLayout = (layout: LabelSpot['layout']): LabelSpot | null => {
+    // 畳数行ありのまま全倍率を試し、だめなら畳数行なしで全倍率を試す（縮小が先、畳数行を省くのは後）
+    for (const area of def.area && layout === 'row' ? [true, false] : [false]) {
+      for (const s of [1, 0.9, 0.8, 0.75]) {
+        if (layout === 'stack' && stackMetrics(r, s).fs < 0.75) continue // 縦積みの文字は 0.75 未満にしない
+        for (const [dx, dy] of offsets) {
+          const sp: LabelSpot = { cx: def.cx + dx, cy: def.cy + dy, s, layout, area }
+          if (inside(sp) && !hit(sp)) return sp
+        }
+      }
+    }
+    return null
+  }
+  // 既定が縦積みの部屋は縦積みだけ試す（横書きでは極小の文字になる）。横書きの部屋は、置けなければ縦積みにも逃がす
+  if (base === 'stack') return tryLayout('stack')
+  return tryLayout('row') ?? (stackFits(r) ? tryLayout('stack') : null)
+}
+
+/**
+ * 1フロア分の部屋ごとのラベルの置き場所。家具のある部屋（PROGRAM の種別）だけが対象で、家具・ドアの弧・開口の通路・
+ * 対面キッチンのカウンターを避ける。家具のない部屋は undefined（従来どおり中央に描く）、置けない部屋は null（ラベルを省く）
+ */
+export function labelSpots(rooms: readonly Room[], doors: readonly Door[], items: readonly FurnitureItem[], kitchenFace: boolean): (LabelSpot | null | undefined)[] {
+  const swings = doors.map((d) => openingPassage(d) ?? doorSwingRect(d))
+  return rooms.map((r, i) => {
+    const mine = items.filter((it) => it.room === i)
+    if (mine.length === 0) return undefined
+    return labelSpot(r, kitchenFace, [...blockedRects(r, swings, kitchenFace), ...mine])
+  })
 }
 
 export function overlaps(a: Rect, b: Rect): boolean {
@@ -93,7 +179,7 @@ export function overlaps(a: Rect, b: Rect): boolean {
 }
 
 /** 壁沿い・角寄りの候補位置。2つの向き × （四隅 → 各壁の中央 → 各壁の1/4・3/4）の順で固定 */
-export function candidates(r: Room, size: { w: number; h: number }, area?: Rect | null): Rect[] {
+export function candidates(r: Room, size: { w: number; h: number }): Rect[] {
   const out: Rect[] = []
   for (const [w, h] of [[size.w, size.h], [size.h, size.w]] as const) {
     const x0 = r.x + INSET
@@ -116,32 +202,12 @@ export function candidates(r: Room, size: { w: number; h: number }, area?: Rect 
       out.push({ x, y, w, h })
     }
   }
-  // 畳数行を基準にした候補（末尾追加）。家具の辺を畳数行の上端・下端・左端・右端に合わせ、壁に沿わせる
-  if (area) {
-    for (const [w, h] of [[size.w, size.h], [size.h, size.w]] as const) {
-      const x0 = r.x + INSET
-      const x1 = r.x + r.w - INSET - w
-      const y0 = r.y + INSET
-      const y1 = r.y + r.h - INSET - h
-      if (x1 < x0 - 1e-9 || y1 < y0 - 1e-9) continue
-      const inX = (x: number) => x >= x0 - 1e-9 && x <= x1 + 1e-9
-      const inY = (y: number) => y >= y0 - 1e-9 && y <= y1 + 1e-9
-      const above = area.y - h
-      const below = area.y + area.h
-      const left = area.x - w
-      const right = area.x + area.w
-      if (inY(above)) for (const x of [x0, x1]) out.push({ x, y: above, w, h })
-      if (inY(below)) for (const x of [x0, x1]) out.push({ x, y: below, w, h })
-      if (inX(left)) for (const y of [y0, y1]) out.push({ x: left, y, w, h })
-      if (inX(right)) for (const y of [y0, y1]) out.push({ x: right, y, w, h })
-    }
-  }
   return out
 }
 
-/** 家具が避ける固定領域（ドア開き・部屋名ラベル・対面キッチンのカウンター）。furnish とテストで共有する */
+/** 家具が避ける固定領域（ドア開き・対面キッチンのカウンター）。部屋名ラベルは避けない（ラベルのほうが家具の後に空きへ置かれる。labelSpot）。furnish とテストで共有する */
 export function blockedRects(r: Room, swings: readonly Rect[], kitchenFace: boolean): Rect[] {
-  const blocked: Rect[] = [...swings, labelRect(r, kitchenFace)]
+  const blocked: Rect[] = [...swings]
   if (r.type === 'ldk' && kitchenFace) {
     const c = kitchenCounter(r)
     blocked.push({ ...c, h: c.h + COUNTER_CLEARANCE })
@@ -151,8 +217,8 @@ export function blockedRects(r: Room, swings: readonly Rect[], kitchenFace: bool
 
 /**
  * 1フロア分の家具を決定的に配置する（純関数・乱数なし）。
- * ドア開きの外接矩形・対面キッチンのカウンター・ラベル領域・既配置の家具と重ならない最初の位置に置き、置けなければ置かない。
- * 2段階: 第1優先は部屋名＋畳数行の両方を避ける位置。なければ部屋名だけを避ける従来の位置にフォールバックする（配置率を落とさない）。
+ * ドア開きの外接矩形・対面キッチンのカウンター・既配置の家具と重ならない最初の位置に置き、置けなければ置かない。
+ * 部屋名ラベルは避けない（ラベルは家具の後に空いた場所へ置く。labelSpot）。
  */
 export function furnish(rooms: readonly Room[], doors: readonly Door[], opts: FurnishOpts): FurnitureItem[] {
   // 開き戸・折れ戸は弧・葉の矩形、扉のない開口（階段の口）は前の 2×2 の通路を避ける
@@ -162,12 +228,9 @@ export function furnish(rooms: readonly Room[], doors: readonly Door[], opts: Fu
     const kinds = PROGRAM[r.type]
     if (!kinds) return
     const blocked = blockedRects(r, swings, opts.kitchenFace)
-    const area = areaLabelRect(r, opts.kitchenFace)
     for (const kind of kinds) {
-      const cands = candidates(r, SIZE[kind])
-      const candsArea = candidates(r, SIZE[kind], area)
       const free = (c: Rect) => !blocked.some((b) => overlaps(c, b)) && !items.some((it) => it.room === room && overlaps(c, it))
-      const spot = (area ? candsArea.find((c) => free(c) && !overlaps(c, area)) : undefined) ?? cands.find(free)
+      const spot = candidates(r, SIZE[kind]).find(free)
       if (spot) items.push({ kind, room, ...spot })
     }
   })

@@ -5,7 +5,7 @@ import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, doorPath, entryDoor } from '../core/derive'
 import { computeWindows } from '../core/windows'
 import type { WindowSeg } from '../core/windows'
-import { furnish, isVerticalLabel, kitchenCounter } from '../core/furnish'
+import { AREA_FS, LABEL_FS, furnish, isVerticalLabel, kitchenCounter, labelSpots, rowFs, stackMetrics, type LabelSpot } from '../core/furnish'
 import { stairGeom, type StairGeom } from '../core/stair'
 import { Furniture } from './Furniture'
 import { Fixtures, STAIR_LABEL_MIN_H } from './Fixtures'
@@ -26,8 +26,6 @@ const PAD_X = 1.2
 const PAD_TOP = 2.4
 const PAD_BOTTOM = 2.2
 const INK = '#333333'
-const LABEL_FS = 1.2
-const AREA_FS = 1.0
 const LABEL_FILL = '#2b2b2b'
 const AREA_FILL = '#5a5a5a'
 
@@ -82,7 +80,7 @@ function OpeningGap({ d }: { d: Door }) {
   return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fdfcf8" strokeWidth={0.4} />
 }
 
-function RoomLabel({ r, kitchenFace, furnished, halo, geom }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean; geom?: StairGeom | null }) {
+function RoomLabel({ r, kitchenFace, furnished, halo, geom, spot }: { r: Room; kitchenFace?: boolean; furnished?: boolean; halo?: boolean; geom?: StairGeom | null; spot?: LabelSpot | null }) {
   // クローゼットは「CL」と短く表示し、畳数は出さない
   if (r.type === 'closet') {
     const lo = Math.min(r.w, r.h), hi = Math.max(r.w, r.h)
@@ -112,6 +110,32 @@ function RoomLabel({ r, kitchenFace, furnished, halo, geom }: { r: Room; kitchen
     return <text x={cx} y={r.y + 1.7} fontSize={Math.min(LABEL_FS, (r.w - 0.5) / len)} {...common} {...outline}>{r.name}</text>
   }
   // 細長い部屋（玄関・トイレ等）はラベルを縦積みにして壁に触れさせない
+  // 家具を表示しているときの置き場所（labelSpots）。null は置けないので省く
+  if (spot === null) return null
+  if (spot) {
+    if (spot.layout === 'stack') {
+      const { fs, step } = stackMetrics(r, spot.s)
+      const y0 = spot.cy - ((len - 1) * step) / 2 + fs * 0.35
+      return (
+        <text fontSize={fs} {...common}>
+          {Array.from(r.name).map((ch, i) => (
+            <tspan key={i} x={spot.cx} y={y0 + i * step}>{vch(ch)}</tspan>
+          ))}
+        </text>
+      )
+    }
+    const nfs = rowFs(r, spot.s)
+    const big = r.w >= 5 && r.h >= 4.5
+    if (!big) return <text x={spot.cx} y={spot.cy + nfs * 0.35} fontSize={nfs} {...common}>{r.name}</text>
+    return (
+      <>
+        <text x={spot.cx} y={spot.cy - 0.25} fontSize={nfs} {...common}>{r.name}</text>
+        {spot.area && (
+          <text x={spot.cx} y={spot.cy - 0.25 + 1.5 * spot.s} fontSize={AREA_FS * spot.s} fill={AREA_FILL} textAnchor="middle" {...outline}>{tatami(r.w, r.h)}帖</text>
+        )}
+      </>
+    )
+  }
   if (isVerticalLabel(r)) {
     const fs = Math.min(1.0, r.w - 0.5)
     const y0 = cy - ((r.name.length - 1) * 1.08) / 2 + 0.35
@@ -216,6 +240,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
     () => (showFurniture ? furnish(rooms, doors, { kitchenFace: !!kitchenFace }) : []),
     [showFurniture, rooms, doors, kitchenFace],
   )
+  const labelPos = useMemo(() => (furniture.length > 0 ? labelSpots(rooms, doors, furniture, !!kitchenFace) : null), [furniture, rooms, doors, kitchenFace])
   const geom = useMemo(() => stairGeom(plan, floorIdx), [plan, floorIdx])
   const flows = useMemo(() => (showFlow ? computeFlows(plan, floorIdx) : []), [showFlow, plan, floorIdx])
   // 存在しない階を指された場合は何も描かない（フックの後で判定する）
@@ -329,7 +354,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
       )}
       {/* 動線は部屋名ラベルより下 */}
       {showFlow && <FlowOverlay flows={flows} legendY={legendY} legendX={vbX + 1.2} />}
-      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} geom={geom} />)}
+      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} geom={geom} spot={labelPos?.[i]} />)}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === fpBottom && (() => {
         const ed = entryDoor(entry, fpBottom)
