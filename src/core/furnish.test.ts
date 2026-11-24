@@ -101,7 +101,7 @@ describe('家具配置 furnish', () => {
     function spotStats() {
       let rooms = 0
       let omitted = 0
-      let moved = 0
+      const byType: Record<string, { rooms: number; omitted: number }> = {}
       const overlapsFound: string[] = []
       for (const { cfg, plan } of PLANS) {
         const kitchenFace = cfg.feats.includes('kitchenFace')
@@ -114,11 +114,13 @@ describe('家具配置 furnish', () => {
             const sp = spots[i]
             if (sp === undefined) return
             rooms++
+            const bt = (byType[r.type] ??= { rooms: 0, omitted: 0 })
+            bt.rooms++
             if (sp === null) {
               omitted++
+              bt.omitted++
               return
             }
-            if (sp.s !== 1 || sp.cx !== r.x + r.w / 2) moved++
             for (const q of labelRects(r, sp)) {
               for (const it of items) if (it.room === i && overlaps(q, it)) overlapsFound.push(`${r.type} ${it.kind}`)
               for (const s of swings) if (overlaps(q, s)) overlapsFound.push(`${r.type} door`)
@@ -129,7 +131,7 @@ describe('家具配置 furnish', () => {
           })
         }
       }
-      return { rooms, omitted, moved, overlapsFound }
+      return { rooms, omitted, byType, overlapsFound }
     }
 
     it('描かれるラベルは、同じ部屋の家具・ドアの弧・カウンターと重ならない', () => {
@@ -139,9 +141,17 @@ describe('家具配置 furnish', () => {
     })
 
     it('ラベルを置けずに省略した部屋の割合（記録用の上限）', () => {
-      const { rooms, omitted, moved } = spotStats()
+      const { rooms, omitted } = spotStats()
       // 実測 51/1230（4.1%）。家具のある部屋のうち、従来の描画でも省く部屋（幅不足）を含む。上限は実測に余裕を足した値
-      expect(omitted / rooms, `omitted ${omitted}/${rooms} (moved ${moved})`).toBeLessThanOrEqual(OMIT_MAX)
+      expect(omitted / rooms, `omitted ${omitted}/${rooms}`).toBeLessThanOrEqual(OMIT_MAX)
+    })
+
+    it('洋室の省略率（記録用の上限。省略は洋室に偏る）', () => {
+      const { byType } = spotStats()
+      const w = byType['bed']
+      expect(w?.rooms).toBeGreaterThan(100)
+      // 実測 51/570（8.9%。全体の省略 51 件はすべて洋室）。上限は実測に余裕を足した値
+      expect((w?.omitted ?? 0) / (w?.rooms ?? 1), `bed ${w?.omitted}/${w?.rooms}`).toBeLessThanOrEqual(0.1)
     })
 
     it('家具のない部屋は undefined（従来どおり中央に描く）', () => {

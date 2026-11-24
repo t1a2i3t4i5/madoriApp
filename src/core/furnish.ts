@@ -128,7 +128,7 @@ export function labelRects(r: Room, spot: LabelSpot): Rect[] {
 
 /**
  * 部屋名ラベルの置き場所を決める（純関数。家具を置いた後に呼ぶ）。
- * 中央 → 中央からの上下左右のずらし（近い順）→ 縮小（下限 0.75 倍）→ 畳数行を省く → 縦積み の順に試し、
+ * 中央 → 中央からの上下左右のずらし（近い順）→ 縮小（下限 0.75 倍。畳数行ありのまま全倍率）→ 畳数行を省く（なしで全倍率）→ 縦積み（文字は 0.75 未満にしない）の順に試し、
  * obstacles（家具・ドアの弧・カウンター）と重ならず部屋に収まる最初の位置を返す。置けなければ null（ラベルを省く）。
  * 既定の位置で重ならないとき（障害物がないときを含む）は既定をそのまま返す。
  */
@@ -143,9 +143,10 @@ export function labelSpot(r: Room, kitchenFace: boolean, obstacles: readonly Rec
   for (let dy = -6; dy <= 6; dy += 0.5) for (let dx = -6; dx <= 6; dx += 0.5) offsets.push([dx, dy])
   offsets.sort((a, b) => Math.abs(a[0]) + Math.abs(a[1]) - (Math.abs(b[0]) + Math.abs(b[1])) || a[1] - b[1] || a[0] - b[0])
   const tryLayout = (layout: LabelSpot['layout']): LabelSpot | null => {
-    for (const s of [1, 0.9, 0.8, 0.75]) {
-      for (const area of def.area ? [true, false] : [false]) {
-        if (layout === 'stack' && area) continue
+    // 畳数行ありのまま全倍率を試し、だめなら畳数行なしで全倍率を試す（縮小が先、畳数行を省くのは後）
+    for (const area of def.area && layout === 'row' ? [true, false] : [false]) {
+      for (const s of [1, 0.9, 0.8, 0.75]) {
+        if (layout === 'stack' && stackMetrics(r, s).fs < 0.75) continue // 縦積みの文字は 0.75 未満にしない
         for (const [dx, dy] of offsets) {
           const sp: LabelSpot = { cx: def.cx + dx, cy: def.cy + dy, s, layout, area }
           if (inside(sp) && !hit(sp)) return sp

@@ -109,4 +109,25 @@ describe('直下率: 独立実装との一致と、実測（GEN_VERSION 7）', (
     expect(quantile(xs, 0.5)).toBeCloseTo(54.3, 0)
     expect(xs.filter((x) => x < 40).length / xs.length).toBeCloseTo(0.071, 2)
   }, TIMEOUT)
+  // R-IDX-10: 載らない壁片のうち南帯の縦（vS）が占める割合。実測は人気6 55.0%・グリッド総二階 45.7%（上限・下限は実測±2.5pt）
+  const vSShare = (ps: Plan[]) => {
+    let off = 0
+    let offVS = 0
+    for (const p of ps.filter((q) => q.floors.length === 2)) {
+      const b = chokkaBreakdown(p)
+      if (!b) continue
+      off += b.total - b.on
+      offVS += b.byClass.vS.total - b.byClass.vS.on
+    }
+    return offVS / off
+  }
+  it('内訳（R-IDX-10）: 載らない壁片に占める南帯の縦の割合を記録（人気6 55%・グリッド総二階 46%）', () => {
+    build()
+    const pp = vSShare(popular)
+    const gf = vSShare(gridFull)
+    expect(pp).toBeGreaterThanOrEqual(0.525)
+    expect(pp).toBeLessThanOrEqual(0.575)
+    expect(gf).toBeGreaterThanOrEqual(0.432)
+    expect(gf).toBeLessThanOrEqual(0.482)
+  }, TIMEOUT)
 })
