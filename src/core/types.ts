@@ -104,6 +104,10 @@ export interface Variant {
   bedShift: -1 | 0 | 1 | 2
   /** クローゼットのモード（GEN_VERSION 5）。'hard' = 強（個室の幅の下限を上げて必ず付ける）。省略 = 弱（入るときだけ付ける） */
   closet?: 'hard'
+  /**
+   * 2階建ての北帯（階段のある帯）の高さ（GEN_VERSION 6）。両階共通で、階段は 4×hN の折り返しになる。平屋・v5 までの案は省略
+   */
+  hN?: 5 | 6
 }
 
 /** i 階の板の矩形。fp がなければ建物全体（Plan.W × Plan.H） */
@@ -189,8 +193,11 @@ export interface Door {
   b: Room
   edge: Edge
   swing: DoorSwing
-  /** 'fold' = 付属収納の折れ戸／引戸（開き弧を描かない。swing.rect は開き先の薄い矩形）。省略 = 開き戸 */
-  kind?: 'swing' | 'fold'
+  /**
+   * 'fold' = 付属収納の折れ戸／引戸（開き弧を描かない。swing.rect は開き先の薄い矩形）。
+   * 'open' = 扉のない開口（GEN_VERSION 6。階段とホール・玄関・土間・LDK の間。葉も弧もなく、swing.rect は幅0、swing.center が通行点）。省略 = 開き戸
+   */
+  kind?: 'swing' | 'fold' | 'open'
 }
 
 export interface Footprint {

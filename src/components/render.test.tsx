@@ -27,6 +27,31 @@ describe('コンポーネントの描画', () => {
     expect(off).not.toContain('aria-hidden="true"')
   })
 
+  it('FloorSvg: 折り返し階段（GEN_VERSION 6）。1F は破線の段線と切断線、2F は「下」。階段の口は壁を抜く。旧版の4×4・直進の階段は従来の直進のまま', () => {
+    const plan = defined(plans[0])
+    const f1 = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" />)
+    const f2 = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={1} uid="t" />)
+    // 段線の破線（切断線より上）は1Fだけ。クローゼットのハンガーパイプの破線（"1.2 0.3 0.2 0.3"）とは別
+    expect(f1).toContain('stroke-dasharray="0.4 0.3"')
+    expect(f2).not.toContain('stroke-dasharray="0.4 0.3"')
+    expect(f2).toContain('>下</text>')
+    expect(f1).not.toContain('>下</text>')
+    // 階段のラベルは踊り場（上端）に出る
+    expect(f1).toMatch(/>階段<\/text>/)
+    // 開口: 壁を背景色で抜く線（階段とホールの共有区間。弧は描かない）が1本以上
+    expect(f1).toContain('stroke="#fdfcf8" stroke-width="0.4"')
+    // 旧版（直進・4×4）の階段: stairGeom が null なので従来どおり。切断線も「下」もない
+    const legacy = structuredClone(plan)
+    for (const fl of legacy.floors) {
+      const st = defined(fl.rooms.find((r) => r.type === 'stair'))
+      st.h = 4
+      st.area = st.w * st.h
+    }
+    const old = renderToStaticMarkup(<FloorSvg plan={legacy} floorIdx={1} uid="t" />)
+    expect(old).not.toContain('>下</text>')
+    expect(old).not.toContain('stroke-dasharray="0.4 0.3"')
+  })
+
   it('FloorSvg: 下屋は2Fに fp があるときだけ描かれ、総二階・1Fでは描かれない', () => {
     const pc = defined(PARTIAL_CONDITIONS[0]).cfg
     const pp = defined(enumeratePlans(pc)[0])
@@ -74,7 +99,8 @@ describe('コンポーネントの描画', () => {
     expect(on).toContain('来客動線（玄関→LDK）')
     expect(on.indexOf('data-flow="overlay"')).toBeLessThan(on.indexOf('LDK</text>'))
     expect(on).toMatch(/paint-order="stroke"[^>]*>LDK<\/text>/)
-    expect(off).not.toContain('paint-order')
+    // 折り返し階段の名前は常に白縁取りを持つ（段線の上で読めるように）ので、それを除いて確かめる
+    expect(off.replace(/<text[^>]*>階段<\/text>/g, '')).not.toContain('paint-order')
     // 2階（来客・生活の起点がない階）では何も描かない
     expect(renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={1} uid="t" showFlow />)).not.toContain('data-flow="guest"')
   })

@@ -4,12 +4,13 @@ import { mulberry32 } from './rng'
 import { applyVariant, bandsFor, buildPlan, f1MemoKey } from './archetypes'
 import type { F1Memo } from './archetypes'
 import { footprintList, footprintPairs } from './slicing'
+import { STAIR_HS } from './stair'
 import { validateFloor, validatePlan } from './validate'
 import { scorePlan } from './score'
 import { planDistance, planSignature } from './diversity'
 
 /** 生成ロジックのバージョン。アルゴリズムを変えたら上げる（URLハッシュに保存） */
-export const GEN_VERSION = 5
+export const GEN_VERSION = 6
 
 /** 外形候補の件数（縦横比 0.62〜1.62 の制限は footprintList 側で不変） */
 export const FOOTPRINT_LIMIT = 10
@@ -19,7 +20,7 @@ export function scored(plan: Plan): ScoredPlan {
   return { ...plan, score: scorePlan(plan), sig: planSignature(plan, false), sigM: planSignature(plan, true) }
 }
 
-/** 変種の列挙順（正規形が先頭）: stairEnd → rev（1F北が最上位ビット）→ bedShift → クローゼットのモード（弱 → 強） */
+/** 変種の列挙順（正規形が先頭）: stairEnd → rev（1F北が最上位ビット）→ bedShift → クローゼットのモード（弱 → 強）→ 北帯の高さ hN（2階建てのみ。GEN_VERSION 6） */
 const STAIR_ENDS: Variant['stairEnd'][] = ['E', 'W']
 const BED_SHIFTS: Variant['bedShift'][] = [0, 1, 2, -1]
 
@@ -38,8 +39,12 @@ function variantsFor(cfg: PlanConfig): Variant[] {
           : [(m & 8) !== 0, (m & 4) !== 0, (m & 2) !== 0, (m & 1) !== 0]
       // クローゼットのモード（弱 → 強）は最内側の軸。同じ部屋配置になった案は重複除去で先着（弱）が残る
       for (const bedShift of shifts) {
-        out.push({ stairEnd, rev, bedShift })
-        out.push({ stairEnd, rev, bedShift, closet: 'hard' })
+        for (const closet of [undefined, 'hard'] as const) {
+          // 2階建ては、北帯の高さ（= 階段の長さ）を両階で共通にして 5・6 を振る。平屋は階段がないので振らない
+          for (const hN of cfg.floors === 1 ? [undefined] : STAIR_HS) {
+            out.push({ stairEnd, rev, bedShift, ...(closet ? { closet } : {}), ...(hN ? { hN } : {}) })
+          }
+        }
       }
     }
   }
@@ -63,6 +68,7 @@ function distinctVariants(cfg: PlanConfig, arch: ArchId, variants: Variant[]): V
     if (v.closet && !hasClosetCell) continue
     const key = JSON.stringify([
       v.closet ?? '',
+      v.hN ?? '',
       ...base.map((b, i) => (b ? applyVariant(b, i + 1, v, hasVoid) : null)),
     ])
     if (seen.has(key)) continue
@@ -74,6 +80,11 @@ function distinctVariants(cfg: PlanConfig, arch: ArchId, variants: Variant[]): V
 
 const POOL_CACHE_MAX = 8
 const poolCache = new Map<string, readonly ScoredPlan[]>()
+
+/** 候補プールのキャッシュを空にする（計測・テスト用。HALL_RULES を書き換えて比べるときなど） */
+export function resetPoolCache(): void {
+  poolCache.clear()
+}
 
 /**
  * 先着順に、sig または sigM（左右反転）が既出の案を除く。
@@ -103,7 +114,7 @@ export interface PoolStats {
 }
 
 /** 候補の組み立て（キャッシュを介さない）。candidatePool と診断（キャッシュを汚さない用途）が使う */
-function buildPool(cfg: PlanConfig, stats?: PoolStats): readonly ScoredPlan[] {
+function buildPool(cfg: PlanConfig, stats?: PoolStats, diag?: { ignoreStairUnify: true }): readonly ScoredPlan[] {
   const archs: ArchId[] = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
   const allVariants = variantsFor(cfg)
   const built: ScoredPlan[] = []
@@ -115,11 +126,12 @@ function buildPool(cfg: PlanConfig, stats?: PoolStats): readonly ScoredPlan[] {
     ? footprintPairs(cfg.area * 16)
     : footprintList((cfg.area * 16) / cfg.floors, FOOTPRINT_LIMIT)
   for (const arch of archs) {
-    const variants = distinctVariants(cfg, arch, allVariants)
+    // 診断専用（階段の上下一致を外す）では hN は効かないので、hN = 6 の変種は省く（hN = 5 と同じ案になる）
+    const variants = distinctVariants(cfg, arch, allVariants).filter((v) => !diag || v.hN !== 6)
     for (const fp of shapes) {
       for (const variant of variants) {
         if (stats) stats.assembled++
-        const plan = buildPlan(cfg, arch, fp, variant, partial ? memo : undefined)
+        const plan = buildPlan(cfg, arch, fp, variant, partial ? memo : undefined, diag)
         if (!plan) continue
         if (partial) {
           const key = f1MemoKey(cfg, arch, fp.W, fp.H, variant)
@@ -137,6 +149,14 @@ function buildPool(cfg: PlanConfig, stats?: PoolStats): readonly ScoredPlan[] {
   }
   if (stats) stats.f1Layouts = memo.size
   return dedupeBySig(built).sort((a, b) => b.score.total - a.score.total)
+}
+
+/**
+ * 診断専用: 階段を上下で同じ形にする制約（北帯の高さ hN の共通化。GEN_VERSION 6）を外したときの候補プールの件数（キャッシュを介さない）。
+ * 0 でないのに通常のプールが空なら、0案の原因は階段（program.ts の emptyReason が使う）。生成では使わない
+ */
+export function poolSizeWithoutStairUnify(cfg: PlanConfig): number {
+  return buildPool(cfg, undefined, { ignoreStairUnify: true }).length
 }
 
 /** プール構築を（キャッシュを介さず）1回行い、作業量を返す。テスト用 */

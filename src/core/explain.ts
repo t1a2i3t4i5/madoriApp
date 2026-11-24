@@ -1,7 +1,8 @@
 import type { Plan, PlanConfig, Room, ScoredPlan } from './types'
 import { floorRect } from './types'
-import { ROOM } from './rooms'
-import { sharedEdge } from './derive'
+import { ROOM, findEntry } from './rooms'
+import { computeDoors, sharedEdge } from './derive'
+import { stairGeom } from './stair'
 import { privateStorageCount, storageRatio } from './closets'
 
 /** 解説文に使う判定のしきい値（根拠のない褒め言葉を避けるため、満たしたときだけ書く） */
@@ -60,6 +61,28 @@ function stairSide(plan: Plan): { side: '東' | '西'; floorIdx: number; stair: 
   return null
 }
 
+/** どこかの階に、その階の板の全幅のホールが残っているか（残るなら延床の廊下率が低くても「廊下が短い」とは書かない: R-TEXT-02） */
+function hasFullWidthHall(plan: Plan): boolean {
+  return plan.floors.some((fl, i) => fl.rooms.some((r) => r.type === 'hall' && r.w === floorRect(plan, i).W))
+}
+
+/**
+ * 1F の玄関から階段への行き方の事実（折り返し階段が成立する案だけ）: 玄関が階段の口と直接つながるなら「玄関」、
+ * ホールを介してつながるなら「玄関ホール」。どちらでもなければ null（G4 で保証されるので通常は出ない）
+ */
+function stairAccess(plan: Plan): '玄関' | '玄関ホール' | null {
+  const fl = plan.floors[0]
+  if (!fl || !stairGeom(plan, 0)) return null
+  const entry = findEntry(fl.rooms)
+  const stair = fl.rooms.find((r) => r.type === 'stair')
+  if (!entry || !stair) return null
+  const doors = computeDoors(fl.rooms)
+  const linked = (a: Room, b: Room) => doors.some((d) => (d.a === a && d.b === b) || (d.a === b && d.b === a))
+  if (linked(entry, stair)) return '玄関'
+  const hall = fl.rooms.find((r) => r.type === 'hall')
+  return hall && linked(entry, hall) && linked(hall, stair) ? '玄関ホール' : null
+}
+
 /**
  * 案の特徴から2〜3文の日本語解説を作る純関数。
  * 判定はスコア内訳・部屋配置・入力条件だけから導き、当てはまらない特徴は書かない。
@@ -96,7 +119,7 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
   // --- 2文目: 動線・水回り・収納 ---
   const s2: Clause[] = []
   if (hallRatio === 0) s2.push(clause('廊下がなく', '廊下がありません。'))
-  else if (hallRatio < EXPLAIN_TH.hallShort) s2.push(clause(`廊下は延床の約${pct(hallRatio)}と短く`, `廊下は延床の約${pct(hallRatio)}と短めです。`))
+  else if (hallRatio < EXPLAIN_TH.hallShort && !hasFullWidthHall(plan)) s2.push(clause(`廊下は延床の約${pct(hallRatio)}と短く`, `廊下は延床の約${pct(hallRatio)}と短めです。`))
   if (parts.水回り集約 >= EXPLAIN_TH.waterGood) s2.push(clause('水回りが近くに集約され', '水回りが近くに集約されています。'))
   if (priv.total > 0 && priv.with === priv.total) s2.push(clause('すべての個室にクローゼットがあり', 'すべての個室にクローゼットがあります。'))
   if (storeRatio >= EXPLAIN_TH.storeHigh) s2.push(clause(`クローゼットなどの収納が延床の約${pct(storeRatio)}あり`, `クローゼットなどの収納が延床の約${pct(storeRatio)}あります。`))
@@ -124,9 +147,12 @@ export function explainPlan(cfg: PlanConfig, plan: ScoredPlan): string {
     })
     const hasBeds = perFloor.some((f) => f.beds.length > 0)
     const quiet = hasBeds && perFloor.every((f) => !f.facing)
+    const access = stairAccess(plan)
     const stairText = quiet
       ? `階段は${st.side}端にあり、個室は階段に面していないため静かに保ちやすい配置です。`
-      : `階段は${st.side}端に寄せています。`
+      : access
+        ? `階段は${st.side}端に寄せた折り返し階段で、${access}から2階へ上がれます。`
+        : `階段は${st.side}端に寄せています。`
     if (weakText && sentences.length >= 2) sentences.push(`階段は${st.side}端に寄せていますが、${weakText}`)
     else sentences.push(stairText, ...(weakText ? [weakText] : []))
   } else if (weakText) {

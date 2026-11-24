@@ -9,10 +9,10 @@ export const CONDITIONS: { name: string; cfg: PlanConfig }[] = [
   { name: '35坪/2階/個室4', cfg: { ...base, area: 35, floors: 2, rooms: 4, feats: ['kitchenFace', 'wic'] } },
   { name: '平屋/個室2/最小こだわりなし', cfg: { ...base, area: 24, floors: 1, rooms: 2, feats: [] } },
   { name: '32坪/2階/吹抜', cfg: { ...base, area: 32, floors: 2, rooms: 3, feats: ['void'] } },
-  { name: '36坪/2階/吹抜+WIC+書斎', cfg: { ...base, area: 36, floors: 2, rooms: 3, feats: ['void', 'wic', 'study', 'kitchenFace'] } },
+  { name: '40坪/2階/吹抜+WIC+書斎', cfg: { ...base, area: 40, floors: 2, rooms: 3, feats: ['void', 'wic', 'study', 'kitchenFace'] } },
   { name: '33坪/2階/土間+パントリー', cfg: { ...base, area: 33, floors: 2, rooms: 3, feats: ['doma', 'pantry'] } },
   { name: '30坪/平屋/土間+和室', cfg: { ...base, area: 30, floors: 1, rooms: 3, feats: ['doma', 'washitsu'] } },
-  { name: '38坪/2階/全部のせ', cfg: { ...base, area: 38, floors: 2, rooms: 3, feats: ['kitchenFace', 'doma', 'study', 'wic', 'pantry', 'void', 'washitsu', 'laundry'] } },
+  { name: '40坪/2階/全部のせ', cfg: { ...base, area: 40, floors: 2, rooms: 3, feats: ['kitchenFace', 'doma', 'study', 'wic', 'pantry', 'void', 'washitsu', 'laundry'] } },
   { name: '34坪/平屋/ランドリー+書斎', cfg: { ...base, area: 34, floors: 1, rooms: 4, feats: ['laundry', 'study', 'kitchenFace'] } },
 ]
 
@@ -36,10 +36,17 @@ export const INFEASIBLE: { name: string; cfg: PlanConfig }[] = [
 /** 実現可能と判定されるのに、検証を通る案が0になる条件（diagnoseEmpty の経路） */
 export const ZERO_PLAN: PlanConfig = { ...base, area: 26, floors: 2, rooms: 2, feats: ['doma'] }
 
-/** 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 4 の実測。先頭3件は短辺の制約を入れても件数が変わらず、末尾の「30坪/平屋/個室5」は短辺の制約で0案になる） */
+/**
+ * 0案・3案の境界条件（件数が変わったら気づくために件数を固定する）（GEN_VERSION 6 の実測。すべて0案）。
+ * 「0案: 階段」の3件（36坪/吹抜+個室4+WIC、36坪/吹抜+WIC+書斎、38坪/全部のせ）は、階段を上下で同じ 4×5/4×6 にする制約（GEN_VERSION 6）で
+ * 0案になる条件。v5 では 1F の階段が 4×4（どの階段形式も成立しない寸法）か、上下で高さが食い違う案だけを出していた（golden-fixture.test.ts の移行検証で確かめる）。
+ * 30坪/平屋/個室5 は短辺（GEN_VERSION 4）で0案。CONDITIONS には、これらの代わりに v6 でも3案が出る 40坪の同種の条件を置いた
+ */
 export const BOUNDARY: { name: string; cfg: PlanConfig; /** generatePlans が全 SEEDS で返す件数（0案なら候補プールも空） */ expected: number }[] = [
   { name: '境界: 36坪/2階/吹抜+個室4+WIC+書斎（0案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'study', 'kitchenFace'] }, expected: 0 },
-  { name: '境界: 36坪/2階/吹抜+個室4+WIC（3案）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'kitchenFace'] }, expected: 3 },
+  { name: '境界: 36坪/2階/吹抜+個室4+WIC（0案: 階段）', cfg: { ...base, area: 36, floors: 2, rooms: 4, feats: ['void', 'wic', 'kitchenFace'] }, expected: 0 },
+  { name: '境界: 36坪/2階/吹抜+WIC+書斎（0案: 階段）', cfg: { ...base, area: 36, floors: 2, rooms: 3, feats: ['void', 'wic', 'study', 'kitchenFace'] }, expected: 0 },
+  { name: '境界: 38坪/2階/全部のせ（0案: 階段）', cfg: { ...base, area: 38, floors: 2, rooms: 3, feats: ['kitchenFace', 'doma', 'study', 'wic', 'pantry', 'void', 'washitsu', 'laundry'] }, expected: 0 },
   { name: '境界: 26坪/2階/個室2/土間（0案）', cfg: ZERO_PLAN, expected: 0 },
   { name: '境界: 30坪/平屋/個室5（0案: 短辺）', cfg: { ...base, area: 30, floors: 1, rooms: 5, feats: [] }, expected: 0 },
 ]
@@ -209,7 +216,7 @@ export function storageRatioIndependent(plan: Plan): number {
 
 /**
  * 独立検証で見つけた違反（なければ空）: 全セルが1部屋で塗られる／居室が外壁に接する／面積が w*h と一致する／
- * 付属収納の持ち主の関係（ownerViolations）／階段とホールの辺の共有／クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／階段 x の両階一致／吹抜が LDK の x・y の範囲に収まる
+ * 付属収納の持ち主の関係（ownerViolations）／階段の矩形の一致と口の辺・ホールの長さ／クラスタの辺の共有（ランドリー-洗面を含む）／トイレと水回りの接触／吹抜が LDK の x・y の範囲に収まる
  */
 export function independentViolations(plan: Plan): string[] {
   const out: string[] = []
@@ -236,12 +243,8 @@ export function independentViolations(plan: Plan): string[] {
   })
   out.push(...footprintViolations(plan))
   out.push(...ownerViolations(plan))
-  // 階段はホールと辺を共有する（階段の前を塞がれていない）。carve の到達可能性は VIA を見ないので、ここで補う
-  plan.floors.forEach((fl) => {
-    const stair = fl.rooms.find((r) => r.type === 'stair')
-    const hall = fl.rooms.find((r) => r.type === 'hall')
-    if (stair && hall && !sharesEdge(stair, hall)) out.push(`${fl.label} 階段がホールと辺を共有していない`)
-  })
+  // 階段の矩形の両階一致・4×5/4×6・口の辺の全幅（GEN_VERSION 6）、ホールの長さ
+  out.push(...stairViolations(plan), ...hallViolations(plan))
   plan.floors.forEach((fl) => {
     for (const [ta, tb, label] of CLUSTER_PAIRS) {
       const a = fl.rooms.find((r) => r.type === ta)
@@ -263,10 +266,6 @@ export function independentViolations(plan: Plan): string[] {
   })
   if (plan.floors.length === 2) {
     const [f1, f2] = plan.floors
-    const s1 = f1?.rooms.find((r) => r.type === 'stair')
-    const s2 = f2?.rooms.find((r) => r.type === 'stair')
-    if (!s1 || !s2) out.push('階段が両階にない')
-    else if (s1.x !== s2.x || s1.w !== s2.w) out.push(`階段の x が両階で不一致 (${s1.x}+${s1.w} / ${s2.x}+${s2.w})`)
     const ldk = f1?.rooms.find((r) => r.type === 'ldk')
     const vd = f2?.rooms.find((r) => r.type === 'void')
     if (vd) {
@@ -277,4 +276,176 @@ export function independentViolations(plan: Plan): string[] {
     }
   }
   return out
+}
+
+/* ---------------- GEN_VERSION 6: 階段・廊下の独立検証と計測（stair.ts・circulation.ts・validate.ts とは別に素朴に書く） ---------------- */
+
+/** 階段の口の辺に開口でつながってよい種別（derive.ts の STAIR_OPEN_TYPES とは別に持つ独立定義） */
+const OPEN_TYPES = new Set(['hall', 'entry', 'doma', 'ldk'])
+
+/** (x, y) を含む部屋（セル塗りで引く） */
+function roomAt(rooms: readonly Room[], x: number, y: number): Room | undefined {
+  return rooms.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
+}
+
+/**
+ * 階段の独立検証（2階建て）: 両階で x・y・幅・高さが一致／短辺 4・長辺 5〜6／口の辺（南）の全セルが開口でつながる部屋
+ * （ホール・玄関・土間・LDK）に接し、その連なりが2セル以上（開口が成り立つ）
+ */
+export function stairViolations(plan: Plan): string[] {
+  const out: string[] = []
+  if (plan.floors.length !== 2) return out
+  const stairs = plan.floors.map((f) => f.rooms.find((r) => r.type === 'stair'))
+  const [s1, s2] = stairs
+  if (!s1 || !s2) return ['階段が両階にない']
+  if (s1.x !== s2.x || s1.y !== s2.y || s1.w !== s2.w || s1.h !== s2.h) out.push(`階段の矩形が両階で不一致 (${s1.x},${s1.y},${s1.w}x${s1.h} / ${s2.x},${s2.y},${s2.w}x${s2.h})`)
+  if (s1.w !== 4 || (s1.h !== 5 && s1.h !== 6)) out.push(`階段が 4×5 / 4×6 でない (${s1.w}x${s1.h})`)
+  plan.floors.forEach((fl, f) => {
+    const s = stairs[f]
+    if (!s) return
+    let run = 0
+    let minRun = Infinity
+    for (let x = s.x; x <= s.x + s.w; x++) {
+      const r = x < s.x + s.w ? roomAt(fl.rooms, x, s.y + s.h) : undefined
+      if (r && OPEN_TYPES.has(r.type)) run++
+      else {
+        if (run > 0) minRun = Math.min(minRun, run)
+        if (x < s.x + s.w) out.push(`${fl.label} 階段の口の辺 x=${x} が開口でつながる部屋に接していない`)
+        run = 0
+      }
+    }
+    if (minRun < 2) out.push(`${fl.label} 階段の口の辺の連なりが2セル未満`)
+  })
+  return out
+}
+
+/** 階段の扉・開口の独立検証（R-DOOR-04・R-DOOR-13・R-DOOR-14）: 階段に付くのは kind 'open' だけで、相手はホール・玄関・土間・LDK だけ。開口に葉・弧がない */
+export function stairDoorViolations(plan: Plan, doorsOf: (rooms: Room[]) => { a: Room; b: Room; kind?: string; swing: { rect: { w: number; h: number } } }[]): string[] {
+  const out: string[] = []
+  for (const fl of plan.floors) {
+    for (const d of doorsOf(fl.rooms)) {
+      const other = d.a.type === 'stair' ? d.b : d.b.type === 'stair' ? d.a : null
+      if (!other) {
+        if (d.kind === 'open') out.push(`${fl.label} 階段以外に開口がある`)
+        continue
+      }
+      if (d.kind !== 'open') out.push(`${fl.label} 階段に扉（${d.kind ?? 'swing'}）が付いている`)
+      if (!OPEN_TYPES.has(other.type)) out.push(`${fl.label} 階段と ${other.type} の間に開口・扉がある`)
+      if (d.swing.rect.w !== 0 || d.swing.rect.h !== 0) out.push(`${fl.label} 階段の開口に弧の矩形がある`)
+    }
+  }
+  return out
+}
+
+/**
+ * 動線のガード G1〜G4 の独立検証（doorsOf で得た、ドア・開口でつながる相手の種別から判定する）。
+ * G3 は strictBed に従う（true: 主寝室・洋室はホール・玄関・土間から。和室・書斎は LDK も可）
+ */
+export function guardViolationsIndependent(
+  plan: Plan,
+  doorsOf: (rooms: Room[]) => { a: Room; b: Room }[],
+  strictBed = true,
+): string[] {
+  const out: string[] = []
+  for (const fl of plan.floors) {
+    const ds = doorsOf(fl.rooms)
+    const around = (r: Room) => ds.flatMap((d) => (d.a === r ? [d.b] : d.b === r ? [d.a] : []))
+    const circ = (r: Room) => around(r).some((n) => n.type === 'hall' || n.type === 'entry' || n.type === 'doma')
+    const ldk = (r: Room) => around(r).some((n) => n.type === 'ldk')
+    for (const r of fl.rooms) {
+      if (r.type === 'wc' && !circ(r)) out.push(`${fl.label} G1 ${r.name}`)
+      if (r.type === 'wash' && !circ(r) && !ldk(r)) out.push(`${fl.label} G2 ${r.name}`)
+      if ((r.type === 'master' || r.type === 'bed') && !circ(r) && !(!strictBed && ldk(r))) out.push(`${fl.label} G3 ${r.name}`)
+      if ((r.type === 'washitsu' || r.type === 'study') && !circ(r) && !ldk(r)) out.push(`${fl.label} G3 ${r.name}`)
+    }
+    const stair = fl.rooms.find((r) => r.type === 'stair')
+    const entry = fl.rooms.find((r) => r.type === 'entry') ?? fl.rooms.find((r) => r.type === 'doma')
+    if (stair && entry) {
+      const direct = around(entry).includes(stair)
+      const viaHall = around(entry).some((n) => n.type === 'hall' && around(n).includes(stair))
+      if (!direct && !viaHall) out.push(`${fl.label} G4 玄関から階段へ LDK を通らずに行けない`)
+    }
+  }
+  return out
+}
+
+/** ホールの独立検証: 各階に1つ以上、長さ（幅）4 以上 */
+export function hallViolations(plan: Plan): string[] {
+  const out: string[] = []
+  for (const fl of plan.floors) {
+    const halls = fl.rooms.filter((r) => r.type === 'hall')
+    if (halls.length !== 1) out.push(`${fl.label} ホールが ${halls.length} 個`)
+    for (const h of halls) if (h.w < 4) out.push(`${fl.label} ホールの長さ ${h.w} が4未満`)
+  }
+  return out
+}
+
+/** 廊下率（ホール面積 ÷ 延床。独立実装） */
+export function hallRatioIndependent(plan: Plan): number {
+  let hall = 0
+  for (const fl of plan.floors) for (const r of fl.rooms) if (r.type === 'hall') hall += r.w * r.h
+  return hall / (plan.totalArea || 1)
+}
+
+/** 2F に、2F の板の全幅のホールがあるか */
+export function fullWidthHall2F(plan: Plan): boolean {
+  const fl = plan.floors[1]
+  if (!fl) return false
+  const fp = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
+  return fl.rooms.some((r) => r.type === 'hall' && r.w === fp.W)
+}
+
+/**
+ * 直下率（R-IDX-09 の測り方）: 2F の間仕切り（板の外周以外の部屋の辺。吹抜の辺は数えない）を単位長の壁片に分け、
+ * 1F の壁（部屋の辺。外周を含む）の真上にある壁片の割合。2階建てだけ。間仕切りが無ければ NaN
+ */
+export function chokkaRate(plan: Plan): number {
+  const f1 = plan.floors[0]
+  const f2 = plan.floors[1]
+  if (!f1 || !f2) return NaN
+  const segs = (rooms: readonly Room[], skip?: (r: Room) => boolean): Set<string> => {
+    const s = new Set<string>()
+    for (const r of rooms) {
+      if (skip?.(r)) continue
+      for (let x = r.x; x < r.x + r.w; x++) {
+        s.add(`h${x},${r.y}`)
+        s.add(`h${x},${r.y + r.h}`)
+      }
+      for (let y = r.y; y < r.y + r.h; y++) {
+        s.add(`v${r.x},${y}`)
+        s.add(`v${r.x + r.w},${y}`)
+      }
+    }
+    return s
+  }
+  const lower = segs(f1.rooms)
+  const fp = f2.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
+  const upper = segs(f2.rooms, (r) => r.type === 'void')
+  let total = 0
+  let on = 0
+  for (const k of upper) {
+    const [, a = '', b = ''] = /^[hv](\d+),(\d+)$/.exec(k) ?? []
+    const x = Number(a)
+    const y = Number(b)
+    const outer = k[0] === 'h' ? y === fp.y || y === fp.y + fp.H : x === fp.x || x === fp.x + fp.W
+    if (outer) continue
+    // 吹抜と接する壁片は数えない（吹抜の辺は 2F の間仕切りではない）
+    const vd = f2.rooms.find((r) => r.type === 'void')
+    if (vd) {
+      const onVoid = k[0] === 'h'
+        ? x >= vd.x && x < vd.x + vd.w && (y === vd.y || y === vd.y + vd.h)
+        : y >= vd.y && y < vd.y + vd.h && (x === vd.x || x === vd.x + vd.w)
+      if (onVoid) continue
+    }
+    total++
+    if (lower.has(k)) on++
+  }
+  return total ? on / total : NaN
+}
+
+/** 分位点（測定スクリプトと同じ定義: 昇順の添字 floor(p*(n-1)+0.5)）。空なら NaN */
+export function quantile(xs: readonly number[], p: number): number {
+  if (xs.length === 0) return NaN
+  const s = xs.slice().sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1) + 0.5))] ?? NaN
 }

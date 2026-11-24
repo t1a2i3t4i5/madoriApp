@@ -4,6 +4,8 @@ import type { Rng } from './rng'
 import { cell } from './rooms'
 import { layoutFloor } from './slicing'
 import { carveFloor } from './carve'
+import { trimHall } from './hall'
+import { STAIR_HS } from './stair'
 
 export type { Rng }
 
@@ -230,6 +232,17 @@ export interface BuildFootprint {
   H2?: number
 }
 
+/** 北帯の高さ。2階建てで変種が hN を持たないとき（正規形・変種なし）は STAIR_HS の先頭。平屋は undefined */
+function effectiveHN(cfg: PlanConfig, v: Variant): 5 | 6 | undefined {
+  return cfg.floors === 2 ? (v.hN ?? STAIR_HS[0]) : undefined
+}
+
+/** 北帯（階段のある帯）の高さを hN に固定する（GEN_VERSION 6。上下階で同じ高さ → 階段が 4×hN で一致する）。他の帯は変えない */
+function withNorthH(bands: Band[], hN: number | undefined): Band[] {
+  if (hN === undefined) return bands
+  return bands.map((b, i): Band => (i === 0 ? { cells: b.cells, fixedH: hN } : b))
+}
+
 /** 1F の割り付け結果（部分二階のプール構築で、同じ (arch, W, H, stairEnd, rev[0], rev[1]) を使い回すためのメモ） */
 export type F1Layout = { rooms: Room[]; heights: number[] } | 'variant' | 'f1'
 export type F1Memo = Map<string, F1Layout>
@@ -238,12 +251,14 @@ export type F1Memo = Map<string, F1Layout>
 export function f1MemoKey(cfg: PlanConfig, arch: ArchId, W: number, H: number, v: Variant): string {
   // 平屋の1F には個室があり、クローゼットのモードで割り付けが変わる（2階建ての1F には個室がないのでモードを含めない）
   const mode = cfg.floors === 1 && v.closet === 'hard' ? 'k' : ''
-  return `${cfgId(cfg)}|${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}${mode}`
+  // 2階建ての1F は、北帯の高さ hN（GEN_VERSION 6）でも割り付けが変わる
+  const hN = cfg.floors === 2 ? `h${effectiveHN(cfg, v)}` : ''
+  return `${cfgId(cfg)}|${arch}|${W}x${H}|${v.stairEnd}${v.rev[0] ? 1 : 0}${v.rev[1] ? 1 : 0}${mode}${hN}`
 }
 
 /** 外形にアーキタイプを当てはめて1案を組み立てる。構造検査に落ちたら null。variant 省略は正規形（plan.variant は付けない） */
-export function buildPlan(cfg: PlanConfig, arch: ArchId, fp: BuildFootprint, variant?: Variant, memo?: F1Memo): Plan | null {
-  return buildPlanStage(cfg, arch, fp, variant, memo).plan
+export function buildPlan(cfg: PlanConfig, arch: ArchId, fp: BuildFootprint, variant?: Variant, memo?: F1Memo, opts?: { ignoreStairUnify?: boolean }): Plan | null {
+  return buildPlanStage(cfg, arch, fp, variant, memo, opts).plan
 }
 
 /** 組み立てが崩れた段階（0案の理由づけ用）: 1F/2F の割り付け、階段の一致、吹抜の位置、その他（変種が作れない） */
@@ -262,12 +277,15 @@ export function buildPlanStage(
   fp: BuildFootprint,
   variant?: Variant,
   memo?: F1Memo,
-  opts?: { ignoreMinShort?: boolean },
+  opts?: { ignoreMinShort?: boolean; ignoreStairUnify?: boolean },
 ): { plan: Plan | null; failed?: BuildFailure } {
   const fail = (failed: BuildFailure) => ({ plan: null, failed })
   const { W, H } = fp
   const ignoreMinShort = opts?.ignoreMinShort ?? false
+  // 診断専用: 階段の上下一致（北帯の高さの共通化）を外す（生成では使わない）
+  const ignoreStairUnify = opts?.ignoreStairUnify ?? false
   const v = variant ?? CANONICAL
+  const hN = ignoreStairUnify ? undefined : effectiveHN(cfg, v)
   const closet = v.closet === 'hard' ? 'hard' : 'soft'
   const hasVoid = cfg.feats.indexOf('void') >= 0
   const partial = isPartial(cfg)
@@ -275,13 +293,14 @@ export function buildPlanStage(
   // 平屋では2F・階段・個室配分に関係する項目は正規形のみ
   if (cfg.floors === 1 && (v.stairEnd !== 'E' || v.bedShift !== 0 || v.rev[2] || v.rev[3])) return fail('variant')
   // 1F → 2F の順に組む（吹抜ありなら2F南帯の高さを1F南帯（LDK）の高さ以下に抑える）
-  const memoKey = f1MemoKey(cfg, arch, W, H, v) + (ignoreMinShort ? '|i' : '')
+  const memoKey = f1MemoKey(cfg, arch, W, H, v) + (ignoreMinShort ? '|i' : '') + (ignoreStairUnify ? '|u' : '')
   let f1: F1Layout | undefined = memo?.get(memoKey)
   if (f1 === undefined) {
     const b1 = bandsFor(cfg, arch, 1, W)
     const f1bands = b1 && applyVariant(b1, 1, v, hasVoid)
-    const l1 = f1bands ? layoutFloor(W, H, f1bands, { ignoreMinShort, closet }) : null
-    f1 = !f1bands ? 'variant' : l1 ? { rooms: ignoreMinShort ? l1.rooms : carveFloor(l1.rooms), heights: l1.heights } : 'f1'
+    const l1 = f1bands ? layoutFloor(W, H, withNorthH(f1bands, hN), { ignoreMinShort, closet }) : null
+    // 割り付けの後に、ホール帯の端の吸収（GEN_VERSION 6）→ 収納化（carve）
+    f1 = !f1bands ? 'variant' : l1 ? { rooms: ignoreMinShort ? l1.rooms : carveFloor(trimHall(l1.rooms, { x: 0, y: 0, W, H })), heights: l1.heights } : 'f1'
     memo?.set(memoKey, f1)
   }
   if (typeof f1 === 'string') return fail(f1)
@@ -297,9 +316,9 @@ export function buildPlanStage(
     const southH = f1.heights[2]
     if (southH === undefined) return fail('f1')
     const capSouth = southH - (H - H2)
-    const f2 = layoutFloor(W2, H2, f2bands, { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort, closet })
+    const f2 = layoutFloor(W2, H2, withNorthH(f2bands, hN), { ...(hasVoid ? { capH: { 2: capSouth } } : {}), ignoreMinShort, closet })
     if (!f2) return fail('f2')
-    const carved2 = ignoreMinShort ? f2.rooms : carveFloor(f2.rooms)
+    const carved2 = ignoreMinShort ? f2.rooms : carveFloor(trimHall(f2.rooms, { x: 0, y: 0, W: W2, H: H2 }))
     const f2rooms = ox === 0 ? carved2 : carved2.map((r) => ({ ...r, x: r.x + ox }))
     const floor2: Plan['floors'][number] = { label: '2F', rooms: relabelBeds(f2rooms) }
     if (partial) {
@@ -307,10 +326,11 @@ export function buildPlanStage(
       area = W * H + W2 * H2
     }
     floors.push(floor2)
-    // 階段の両階一致を検証（構造的には同じ帯・同じ端だが念のためアサーション）
+    // 階段の両階一致（x・y・幅・高さ。GEN_VERSION 6 から高さも）を検証。北帯の高さを両階で共通にしているので構造的には一致するが、
+    // 割り付けが帯の高さを変えない保証は検査で持つ（診断専用の ignoreStairUnify では高さを見ない）
     const s1 = f1.rooms.find((r) => r.type === 'stair')
     const s2 = f2rooms.find((r) => r.type === 'stair')
-    if (!s1 || !s2 || s1.x !== s2.x || s1.y !== s2.y || s1.w !== s2.w) return fail('stair')
+    if (!s1 || !s2 || s1.x !== s2.x || s1.y !== s2.y || s1.w !== s2.w || (!ignoreStairUnify && s1.h !== s2.h)) return fail('stair')
     // 吹抜はLDK直上（x・y の両方）にあること。
     // y の検査は、現状の帯の高さ範囲では capH（上の layoutFloor）が効くため構造上は違反が出ない。
     // capH の退行や将来の帯範囲の変更に備えた二重の守りとして残している
@@ -324,6 +344,10 @@ export function buildPlanStage(
     }
   }
   const plan: Plan = { W, H, floors, arch, totalArea: area }
-  if (variant) plan.variant = { stairEnd: variant.stairEnd, rev: [...variant.rev], bedShift: variant.bedShift, ...(variant.closet ? { closet: variant.closet } : {}) }
+  if (variant) {
+    plan.variant = { stairEnd: variant.stairEnd, rev: [...variant.rev], bedShift: variant.bedShift, ...(variant.closet ? { closet: variant.closet } : {}) }
+    const eh = effectiveHN(cfg, variant)
+    if (eh !== undefined) plan.variant.hN = eh
+  }
   return { plan }
 }

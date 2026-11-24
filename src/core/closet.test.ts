@@ -52,9 +52,10 @@ describe('GEN_VERSION 5: 付属収納の不変条件（全候補）', () => {
             const partner = mine[0] && (mine[0].a === r ? mine[0].b : mine[0].a)
             const ok = mine.length === 1 && mine[0]?.kind === 'fold' && !!partner && partner.x === r.x + r.of.dx && partner.y === r.y + r.of.dy
             if (!ok && bad.length < 10) bad.push(`${name} ${planKey(p)} ${r.name}: ドア ${mine.length} 枚`)
-            // クローゼットを持つ個室には、ホールへのドアがある（切り出しで個室とホールの接続を失っていない）
-            if (r.type === 'closet' && partner && fl.rooms.some((q) => q.type === 'hall') && !doors.some((d) => (d.a === partner && d.b.type === 'hall') || (d.b === partner && d.a.type === 'hall')) && bad.length < 10) {
-              bad.push(`${name} ${planKey(p)} 持ち主 ${partner.name} にホールへのドアがない`)
+            // クローゼットを持つ個室には、ホール（GEN_VERSION 6 から玄関・土間・LDK も。動線のガード G3）へのドアがある（切り出しで個室の接続を失っていない）
+            const circ = new Set(['hall', 'entry', 'doma', 'ldk'])
+            if (r.type === 'closet' && partner && fl.rooms.some((q) => q.type === 'hall') && !doors.some((d) => (d.a === partner && circ.has(d.b.type)) || (d.b === partner && circ.has(d.a.type))) && bad.length < 10) {
+              bad.push(`${name} ${planKey(p)} 持ち主 ${partner.name} にホール・玄関・土間・LDK へのドアがない`)
             }
             if (r.type === 'closet' && partner) {
               if ((Math.min(partner.w, partner.h) < (partner.type === 'master' ? 6 : 5) || partner.area < partner.minArea - 1) && bad.length < 10) bad.push(`${name} ${planKey(p)} 持ち主 ${partner.name} が小さい`)
@@ -101,6 +102,7 @@ describe('GEN_VERSION 5: 付属収納の不変条件（全候補）', () => {
 
 describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グリッド seed 1）', () => {
   // 実測（GEN_VERSION 5。階段の前を塞ぐホール帯の行き止まりの切り出しをやめた後）: 収納率の中央値 9.6%、10%未満 55.6%、個室付属 82.5%、全個室付属 63.0%。
+  // 実測（GEN_VERSION 6）: 個室付属 74.9%、全個室付属 48.1%（v5 から低下。階段を 4×5/4×6 にそろえて北帯の高さを 5・6 に固定したため、北帯の洋室が幅 7 以上でないとクローゼットを切り出せない）。
   // 下限は実測の少し下に置く（仕様 9.4 の表の試作値は 10.8%・40%・87%・67% で、行き止まりの切り出しが減った分だけ下がった）
   const plans = POPULAR.flatMap(({ cfg }) => SEEDS.flatMap((s) => generatePlans(cfg, s)))
   const ratios = plans.map(storageRatioIndependent)
@@ -111,7 +113,7 @@ describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グ�
     expect(ratios.filter((r) => r < 0.1).length / ratios.length).toBeLessThanOrEqual(0.6)
   })
 
-  it('人気: 個室の収納付属率 ≥ 80%、全個室に収納がある案 ≥ 55%', () => {
+  it('人気: 個室の収納付属率 ≥ 72%、全個室に収納がある案 ≥ 45%', () => {
     let w = 0
     let t = 0
     let all = 0
@@ -121,8 +123,8 @@ describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グ�
       t += s.total
       if (s.with === s.total) all++
     }
-    expect(w / t).toBeGreaterThanOrEqual(0.8)
-    expect(all / plans.length).toBeGreaterThanOrEqual(0.55)
+    expect(w / t).toBeGreaterThanOrEqual(0.72)
+    expect(all / plans.length).toBeGreaterThanOrEqual(0.45)
   })
 
   it('グリッド（fixture と同じ条件）: 収納率の中央値 ≥ 8%。洗面の最大面積超過は実測（91室／240案）以下', () => {

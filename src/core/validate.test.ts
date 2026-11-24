@@ -45,14 +45,14 @@ function allVariants(floors: number): Variant[] {
         floors === 1
           ? [(m & 2) !== 0, (m & 1) !== 0, false, false]
           : [(m & 8) !== 0, (m & 4) !== 0, (m & 2) !== 0, (m & 1) !== 0]
-      for (const bedShift of shifts) out.push({ stairEnd, rev, bedShift })
+      for (const bedShift of shifts) for (const hN of floors === 1 ? [undefined] : ([5, 6] as const)) out.push({ stairEnd, rev, bedShift, ...(hN ? { hN } : {}) })
     }
   }
   return out
 }
 
 describe('制約C: 水回りの隣接は buildPlan の出力で棄却0件', () => {
-  const NAMES = ['30坪/2階/個室3', '38坪/2階/全部のせ', '34坪/平屋/ランドリー+書斎']
+  const NAMES = ['30坪/2階/個室3', '40坪/2階/全部のせ', '34坪/平屋/ランドリー+書斎']
   for (const name of NAMES) {
     it(`${name}: buildPlan の全出力で wetViolations が空`, () => {
       const cfg = defined(CONDITIONS.find((c) => c.name === name)).cfg

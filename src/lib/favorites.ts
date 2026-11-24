@@ -37,7 +37,9 @@ function isCfg(v: unknown): v is PlanConfig {
 function isVariant(v: unknown): boolean {
   return (
     isObj(v) && (v.stairEnd === 'E' || v.stairEnd === 'W') && (v.bedShift === -1 || v.bedShift === 0 || v.bedShift === 1 || v.bedShift === 2) &&
-    Array.isArray(v.rev) && v.rev.length === 4 && v.rev.every((b: unknown) => typeof b === 'boolean')
+    Array.isArray(v.rev) && v.rev.length === 4 && v.rev.every((b: unknown) => typeof b === 'boolean') &&
+    // hN（GEN_VERSION 6 の2階建て）は旧データにない
+    (v.hN === undefined || v.hN === 5 || v.hN === 6)
   )
 }
 

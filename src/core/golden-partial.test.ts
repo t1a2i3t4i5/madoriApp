@@ -7,7 +7,7 @@ import { diagnoseEmpty, feasibility } from './program'
 import { planName, planTags } from './describe'
 import { explainPlan } from './explain'
 import { planKey } from './enumerate'
-import { PARTIAL_CONDITIONS, SEEDS, canon } from './testing'
+import { PARTIAL_CONDITIONS, SEEDS, canon, chokkaRate, hallRatioIndependent, quantile, stairViolations } from './testing'
 import type { PlanConfig, ScoredPlan } from './types'
 
 /**
@@ -19,6 +19,8 @@ import type { PlanConfig, ScoredPlan } from './types'
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}-partial.json`, import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
+const FIXTURE_V5 = new URL('./__fixtures__/gen-v5-partial.json', import.meta.url)
+const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-partial-grid-stairs.json', import.meta.url)
 
 const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 
@@ -39,7 +41,11 @@ interface Fixture {
   diagnoses: { name: string; reason: string; alts: string[] }[]
 }
 
+/** build() が部分二階の feasibility グリッドで選んだ提示案（seed 1）。退行防止の指標の標本 */
+const gridPlans: ScoredPlan[] = []
+
 function build(): Fixture {
+  gridPlans.length = 0
   const cases: Fixture['cases'] = []
   for (const { name, cfg } of ALL) {
     for (const seed of SEEDS) {
@@ -60,7 +66,9 @@ function build(): Fixture {
       for (const feats of [[], ['doma'], ['void'], ['laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
         const cfg: PlanConfig = { area, floors: 2, rooms: nr, parking: 1, garden: 1, feats, story: 'partial' }
         if (!feasibility(cfg).ok) continue
-        grid[JSON.stringify(cfg)] = generatePlans(cfg, 1).map(planKey)
+        const plans = generatePlans(cfg, 1)
+        gridPlans.push(...plans)
+        grid[JSON.stringify(cfg)] = plans.map(planKey)
       }
     }
   }
@@ -116,25 +124,69 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
     expect(now.diagnoses).toEqual(fixture.diagnoses)
   })
 
-  // 移行検証（v4 → v5）: 成立条件・プールは v4 以上、0案の境界は不変（旧 fixture は消さずに残す）
-  describe('v4 からの移行（クローゼット）', () => {
+  // 退行防止の指標（hall-stair-spec §10.3）。しきい値は GEN_VERSION 6 の実測（括弧内）に余裕を持たせた値
+  it('部分二階グリッド: 廊下率の中央値 ≤ 9.0%（実測 7.6）、8%以下の案 ≥ 35%（実測 60.6%）。階段は上下一致の 4×5 / 4×6。3案が出る条件は 33 以上。直下率の中央値 ≥ 40%', () => {
+    const hall = gridPlans.map((p) => hallRatioIndependent(p) * 100)
+    expect(hall.length).toBeGreaterThan(80)
+    expect(quantile(hall, 0.5)).toBeLessThanOrEqual(9.0)
+    expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.35)
+    for (const p of gridPlans) expect(stairViolations(p), planKey(p)).toEqual([])
+    expect(Object.keys(now.grid).filter((k) => now.grid[k]?.length === 3).length).toBeGreaterThanOrEqual(33)
+    expect(quantile(gridPlans.map((p) => chokkaRate(p) * 100), 0.5)).toBeGreaterThanOrEqual(40)
+  })
+
+  // 移行検証（v4 → v5。fixture どうしの記録）: 成立条件・プールは v4 以上、0案の境界は不変（旧 fixture は消さずに残す）
+  describe('v4 → v5 の移行（クローゼット。fixture どうしの記録）', () => {
     let v4: Fixture
+    let v5: Fixture
     beforeAll(() => {
       v4 = JSON.parse(readFileSync(FIXTURE_V4, 'utf8')) as Fixture
+      v5 = JSON.parse(readFileSync(FIXTURE_V5, 'utf8')) as Fixture
     })
     it('grid: v4 で3案が出た条件は v5 でも3案が出る。条件の集合も同一', () => {
       expect(v4.genVersion).toBe(4)
-      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v4.grid).sort())
+      expect(v5.genVersion).toBe(5)
+      expect(Object.keys(v5.grid).sort()).toEqual(Object.keys(v4.grid).sort())
       const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
-      expect(three(v4.grid).filter((k) => now.grid[k]?.length !== 3)).toEqual([])
-      expect(three(now.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
+      expect(three(v4.grid).filter((k) => v5.grid[k]?.length !== 3)).toEqual([])
+      expect(three(v5.grid).length).toBeGreaterThanOrEqual(three(v4.grid).length)
     })
     it('候補プールの件数は全条件で v4 以上', () => {
-      expect(v4.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
-      for (const [i, p] of now.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
+      expect(v4.pools.map((p) => p.name)).toEqual(v5.pools.map((p) => p.name))
+      for (const [i, p] of v5.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v4.pools[i]?.count ?? Infinity)
     })
     it('提示案の件数は v4 と同じ（0案の境界が動かない）', () => {
-      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v4.cases.map((c) => [c.name, c.seed, c.plans.length]))
+      expect(v5.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v4.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+  })
+
+  // 移行検証（v5 → v6）: 階段を上下で同じ 4×5/4×6 にし、ホール帯の端を吸収する。部分二階は、2F が北寄せ・階段側寄せで北帯の高さをそろえやすいので、見込みでは成立条件は減らないはずだったが、実測は 48 → 44（下の toHaveLength(4) と 44）
+  describe('v5 → v6 の移行（階段・廊下）', () => {
+    let v5: Fixture
+    beforeAll(() => {
+      v5 = JSON.parse(readFileSync(FIXTURE_V5, 'utf8')) as Fixture
+    })
+    it('grid: 条件の集合（feasibility）は v5 と同一。v5 で3案が出て v6 で出なくなった条件は、v5 の提示案の階段がすべて成立しない矩形（4×4・上下の食い違い）で、v6 で新しく3案が出る条件はない', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v5.grid).sort())
+      const three = (g: Fixture['grid']) => Object.keys(g).filter((k) => g[k]?.length === 3)
+      const stairs = JSON.parse(readFileSync(FIXTURE_V5_STAIRS, 'utf8')) as Record<string, { key: string; s1: string; s2: string }[]>
+      expect(Object.keys(stairs).sort()).toEqual(three(v5.grid).sort())
+      const lost = three(v5.grid).filter((k) => now.grid[k]?.length !== 3)
+      for (const k of lost) {
+        for (const p of stairs[k] ?? []) expect(p.s1 !== p.s2 || !/^\d+,0,4,[56]$/.test(p.s1), `${k} ${p.key} 1F ${p.s1} / 2F ${p.s2}`).toBe(true)
+      }
+      // 記録: 部分二階のグリッド（5×4×4 条件の可能なもの）で 3案が出る条件は 48 → 44（24坪/個室2/こだわりなし・吹抜、28坪/個室2・3/ランドリー+パントリー+WIC の4件が、1F の階段 4×4 だけだったため）
+      expect(lost).toHaveLength(4)
+      expect(three(now.grid).filter((k) => v5.grid[k]?.length !== 3)).toEqual([])
+      expect(three(now.grid)).toHaveLength(44)
+    })
+    it('人気3条件（部分二階）の候補プールは v5 以上。0案の境界の提示案の件数は不変', () => {
+      for (const { name } of PARTIAL_CONDITIONS.slice(0, 3)) {
+        expect(now.pools.find((p) => p.name === name)?.count ?? 0, name).toBeGreaterThanOrEqual(v5.pools.find((p) => p.name === name)?.count ?? Infinity)
+      }
+      for (const c of v5.cases.filter((x) => x.plans.length === 0)) {
+        expect(now.cases.find((x) => x.name === c.name && x.seed === c.seed)?.plans.length, c.name).toBe(0)
+      }
     })
   })
 })

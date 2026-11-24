@@ -56,6 +56,35 @@ describe('enumeratePlans（候補プール）', () => {
   })
 })
 
+describe('planKey の -h（GEN_VERSION 6: 2階建ての北帯の高さ）', () => {
+  it('2階建ての key は変種の後ろに -h5 / -h6 を持ち（-p・-k の前）、平屋は持たない。parsePlanKey で往復する', () => {
+    for (const { cfg } of CONDITIONS.slice(0, 3)) {
+      for (const p of enumeratePlans(cfg).slice(0, 40)) {
+        const k = planKey(p)
+        expect(/^[0-2]-\d+x\d+-[EW][01]{4}[m012](-h[56])?(-k)?$/.test(k), k).toBe(true)
+        expect(k.includes('-h'), k).toBe(cfg.floors === 2)
+        const parsed = defined(parsePlanKey(k))
+        expect(parsed.variant?.hN, k).toBe(cfg.floors === 2 ? p.variant?.hN : undefined)
+      }
+    }
+    expect(planKey({ arch: 1, W: 16, H: 14, variant: { stairEnd: 'E', rev: [false, true, false, false], bedShift: 0, hN: 5 } })).toBe('1-16x14-E01000-h5')
+    expect(planKey({ arch: 1, W: 18, H: 14, variant: { stairEnd: 'E', rev: [false, true, false, false], bedShift: 0, hN: 6, closet: 'hard' }, floors: [{}, { fp: { x: 0, y: 0, W: 12, H: 14 } }] })).toBe('1-18x14-E01000-h6-p12x14-k')
+    expect(parsePlanKey('1-18x14-E01000-h6-p12x14-k')).toMatchObject({ W: 18, fp2: { W2: 12, H2: 14 }, variant: { hN: 6, closet: 'hard' } })
+    expect(isPlanKey('1-16x14-E01000-h7')).toBe(false)
+  })
+  it('v5 の key（2階建てで -h なし）は planFromKey が再構築しない。平屋に -h の key も不可', () => {
+    const { cfg } = defined(CONDITIONS[0])
+    const p = defined(enumeratePlans(cfg)[0])
+    const k = planKey(p)
+    expect(planFromKey(cfg, k)).not.toBeNull()
+    expect(planFromKey(cfg, k.replace(/-h[56]/, '')), 'v5 形式').toBeNull()
+    const flat = defined(CONDITIONS[1]).cfg
+    const fk = planKey(defined(enumeratePlans(flat)[0]))
+    expect(planFromKey(flat, fk)).not.toBeNull()
+    expect(planFromKey(flat, `${fk}-h5`.replace(/(-k)?-h5$/, '-h5'))).toBeNull()
+  })
+})
+
 describe('galleryPlans', () => {
   it('上限を守り、プールの部分集合で、スコア降順・最良案を含む・再現できる', () => {
     for (const { cfg } of CONDITIONS.slice(0, 3)) {

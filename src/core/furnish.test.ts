@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { generatePlans } from './generate'
 import { enumeratePlans } from './enumerate'
-import { computeDoors, doorSwingRect } from './derive'
+import { computeDoors, doorSwingRect, openingPassage } from './derive'
 import { PROGRAM, SIZE, areaLabelRect, blockedRects, candidates, furnish, isVerticalLabel, kitchenCounter, labelRect, overlaps, type FurnitureItem } from './furnish'
 import { CONDITIONS, SEEDS } from './testing'
 import type { Rect } from './derive'
@@ -9,13 +9,14 @@ import { minShort } from './rooms'
 import type { PlanConfig, Room, ScoredPlan } from './types'
 
 /**
- * 畳数行に重なった家具の件数の上限（GEN_VERSION 5 の標本での実測値585に余裕を足したもの（階段の前を塞ぐ行き止まりの切り出しをやめた後。それ以前は524）。増える退行を止める）。
+ * 畳数行に重なった家具の件数の上限（GEN_VERSION 6 の標本での実測値663に余裕を足したもの。v6 は LDK・玄関が吸収で広がり、標本の条件も入れ替えたので v5 の585より増えた）。
+ * （以下は v5 の記録）GEN_VERSION 5 の標本での実測値585に余裕を足したもの（階段の前を塞ぐ行き止まりの切り出しをやめた後。それ以前は524）。増える退行を止める）。
  * v5 はクローゼット・収納が部屋に加わり（家具の対象外の部屋が増え）、洋室・主寝室がクローゼット分だけ小さくなったので、v4 の437より増えた。
  * v4 は最小の短辺で玄関・WIC などが幅3以上になり、部屋が細長く（帯の高さいっぱいに）なるため v2 の382より増えた。
  * v2 は変種が増え、同じ部屋形状が複数の案に現れるため v1 の標本（実測値190）より件数が多い。
  * 「避けられるのに重なった」件数は別途 0 を要求している
  */
-const OVERLAP_MAX = 640
+const OVERLAP_MAX = 700
 
 /** 標本: 条件ごとに候補プールのスコア上位24案 + seed 2つの3案（ギャラリーの多様性優先は極端な形が増えるので使わない） */
 function allPlans(): { cfg: PlanConfig; plan: ScoredPlan }[] {
@@ -165,7 +166,7 @@ describe('家具配置 furnish', () => {
       const kitchenFace = cfg.feats.includes('kitchenFace')
       for (const fl of plan.floors) {
         const doors = computeDoors(fl.rooms)
-        const swings = doors.map((d) => doorSwingRect(d))
+        const swings = doors.map((d) => openingPassage(d) ?? doorSwingRect(d))
         const placed = furnish(fl.rooms, doors, { kitchenFace })
         placed.forEach((it, i) => {
           items++
@@ -213,7 +214,7 @@ describe('家具配置 furnish', () => {
       const kitchenFace = cfg.feats.includes('kitchenFace')
       for (const fl of plan.floors) {
         const doors = computeDoors(fl.rooms)
-        const swings = doors.map((d) => doorSwingRect(d))
+        const swings = doors.map((d) => openingPassage(d) ?? doorSwingRect(d))
         const two = furnish(fl.rooms, doors, { kitchenFace })
         fl.rooms.forEach((r, room) => {
           const placed: Rect[] = []

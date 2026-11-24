@@ -43,8 +43,8 @@ describe('nextDistinctSeed（偽の sigsOf）', () => {
 })
 
 describe('nextDistinctSeed（実生成）', () => {
-  const cond = defined(CONDITIONS.find((c) => c.name === '36坪/2階/吹抜+WIC+書斎'))
-  it('36坪/2階/吹抜+WIC+書斎: 見つかった seed の3案の組は現在と違い、前進し続ける', () => {
+  const cond = defined(CONDITIONS.find((c) => c.name === '40坪/2階/吹抜+WIC+書斎'))
+  it('40坪/2階/吹抜+WIC+書斎: 見つかった seed の3案の組は現在と違い、前進し続ける', () => {
     const sigsOf = (s: number) => generatePlans(cond.cfg, s).map((p) => p.sig)
     let seed = 20261121
     for (let i = 0; i < 15; i++) {
