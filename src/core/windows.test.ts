@@ -95,10 +95,10 @@ describe('windowStats: 提示案の不変条件と実測', () => {
       expect(st.rooms.map((r) => [...r.sides].sort().join(''))).toEqual(ind.map((r) => [...r.sides].sort().join('')))
     }
   })
-  it('二面採光率の退行防止の下限（人気6条件 ≥0.62）', () => {
+  it('二面採光率の退行防止の下限（人気6条件 ≥0.70。GEN_VERSION 7 の実測 75.8%。v6 は 66.7%）', () => {
     let two = 0, n = 0
     for (const p of plans) { const st = windowStats(p); two += st.rooms.filter((r) => r.sides.length >= 2).length; n += st.rooms.length }
-    expect(two / n).toBeGreaterThanOrEqual(0.62)
+    expect(two / n).toBeGreaterThanOrEqual(0.70)
   })
   it('玄関の窓はドアと重ならない（全提示案）', () => {
     for (const p of plans) {
@@ -155,16 +155,16 @@ const rate = (plans: Plan[]) => {
 const GRID_TIMEOUT = 600_000
 
 describe('windowStats: feasibility グリッド（seed 1）の実測と退行防止', () => {
-  it('総二階・平屋（207案・居室916室）: 二面採光率 ≥0.43（実測 45.3%）、通風 C ≤1.5%（実測 10室 = 1.1%）', () => {
+  it('総二階・平屋（207案・居室918室）: 二面採光率 ≥0.51（GEN_VERSION 7 の実測 53.1%。v6 は 45.3%）、通風 C ≤1.5%（実測 7室 = 0.8%。v6 は 10室）', () => {
     const r = rate(grid().full)
-    expect(r.n).toBe(916)
-    expect(r.two).toBeGreaterThanOrEqual(0.43)
+    expect(r.n).toBe(918)
+    expect(r.two).toBeGreaterThanOrEqual(0.51)
     expect(r.c).toBeLessThanOrEqual(0.015)
   }, GRID_TIMEOUT)
-  it('部分二階（132案・居室543室）: 通風 C は 0（不変条件）、二面採光率 ≥0.68（実測 70.5%）', () => {
+  it('部分二階（132案・居室543室）: 通風 C は 0（不変条件）、二面採光率 ≥0.80（GEN_VERSION 7 の実測 82.9%。v6 は 70.5%）', () => {
     const r = rate(grid().part)
     expect(r.cCount).toBe(0)
-    expect(r.two).toBeGreaterThanOrEqual(0.68)
+    expect(r.two).toBeGreaterThanOrEqual(0.80)
   }, GRID_TIMEOUT)
   it('グリッドの C は平屋だけ（2階建ての総二階には出ない）', () => {
     for (const p of grid().full) if (p.floors.length > 1) expect(windowStats(p).level.C).toBe(0)

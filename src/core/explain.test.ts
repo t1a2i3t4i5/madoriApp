@@ -3,10 +3,33 @@ import { enumeratePlans } from './enumerate'
 import { EXPLAIN_TH, explainPlan } from './explain'
 import { storageRatio } from './closets'
 import { CONDITIONS, defined, sharesEdge } from './testing'
+import { windowStats } from './windows'
 import type { ScoredPlan } from './types'
 
 const cond = (name: string) => defined(CONDITIONS.find((c) => c.name === name), name)
 const sentenceCount = (t: string) => t.split('。').filter(Boolean).length
+
+describe('explainPlan: 二面採光の文（GEN_VERSION 7）', () => {
+  it('旧文（全居室が外壁に面している）は出ず、二面の文は LDK・主寝室が実際に二面のときだけ出る', () => {
+    let withSentence = 0
+    for (const { cfg } of CONDITIONS) {
+      for (const p of enumeratePlans(cfg).slice(0, 12)) {
+        const t = explainPlan(cfg, p)
+        expect(t).not.toContain('採光は確保')
+        const rs = windowStats(p).rooms
+        const two = (ty: string) => rs.filter((r) => r.room.type === ty).every((r) => r.sides.length >= 2)
+        if (t.includes('二面に窓があり')) {
+          withSentence++
+          if (t.includes('LDK と主寝室は')) expect(two('ldk') && two('master')).toBe(true)
+          else if (t.includes('LDK は')) expect(two('ldk')).toBe(true)
+          else expect(two('master')).toBe(true)
+        }
+      }
+    }
+    // 二面の文は「補い」（2文に満たないとき）の位置にあるので、通常の標本では出ない（旧文と同じ位置）。出たときの整合だけを見る
+    expect(withSentence).toBeGreaterThanOrEqual(0)
+  })
+})
 
 describe('explainPlan', () => {
   it('全条件の全候補で2〜3文・日本語・決定的', () => {

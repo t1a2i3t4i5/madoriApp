@@ -52,7 +52,7 @@ function isFpInside(fp: unknown, W: number, H: number): boolean {
 }
 
 /** 後の GEN_VERSION で足されたスコア項目（旧版のお気に入りには無い。無くても壊れたデータとしない。R-COMPAT-12） */
-const ADDED_PARTS: ReadonlySet<string> = new Set(['個室収納'])
+const ADDED_PARTS: ReadonlySet<string> = new Set(['個室収納', '二面採光'])
 
 /** 描画で落ちない程度に、案データの形を確かめる（variant は GEN_VERSION 1 の旧データでは無い） */
 function isPlan(v: unknown): v is ScoredPlan {

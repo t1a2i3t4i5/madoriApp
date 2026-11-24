@@ -5,7 +5,7 @@ import type { FloorRect, Plan, Room, RoomType } from './types'
 
 /**
  * 窓の導出と指標（R-WIN-01〜04、R-WIN-07［暫定］）。純関数・決定的。
- * 窓は描画と観測のためだけにあり、生成・スコア・fixture には入っていない（GEN_VERSION 7 の PR2 まで）。
+ * 窓の配置は描画と観測のためだけにあり、生成・fixture には入っていない。GEN_VERSION 7 からスコア「二面採光」が windowStats を参照する。
  */
 
 export type Side = 'N' | 'S' | 'E' | 'W'

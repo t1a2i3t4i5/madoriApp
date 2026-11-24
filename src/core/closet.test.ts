@@ -156,7 +156,7 @@ describe('スコア: 個室収納', () => {
     const w = SCORE_WEIGHTS
     expect(Object.values(w).reduce((s, v) => s + v, 0)).toBeCloseTo(1, 12)
     expect(w.個室収納).toBe(0.1)
-    expect(w.採光).toBeCloseTo(0.2 * 0.9, 12)
+    expect(w.二面採光).toBeCloseTo(0.2 * 0.9, 12)
     expect(w.縦横比).toBeCloseTo(0.15 * 0.9, 12)
     expect(w['910モジュール']).toBeCloseTo(0.05 * 0.9, 12)
   })

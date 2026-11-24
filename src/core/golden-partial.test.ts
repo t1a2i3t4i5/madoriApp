@@ -19,6 +19,7 @@ import type { PlanConfig, ScoredPlan } from './types'
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}-partial.json`, import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
+const FIXTURE_V6 = new URL('./__fixtures__/gen-v6-partial.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5-partial.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-partial-grid-stairs.json', import.meta.url)
 
@@ -161,6 +162,18 @@ describe(`gen-v${GEN_VERSION}-partial スナップショット`, () => {
   })
 
   // 移行検証（v5 → v6）: 階段を上下で同じ 4×5/4×6 にし、ホール帯の端を吸収する。部分二階は、2F が北寄せ・階段側寄せで北帯の高さをそろえやすいので、見込みでは成立条件は減らないはずだったが、実測は 48 → 44（下の toHaveLength(4) と 44）
+  // 移行検証: GEN_VERSION 7 はスコアの置き換えだけ（棄却しない）。プールの件数・3案が出る条件は v6 と同一
+  describe('v6 → v7 の移行（二面採光）', () => {
+    let v6: Fixture
+    beforeAll(() => { v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture })
+    it('候補プールの件数・grid の条件と提示案の件数・named 条件の提示案の件数は v6 と同一', () => {
+      expect(now.pools.map((p) => [p.name, p.count])).toEqual(v6.pools.map((p) => [p.name, p.count]))
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v6.grid).sort())
+      for (const [k, v] of Object.entries(v6.grid)) expect(now.grid[k]?.length, k).toBe(v.length)
+      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v6.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+  })
+
   describe('v5 → v6 の移行（階段・廊下）', () => {
     let v5: Fixture
     beforeAll(() => {
