@@ -1,14 +1,13 @@
 import type { Plan, ScoreResult } from './types'
-import { floorRect } from './types'
-import { HABITABLE, ROOM } from './rooms'
+import { ROOM } from './rooms'
 import { clamp } from './rng'
 import { computeDoors } from './derive'
-import { touchesOuterWall } from './validate'
 import { privateStorageCount } from './closets'
+import { windowStats } from './windows'
 
 /** GEN_VERSION 5: 個室収納 0.10 を足し、従来の7項目は比を保ったまま ×0.9（合計 1.0） */
 export const SCORE_WEIGHTS = {
-  採光: 0.18,
+  二面採光: 0.18,
   面積適合: 0.18,
   縦横比: 0.135,
   廊下の少なさ: 0.135,
@@ -24,22 +23,18 @@ export const HALL_FULL = 0.08
 export const HALL_ZERO = 0.14
 
 /**
- * ソフトスコア: 採光.18 面積適合.18 縦横比.135 廊下率.135（8% 以下で満点）ドア.135（階段の開口もつながりとして数える） 水回り集約.09 モジュール.045 個室収納.10。
+ * ソフトスコア: 二面採光.18（居室のうち2方位以上に窓のある割合。GEN_VERSION 7 で「採光」から置き換え） 面積適合.18 縦横比.135 廊下率.135（8% 以下で満点）ドア.135（階段の開口もつながりとして数える） 水回り集約.09 モジュール.045 個室収納.10。
  * 面積適合・縦横比は付属収納（Room.of を持つクローゼット・収納）を除く（細長いクローゼットが案を不利にしないよう）
  */
 export function scorePlan(plan: Plan): ScoreResult {
-  let light = 0, lightN = 0, fit = 0, fitN = 0, aspect = 0, aspN = 0
+  let fit = 0, fitN = 0, aspect = 0, aspN = 0
   let hallArea = 0, doorCount = 0, roomCount = 0, mod = 0, modN = 0
   const waters: { x: number; y: number }[] = []
-  for (const [fi, fl] of plan.floors.entries()) {
+  for (const fl of plan.floors) {
     doorCount += computeDoors(fl.rooms).length
     for (const r of fl.rooms) {
       roomCount++
       if (r.type === 'hall') hallArea += r.area
-      if (HABITABLE[r.type]) {
-        lightN++
-        if (touchesOuterWall(r, floorRect(plan, fi))) light++
-      }
       if (r.type !== 'hall' && r.type !== 'void' && r.type !== 'stair' && !r.of) {
         const ratio = clamp(r.area / r.target, 0.4, 1.8)
         fit += 1 - Math.min(1, Math.abs(1 - ratio))
@@ -66,7 +61,8 @@ export function scorePlan(plan: Plan): ScoreResult {
   }
   const privateOwners = privateStorageCount(plan)
   const parts: ScoreResult['parts'] = {
-    採光: lightN ? light / lightN : 1,
+    // GEN_VERSION 7: 外壁接触率（ハード制約で常に1）をやめ、居室の二面採光率（全居室を均等に数える。R-WIN-06）
+    二面採光: windowStats(plan).twoFaceRate,
     面積適合: fitN ? fit / fitN : 1,
     縦横比: aspN ? aspect / aspN : 1,
     // GEN_VERSION 6: 8% 以下で満点、14% で0点の折れ線（吸収でホールをぎりぎりまで縮めた案が有利になりすぎないように）

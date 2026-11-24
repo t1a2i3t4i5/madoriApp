@@ -129,9 +129,12 @@ describe('お気に入り', () => {
     const { variant: _v, ...p0NoVariant } = p0
     void _v
     // 本物の旧データ: スコアの内訳に GEN_VERSION 5 で足した「個室収納」がない（現行の案から作ると含んでしまい、検出できない）
-    const { 個室収納: _c, ...oldParts } = p0.score.parts
-    void _c
+    // 二面採光も GEN_VERSION 7 で「採光」から改名したので旧データにはなく、旧キー「採光」（常に1）が残る
+    const { 個室収納: _c, 二面採光: _f, ...oldParts0 } = p0.score.parts
+    void _c; void _f
+    const oldParts = { ...oldParts0, 採光: 1 }
     expect(Object.keys(oldParts)).not.toContain('個室収納')
+    expect(Object.keys(oldParts)).not.toContain('二面採光')
     const v1plan = { ...p0NoVariant, score: { ...p0.score, parts: oldParts } } as unknown as ScoredPlan
     const old: Favorite = { key: planKey(v1plan), cfg, v: 1, plan: v1plan, savedAt: 5 }
     expect(old.key).toMatch(/^\d-\d+x\d+$/)
@@ -139,8 +142,9 @@ describe('お気に入り', () => {
     expect(loaded).toHaveLength(1)
     expect(isOldVersion(defined(loaded[0]))).toBe(true)
     expect(Object.keys(defined(loaded[0]).plan.score.parts)).not.toContain('個室収納')
-    // 個室収納以外の項目が欠けたデータは壊れたデータとして捨てる
-    const { 採光: _l, ...lacking } = oldParts
+    expect(Object.keys(defined(loaded[0]).plan.score.parts)).not.toContain('二面採光')
+    // 足された項目（個室収納・二面採光）以外が欠けたデータは壊れたデータとして捨てる
+    const { 面積適合: _l, ...lacking } = oldParts
     void _l
     const lackingFav = { ...old, plan: { ...v1plan, score: { ...p0.score, parts: lacking } } }
     expect(loadFavorites(memory(JSON.stringify([lackingFav])))).toHaveLength(0)

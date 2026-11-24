@@ -238,7 +238,7 @@ function synth(x: number, total: number, opts: { arch?: 0 | 1 | 2; y?: number } 
     ...plan,
     score: {
       total,
-      parts: { 採光: 0, 面積適合: 0, 縦横比: 0, 廊下の少なさ: 0, '動線・ドア': 0, 水回り集約: 0, '910モジュール': 0, 個室収納: 0 },
+      parts: { 二面採光: 0, 面積適合: 0, 縦横比: 0, 廊下の少なさ: 0, '動線・ドア': 0, 水回り集約: 0, '910モジュール': 0, 個室収納: 0 },
     },
     sig: planSignature(plan, false),
     sigM: planSignature(plan, true),

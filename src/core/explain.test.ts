@@ -1,12 +1,55 @@
-import { describe, expect, it } from 'vitest'
-import { enumeratePlans } from './enumerate'
+import { beforeAll, describe, expect, it } from 'vitest'
+import { enumeratePlans, planKey } from './enumerate'
+import { generatePlans } from './generate'
 import { EXPLAIN_TH, explainPlan } from './explain'
 import { storageRatio } from './closets'
-import { CONDITIONS, defined, sharesEdge } from './testing'
-import type { ScoredPlan } from './types'
+import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, defined, sharesEdge } from './testing'
+import { windowStats } from './windows'
+import type { PlanConfig, ScoredPlan } from './types'
 
 const cond = (name: string) => defined(CONDITIONS.find((c) => c.name === name), name)
 const sentenceCount = (t: string) => t.split('。').filter(Boolean).length
+
+describe('explainPlan: 二面採光の節（GEN_VERSION 7。1文目の節。双方向）', () => {
+  // 提示案（人気6条件を含む全条件 × 6 seed）。平屋は LDK、2階建ては主寝室が二面のときだけ書く（EXPLAIN_TH）
+  const shown: { cfg: PlanConfig; p: ScoredPlan }[] = []
+  beforeAll(() => {
+    for (const { cfg } of [...CONDITIONS, ...PARTIAL_CONDITIONS]) {
+      for (const s of SEEDS) for (const p of generatePlans({ ...cfg, feats: [...cfg.feats] }, s)) shown.push({ cfg, p })
+    }
+  }, 120_000)
+  const twoFace = (p: ScoredPlan, ty: string) => {
+    const l = windowStats(p).rooms.filter((r) => r.room.type === ty)
+    return l.length > 0 && l.every((r) => r.sides.length >= EXPLAIN_TH.windowFaces)
+  }
+  const subject = (p: ScoredPlan) => (p.floors.length <= EXPLAIN_TH.windowLdkMaxFloors ? twoFace(p, 'ldk') : twoFace(p, 'master'))
+
+  it('条件を満たす案では必ず1文目に出て、満たさない案では出ない。旧文も出ない', () => {
+    expect(shown.length).toBeGreaterThan(250)
+    for (const { cfg, p } of shown) {
+      const t = explainPlan(cfg, p)
+      expect(t).not.toContain('採光は確保')
+      const first = t.split('。')[p.floors[1]?.fp ? 1 : 0] ?? ''
+      expect(first.includes('二面に窓があ'), planKey(p)).toBe(subject(p))
+      expect(t.split('二面に窓があ').length - 1, planKey(p)).toBe(subject(p) ? 1 : 0)
+      if (subject(p) && p.floors.length > 1) expect(first).toContain('主寝室は二面に窓があ')
+    }
+  })
+  it('出現率の下限（実測: 2階建て 78.7%・平屋 26.4%。レビュー前は 0%）。文の数は2〜3文のまま', () => {
+    const rate = (f: (p: ScoredPlan) => boolean) => {
+      const xs = shown.filter(({ p }) => f(p))
+      return xs.filter(({ cfg, p }) => explainPlan(cfg, p).includes('二面に窓があ')).length / xs.length
+    }
+    expect(rate((p) => p.floors.length === 2)).toBeGreaterThanOrEqual(0.7)
+    expect(rate((p) => p.floors.length === 1)).toBeGreaterThanOrEqual(0.2)
+    expect(rate((p) => p.floors.length === 1)).toBeLessThan(0.5) // 平屋の LDK の二面は珍しい（常套句にならない）
+    for (const { cfg, p } of shown) {
+      const n = sentenceCount(explainPlan(cfg, p)) - (p.floors[1]?.fp ? 1 : 0)
+      expect(n).toBeGreaterThanOrEqual(2)
+      expect(n).toBeLessThanOrEqual(3)
+    }
+  })
+})
 
 describe('explainPlan', () => {
   it('全条件の全候補で2〜3文・日本語・決定的', () => {

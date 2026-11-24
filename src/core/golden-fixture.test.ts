@@ -23,6 +23,7 @@ import type { PlanConfig, Room, ScoredPlan } from './types'
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.url)
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
+const FIXTURE_V6 = new URL('./__fixtures__/gen-v6.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-grid-stairs.json', import.meta.url)
 
@@ -39,12 +40,15 @@ function canon(v: unknown): string {
   })
 }
 
+/** 候補プールの sig 集合のハッシュ（順序・スコアに依らない） */
+const sigHash = (pool: readonly ScoredPlan[]) => createHash('sha256').update(JSON.stringify(pool.map((p) => `${p.sig}|${p.sigM}`).sort())).digest('hex')
+
 const rooms = (p: ScoredPlan) => p.floors.map((f) => f.rooms.map((r) => `${r.type}:${r.x},${r.y},${r.w},${r.h}`))
 
 interface Fixture {
   genVersion: number
   cases: { name: string; seed: number; plans: { key: string; score: number; name: string; tags: string[]; floors: string[][] /* 階ごとの "type:x,y,w,h" */ }[] }[]
-  pools: { name: string; count: number; top: string[]; sha256: string }[]
+  pools: { name: string; count: number; top: string[]; sha256: string; /** プールの sig（sig|sigM）の集合のハッシュ。スコアを含まないので、スコアだけを変える版（v7）でも前の版と一致する */ sigSha256: string }[]
   grid: Record<string, string[]>
 }
 
@@ -69,6 +73,7 @@ function build(): Fixture {
       count: pool.length,
       top: pool.slice(0, 10).map(planKey),
       sha256: createHash('sha256').update(canon(pool)).digest('hex'),
+      sigSha256: sigHash(pool),
     }
   })
   // feasibility グリッド（2×6×4×4=192条件）の可能な条件 × seed 1 で選ばれた3案の key
@@ -189,6 +194,28 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
     })
     it('提示案の件数は v4 と同じ（0案・3案の境界が動かない）', () => {
       expect(v5.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v4.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+  })
+
+  // 移行検証: GEN_VERSION 7 はスコア「採光」を「二面採光」に置き換えた（棄却はしないので、プールの件数・3案が出る条件は不変。順位だけが変わる）
+  describe('v6 → v7 の移行（二面採光）', () => {
+    let v6: Fixture
+    beforeAll(() => { v6 = JSON.parse(readFileSync(FIXTURE_V6, 'utf8')) as Fixture })
+    it('候補プールの条件ごとの件数は v6 と同一', () => {
+      expect(now.pools.map((p) => [p.name, p.count])).toEqual(v6.pools.map((p) => [p.name, p.count]))
+    })
+    it('候補プールの sig の集合は、全条件で v6 と一致する（スコア以外の生成が不変であることの固定。件数だけでは同数の別の案を見逃す）', () => {
+      expect(v6.pools.every((p) => p.sigSha256.length === 64)).toBe(true)
+      expect(now.pools.map((p) => [p.name, p.sigSha256])).toEqual(v6.pools.map((p) => [p.name, p.sigSha256]))
+    })
+    it('grid: 条件の集合と、提示案の件数（3案が出る条件）は v6 と同一', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v6.grid).sort())
+      for (const [k, v] of Object.entries(v6.grid)) expect(now.grid[k]?.length, k).toBe(v.length)
+    })
+    it('named 条件 × seed の提示案の件数は v6 と同一。3案の組は変わる（空振り防止）', () => {
+      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v6.cases.map((c) => [c.name, c.seed, c.plans.length]))
+      const changed = now.cases.filter((c, i) => canon(c.plans.map((p) => p.key).sort()) !== canon((v6.cases[i]?.plans ?? []).map((p) => p.key).sort()))
+      expect(changed.length).toBeGreaterThan(0)
     })
   })
 
