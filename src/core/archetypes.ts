@@ -246,11 +246,15 @@ function withNorthH(bands: Band[], hN: number | undefined): Band[] {
   return bands.map((b, i): Band => (i === 0 ? { cells: b.cells, fixedH: hN } : b))
 }
 
-/** 1F の割り付け結果（部分二階のプール構築で、同じ (arch, W, H, stairEnd, rev[0], rev[1]) を使い回すためのメモ） */
+/** 1F の割り付け結果（プール構築で、同じ 1F の入力（キーは f1MemoKey）を使い回すためのメモ。総二階・部分二階・平屋のどれでも使う） */
 export type F1Layout = { rooms: Room[]; heights: number[] } | 'variant' | 'f1'
 export type F1Memo = Map<string, F1Layout>
 
-/** 1F の割り付けが依存するもの: (cfg, arch, 1Fの板, stairEnd, rev[0], rev[1])。cfg が違う memo の使い回しで取り違えないよう cfgId を先頭に含める */
+/**
+ * 1F の割り付けが依存するもの: (cfg, arch, 1Fの板, stairEnd, rev[0], rev[1])。cfg が違う memo の使い回しで取り違えないよう cfgId を先頭に含める。
+ * 加えて、2階建てでは北帯の高さ hN（変種が持たないときは既定の 5）をキーに含める。クローゼットのモード（弱・強）は、
+ * 個室のある平屋の 1F が強のときだけキーに含め、2階建ての 1F（個室がない）では含めない
+ */
 export function f1MemoKey(cfg: PlanConfig, arch: ArchId, W: number, H: number, v: Variant): string {
   // 平屋の1F には個室があり、クローゼットのモードで割り付けが変わる（2階建ての1F には個室がないのでモードを含めない）
   const mode = cfg.floors === 1 && v.closet === 'hard' ? 'k' : ''

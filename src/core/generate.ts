@@ -3,6 +3,7 @@ import type { ArchId, PlanConfig, Plan, ScoredPlan, Variant } from './types'
 import { mulberry32 } from './rng'
 import { applyVariant, bandsFor, buildPlan, f1MemoKey } from './archetypes'
 import type { F1Memo } from './archetypes'
+import { withCarveMemo } from './carve'
 import { footprintList, footprintPairs } from './slicing'
 import { STAIR_HS } from './stair'
 import { validateFloor, validatePlan } from './validate'
@@ -118,11 +119,15 @@ export interface PoolStats {
 
 /** 候補の組み立て（キャッシュを介さない）。candidatePool と診断（キャッシュを汚さない用途）が使う */
 function buildPool(cfg: PlanConfig, stats?: PoolStats, diag?: { ignoreStairUnify: true }): readonly ScoredPlan[] {
+  return withCarveMemo(() => buildPoolBody(cfg, stats, diag))
+}
+
+function buildPoolBody(cfg: PlanConfig, stats?: PoolStats, diag?: { ignoreStairUnify: true }): readonly ScoredPlan[] {
   const archs: ArchId[] = cfg.floors === 1 ? [0, 1] : [0, 1, 2]
   const allVariants = variantsFor(cfg)
   const built: ScoredPlan[] = []
   const partial = isPartial(cfg)
-  // 部分二階: 1F は (arch, 1Fの板, stairEnd, rev[0], rev[1]) で決まるので、割り付けと検証を使い回す
+  // 1F は (arch, 1Fの板, stairEnd, rev[0], rev[1], hN) で決まるので、割り付けを使い回す。検証の使い回しは部分二階のみ（総二階は plan 全体を検証する）
   const memo: F1Memo = new Map()
   const f1Valid = new Map<string, boolean>()
   const shapes: { W: number; H: number; W2?: number; H2?: number }[] = partial
@@ -134,7 +139,7 @@ function buildPool(cfg: PlanConfig, stats?: PoolStats, diag?: { ignoreStairUnify
     for (const fp of shapes) {
       for (const variant of variants) {
         if (stats) stats.assembled++
-        const plan = buildPlan(cfg, arch, fp, variant, partial ? memo : undefined, diag)
+        const plan = buildPlan(cfg, arch, fp, variant, memo, diag)
         if (!plan) continue
         if (partial) {
           const key = f1MemoKey(cfg, arch, fp.W, fp.H, variant)

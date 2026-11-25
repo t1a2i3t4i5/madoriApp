@@ -118,6 +118,16 @@ describe('部分二階の生成', () => {
     }
   })
 
+  it('総二階でも F1Memo が再利用される（1Fの割り付けの数が組み立て回数より少ない）', () => {
+    for (const { cfg: partialCfg } of POPULAR) {
+      const cfg: PlanConfig = { ...partialCfg, story: 'full' }
+      expect(isPartial(cfg)).toBe(false)
+      const st = poolBuildStats(cfg)
+      expect(st.f1Layouts).toBeGreaterThan(0)
+      expect(st.f1Layouts).toBeLessThan(st.assembled)
+    }
+  })
+
   it('部分二階の1Fの割り付けの回数（f1Layouts・f1Validations）は v5 の 2 倍（北帯の高さ hN で割り付けが変わる）。クローゼットのモードは1Fのメモに入らない', () => {
     // v5（コミット 4452e74）の実測 [f1Layouts, f1Validations]（v4 と同じ値）。assembled は変種のモード（弱・強）と hN で増えるが、1Fは個室セルがないのでモードでは増えない
     const v5: [number, number][] = [[264, 120], [240, 72], [240, 216], [144, 24], [264, 128], [264, 168]]
