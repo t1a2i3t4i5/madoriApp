@@ -67,6 +67,8 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
     return () => document.removeEventListener('keydown', onKey)
   }, [])
   const name = planName(cfg, plan)
+  const siteText = explainSite(cfg, plan)
+  const siteNote = siteCaption(siteLayout(plan, cfg))
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-scrim px-3 py-[18px]" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-[900px] rounded-2xl bg-surface p-6 shadow-panel max-[640px]:p-4">
@@ -140,8 +142,8 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
             })}
             <h3 className="mt-[18px] mb-2 text-[13px] font-bold">敷地の配置（南道路）</h3>
             <div className="rounded-xl border border-plan-line bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} uid="dlgsite" /></div>
-            {explainSite(cfg, plan) && <p className="mt-2 text-[12.5px] leading-[1.8] text-ink2">{explainSite(cfg, plan)}</p>}
-            <p className="mt-1 text-[11.5px] leading-[1.7] text-ink2">{siteCaption(siteLayout(plan, cfg))}</p>
+            {siteText && <p className="mt-2 text-[12.5px] leading-[1.8] text-ink2">{siteText}</p>}
+            <p className="mt-1 text-[11.5px] leading-[1.7] text-ink2">{siteNote}</p>
           </div>
         </div>
       </div>

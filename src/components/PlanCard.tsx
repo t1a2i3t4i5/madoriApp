@@ -29,6 +29,8 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
   // 条件変更で階数が減ってもタブ選択が残るため、存在する階にクランプする
   const floor = clampFloor(selectedFloor, plan.floors.length)
   const name = planName(cfg, plan)
+  const siteText = explainSite(cfg, plan)
+  const siteNote = siteCaption(siteLayout(plan, cfg))
   const cl = storageCount(plan)
   const open = () => onOpen(floor)
   return (
@@ -52,7 +54,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
         {/* 全階の後に敷地図を1つ足す（R-DRAW-27） */}
         <div className="border border-plan-line bg-paper p-1.5">
           <SiteSvg cfg={cfg} plan={plan} uid={`${uidPrefix}${index}s`} />
-          <p className="mt-1 text-[9px] leading-snug text-ink2">{siteCaption(siteLayout(plan, cfg))}</p>
+          <p className="mt-1 text-[9px] leading-snug text-ink2">{siteNote}</p>
         </div>
       </div>
       <div className="p-4 pt-3">
@@ -72,7 +74,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
         <p className="mb-3 text-[12.5px] leading-[1.8] text-ink2">
           {explainPlan(cfg, plan)}
           {/* 敷地の文は explainPlan とは別（R-TEXT-10）。解説文の後に続ける */}
-          {explainSite(cfg, plan) && <span data-site-text> {explainSite(cfg, plan)}</span>}
+          {siteText && <span data-site-text> {siteText}</span>}
         </p>
         <div className="flex items-center gap-3 text-[12px] text-ink2">
           <span>スコア</span>

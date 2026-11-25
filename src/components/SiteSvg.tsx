@@ -17,20 +17,20 @@ const fillOf = (r: Room): string => ROOM_FILL[r.type] ?? (ROOM[r.type].cat === '
 
 const Rect = ({ box, ...p }: { box: SiteRect } & Omit<React.SVGProps<SVGRectElement>, 'r'>) => <rect x={box.x} y={box.y} width={box.w} height={box.h} {...p} />
 
-function Car({ r, vertical }: { r: SiteRect; vertical: boolean }) {
+function Car({ r, front }: { r: SiteRect; front: boolean }) {
   // 車の記号: 駐車枠の中に、道路側へ向けた車体の丸角矩形
   const cx = r.x + r.w / 2
   return (
     <g>
       <Rect box={r} fill="#d8d9d8" stroke="#9a9d9e" strokeWidth={0.15} />
-      <rect x={cx - 1.7} y={r.y + (vertical ? 2.2 : 1.8)} width={3.4} height={CAR_D - 4.4} rx={0.9} fill="#aeb9bf" />
+      <rect x={cx - 1.7} y={r.y + (front ? 2.2 : 1.8)} width={3.4} height={CAR_D - 4.4} rx={0.9} fill="#aeb9bf" />
       <rect x={cx - 1.2} y={r.y + 3.4} width={2.4} height={1.6} rx={0.4} fill="#c9d3d8" />
     </g>
   )
 }
 
 export function SiteSvg({ cfg, plan, uid = 'site' }: { cfg: PlanConfig; plan: Plan; uid?: string }) {
-  const L = useMemo(() => siteLayout(plan, cfg), [plan, cfg.parking, cfg.garden])
+  const L = useMemo(() => siteLayout(plan, cfg), [plan, cfg])
   const rooms = plan.floors[0]?.rooms ?? []
   const fp = floorRect(plan, 0)
   const entry = findEntry(rooms)
@@ -43,7 +43,6 @@ export function SiteSvg({ cfg, plan, uid = 'site' }: { cfg: PlanConfig; plan: Pl
   const vbH = roadY + ROAD_H + PAD * 0.5 - vbY
   const ldk = rooms.find((r) => r.type === 'ldk')
   const sweep = cfg.garden > 0
-  const frontCars = L.cars.filter((c) => c.mode === 'front').length
   return (
     <svg viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="敷地の配置図（南道路）" className="block h-auto w-full">
       <defs>
@@ -72,14 +71,17 @@ export function SiteSvg({ cfg, plan, uid = 'site' }: { cfg: PlanConfig; plan: Pl
       {L.approach.map((a, i) => <Rect key={i} box={a} fill="#e4dfd2" stroke="#c4bda8" strokeWidth={0.1} />)}
       {L.porch && <Rect box={L.porch} fill="#d9d3c2" stroke="#b5ad96" strokeWidth={0.12} />}
       {/* 駐車 */}
-      {L.cars.map((c, i) => <Car key={i} r={c} vertical={c.mode === 'front'} />)}
+      {L.cars.map((c, i) => <Car key={i} r={c} front={c.mode === 'front'} />)}
       {L.cars.length > 0 && (() => {
-        const first = L.cars[0]
+        // ラベルは前庭の台の列に付ける（なければ横の台の列）。外接矩形の中央だと、一部を横に出す案で車の枠をまたぐ
+        const front = L.cars.filter((c) => c.mode === 'front')
+        const group = front.length > 0 ? front : L.cars
+        const first = group[0]
         if (!first) return null
-        const xs = L.cars.map((c) => c.x)
+        const xs = group.map((c) => c.x)
         const x0 = Math.min(...xs)
         const x1 = Math.max(...xs) + CAR_W
-        return <text x={(x0 + x1) / 2} y={first.y + CAR_D + (frontCars > 0 ? -0.4 : -0.4)} fontSize={1.3} fill="#5d686e" textAnchor="middle">{`駐車 ${L.cars.length}台`}</text>
+        return <text x={(x0 + x1) / 2} y={first.y + CAR_D - 0.4} fontSize={1.3} fill="#5d686e" textAnchor="middle">{`駐車 ${L.cars.length}台`}</text>
       })()}
       {/* ウッドデッキ */}
       {L.deck && <><Rect box={L.deck} fill={`url(#deck${uid})`} stroke="#a58b5e" strokeWidth={0.12} /><text x={L.deck.x + L.deck.w / 2} y={L.deck.y + L.deck.h + 1.25} fontSize={1.0} fill="#7a6540" textAnchor="middle">デッキ</text></>}
@@ -102,8 +104,9 @@ export function SiteSvg({ cfg, plan, uid = 'site' }: { cfg: PlanConfig; plan: Pl
       {/* 生け垣（庭なし）: 敷地の南の境界の線に丸い植栽 */}
       {L.hedge.map((h, i) => (
         <g key={i}>
-          <line x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#7fa267" strokeWidth={0.5} strokeDasharray="0.9 0.5" strokeLinecap="round" />
-          <text x={(h.x1 + h.x2) / 2} y={h.y1 - 0.7} fontSize={1.0} fill="#5b6b4c" textAnchor="middle">生け垣</text>
+          {/* 線幅 0.5 の半分が道路の帯に隠れないよう、敷地の内側へ 0.25 ずらす */}
+          <line x1={h.x1} y1={h.y1 - 0.25} x2={h.x2} y2={h.y2 - 0.25} stroke="#7fa267" strokeWidth={0.5} strokeDasharray="0.9 0.5" strokeLinecap="round" />
+          <text x={(h.x1 + h.x2) / 2} y={h.y1 - 0.95} fontSize={1.0} fill="#5b6b4c" textAnchor="middle">生け垣</text>
         </g>
       ))}
       {/* 南の道路 */}

@@ -209,11 +209,15 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
 export interface SiteStats {
   /** LDK の南面のうち前庭の駐車にかからない間口（セル） */
   ldkFreeFront: number
+  /** R-WIN-05: LDK の南面から道路までの前庭の奥行（セル）。駐車が前庭にあると奥行が増える */
+  ldkFrontDepth: number
   /**
-   * R-WIN-05: LDK の南面のうち、駐車・庭・植栽で道路から隔てられる割合（0〜1）。
-   * 空き間口は庭（あり）か生け垣（なし）で必ず隔てるので、いまは LDK のある案で常に 1（観測の基準値。スライシング木の版で比べる）
+   * R-WIN-05: LDK の南面（幅 = 1）を道路から隔てるものの内訳（合計 1。LDK がなければすべて 0）。
+   * 前庭の駐車がかかる割合・庭で隔てる割合（庭あり）・生け垣だけで隔てる割合（庭なし）。案ごとに変わる
    */
-  ldkScreened: number
+  ldkByCar: number
+  ldkByGarden: number
+  ldkByHedge: number
   /** 前庭に並べた台数・建物の横に出した台数 */
   carMode: { front: number; side: number }
   /** 敷地の目安（坪・間口と奥行のセル数） */
@@ -226,11 +230,15 @@ export interface SiteStats {
 export function siteStats(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<PlanConfig, 'parking' | 'garden'>): SiteStats {
   const L = siteLayout(plan, cfg)
   const ldk = plan.floors[0]?.rooms.find((r) => r.type === 'ldk')
-  const covered = ldk ? ldk.w - L.ldkFreeFront : 0
-  const screenedFree = L.garden.length > 0 || L.hedge.length > 0 ? L.ldkFreeFront : 0
+  const w = ldk && ldk.w > 0 ? ldk.w : 0
+  const byCar = w > 0 ? (w - L.ldkFreeFront) / w : 0
+  const free = w > 0 ? L.ldkFreeFront / w : 0
   return {
     ldkFreeFront: L.ldkFreeFront,
-    ldkScreened: ldk && ldk.w > 0 ? (covered + screenedFree) / ldk.w : 0,
+    ldkFrontDepth: L.frontDepth,
+    ldkByCar: byCar,
+    ldkByGarden: L.garden.length > 0 ? free : 0,
+    ldkByHedge: L.hedge.length > 0 ? free : 0,
     carMode: { front: L.cars.filter((c) => c.mode === 'front').length, side: L.cars.filter((c) => c.mode === 'side').length },
     lotArea: (L.lot.w * L.lot.h) / 16,
     lotW: L.lot.w,
@@ -238,12 +246,12 @@ export function siteStats(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Plan
   }
 }
 
-const mm = (cells: number) => ((cells * 455) / 1000).toFixed(1)
+const meters = (cells: number) => ((cells * 455) / 1000).toFixed(1)
 
 /** 敷地の目安の文言（敷地図の下・印刷に出す） */
 export function siteCaption(layout: SiteLayout): string {
   const tsubo = Math.round((layout.lot.w * layout.lot.h) / 16)
-  return `敷地の目安 約${tsubo}坪（間口 ${mm(layout.lot.w)}m × 奥行 ${mm(layout.lot.h)}m）。建物と駐車・庭から計算した目安で、敷地の条件は考慮していません`
+  return `敷地の目安 約${tsubo}坪（間口 ${meters(layout.lot.w)}m × 奥行 ${meters(layout.lot.h)}m）。建物と駐車・庭から計算した目安で、敷地の条件は考慮していません`
 }
 
 const DIR = { W: '西', E: '東' } as const
@@ -264,18 +272,22 @@ export function explainSite(cfg: Pick<PlanConfig, 'parking' | 'garden'>, plan: P
   const dir = DIR[L.side]
   const yard = garden > 0 ? '庭' : '前庭'
   const out: string[] = []
+  // 前庭の駐車が LDK の前にかかる案は、「LDK の前を空けている」と言い切らない
+  const covered = nFront > 0 && L.ldkFreeFront < ldk.w
+  const front = covered ? `LDK の前は車がかかる部分を除いて${yard}として空けています。` : `LDK の前を${yard}として空けています。`
   if (n > 0) {
     if (nSide === 0) out.push(`駐車${n}台は玄関のある${dir}側の前庭に並べ、玄関へそのままアプローチできます。`)
-    else if (nFront === 0) out.push(`駐車${n}台は建物の${dir}側の横に置き、LDK の前を${yard}として空けています。`)
-    else out.push(`駐車${n}台のうち${nSide}台は建物の${dir}側の横に出し、LDK の前を${yard}として空けています。`)
-    if (nFront > 0 && L.ldkFreeFront < ldk.w) out.push('前庭の駐車が LDK の前に一部かかるため、その部分は車が道路からの視線をさえぎります。')
+    else if (nFront === 0) out.push(`駐車${n}台は建物の${dir}側の横に置き、${front}`)
+    else out.push(`駐車${n}台のうち${nSide}台は建物の${dir}側の横に出し、${front}`)
+    if (covered) out.push('前庭の駐車が LDK の前に一部かかるため、その部分は車が道路からの視線をさえぎります。')
   }
   if (garden > 0) {
     let s = `LDK は南の${garden === 2 ? '広めの' : '小さめの'}庭に面し${L.deck ? '、前にウッドデッキを置けます' : ''}`
     if (L.wrap) s += `。角の LDK なので${DIR[L.side === 'W' ? 'E' : 'W']}側にも庭を回しています`
     out.push(`${s}。`)
   } else if (L.hedge.length > 0) {
-    out.push('LDK の南は道路に近いため、生け垣などの目隠しを想定しています。')
+    // 前庭に駐車があって道路まで深い案（13 セル ≒ 5.9m）では「道路に近い」と書かない
+    out.push(L.frontDepth <= 8 ? 'LDK の南は道路に近いため、生け垣などの目隠しを想定しています。' : 'LDK の南の道路側に、生け垣などの目隠しを想定しています。')
   }
   return out.join('')
 }

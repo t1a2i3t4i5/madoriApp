@@ -189,6 +189,34 @@ describe('explainSite: 当てはまる事実だけを書く', () => {
       }
     }
   })
+  it('1文目と2文目が矛盾しない: 駐車が LDK にかかる案は「LDK の前を…空けています」と言い切らない', () => {
+    let covered = 0
+    for (const { plan } of samples) {
+      for (const c of COMBOS.filter((x) => x.parking > 0)) {
+        const t = explainSite(c, plan)
+        const ldk = plan.floors[0]?.rooms.find((r) => r.type === 'ldk')
+        const L = siteLayout(plan, c)
+        const hasCover = L.cars.some((x) => x.mode === 'front') && !!ldk && L.ldkFreeFront < ldk.w
+        expect(t.includes('一部かかる')).toBe(hasCover)
+        if (hasCover) {
+          covered++
+          expect(t).not.toMatch(/LDK の前を(庭|前庭)として空けています/)
+          // 1文目で LDK の前に触れるのは横に出す台があるときだけ。そのときは言い切らない形になる
+          if (L.cars.some((x) => x.mode === 'side')) expect(t).toContain('車がかかる部分を除いて')
+        }
+      }
+    }
+    expect(covered).toBeGreaterThan(0)
+  })
+  it('生け垣の文は、前庭が深い案では「道路に近い」と書かない', () => {
+    for (const { plan } of samples) {
+      for (const parking of [0, 1, 2]) {
+        const L = siteLayout(plan, { parking, garden: 0 })
+        const t = explainSite({ parking, garden: 0 }, plan)
+        expect(t.includes('道路に近いため')).toBe(L.frontDepth <= 8)
+      }
+    }
+  })
 })
 
 /** 提示案の標本（窓・直下率の仕様と同じ feasibility グリッド・seed 1。総二階・平屋 207案／部分二階 132案）。生成に ~90 秒かかるので1度だけ作る */
@@ -219,6 +247,7 @@ function grid(): { full: Plan[]; part: Plan[] } {
   return gridCache
 }
 
+const avg = (xs: number[]) => (xs.length === 0 ? 0 : xs.reduce((a, b) => a + b, 0) / xs.length)
 const pct = (n: number, d: number) => (d === 0 ? 0 : n / d)
 
 describe('siteStats: 観測の実測（スコア・生成には入れない）', () => {
@@ -234,9 +263,10 @@ describe('siteStats: 観測の実測（スコア・生成には入れない）',
         const area = ss.map((s) => s.lotArea)
         const side = ss.filter((s) => s.carMode.side > 0).length
         const free = ss.map((s) => s.ldkFreeFront)
-        rows.push(`${name}(${ss.length}案) 駐車${c.parking}/庭${c.garden}: 敷地 中央値${quantile(area, 0.5).toFixed(1)}坪 p10 ${quantile(area, 0.1).toFixed(1)} p90 ${quantile(area, 0.9).toFixed(1)} / 横付けあり ${(pct(side, ss.length) * 100).toFixed(1)}% / LDK空き間口 中央値${quantile(free, 0.5)} 最小${Math.min(...free)} / 隔て率 ${(ss.reduce((a, s) => a + s.ldkScreened, 0) / ss.length).toFixed(3)}`)
+        rows.push(`${name}(${ss.length}案) 駐車${c.parking}/庭${c.garden}: 敷地 中央値${quantile(area, 0.5).toFixed(1)}坪 p10 ${quantile(area, 0.1).toFixed(1)} p90 ${quantile(area, 0.9).toFixed(1)} / 横付けあり ${(pct(side, ss.length) * 100).toFixed(1)}% / LDK空き間口 中央値${quantile(free, 0.5)} 最小${Math.min(...free)} / LDK前の奥行 中央値${quantile(ss.map((s) => s.ldkFrontDepth), 0.5)} / 車がかかる割合 平均${avg(ss.map((s) => s.ldkByCar)).toFixed(3)}・庭${avg(ss.map((s) => s.ldkByGarden)).toFixed(3)}・生け垣${avg(ss.map((s) => s.ldkByHedge)).toFixed(3)}`)
         for (const s of ss) {
-          expect(s.ldkScreened).toBeGreaterThan(0.999)
+          expect(s.ldkByCar + s.ldkByGarden + s.ldkByHedge).toBeCloseTo(1, 9)
+          expect(c.garden > 0 ? s.ldkByHedge : s.ldkByGarden).toBe(0)
           expect(s.carMode.front + s.carMode.side).toBe(c.parking)
           expect(s.ldkFreeFront).toBeGreaterThanOrEqual(c.garden > 0 && c.parking > 0 ? 5 : 4)
         }
