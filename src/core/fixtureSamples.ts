@@ -33,7 +33,13 @@ export interface SamplesFile {
 }
 
 export function loadGrid(name: string, pick: (json: { genVersion: number; grid?: Record<string, string[]>; gridPartAlt?: Record<string, string[]> }) => Record<string, string[]> | undefined): GridSample {
-  const json = JSON.parse(readFileSync(url(name), 'utf8')) as { genVersion: number; grid?: Record<string, string[]>; gridPartAlt?: Record<string, string[]> }
+  let text: string
+  try {
+    text = readFileSync(url(name), 'utf8')
+  } catch (e) {
+    throw new Error(`${name} を読み込めません。UPDATE_GOLDEN=1 npm run test:archive で書き出してください（${e instanceof Error ? e.message : String(e)}）`)
+  }
+  const json = JSON.parse(text) as { genVersion: number; grid?: Record<string, string[]>; gridPartAlt?: Record<string, string[]> }
   const grid = pick(json) ?? {}
   const groups = Object.entries(grid).map(([id, keys]) => {
     const cfg = JSON.parse(id) as PlanConfig

@@ -13,6 +13,8 @@ const room = (type: RoomType, x: number, y: number, w: number, h: number): Room 
   type, name: type, x, y, w, h, area: w * h, target: ROOM[type].target, minArea: ROOM[type].minArea,
 })
 const FP = { x: 0, y: 0, W: 20, H: 14 }
+// 重い走査のテストは並列実行の負荷で既定の30秒を超えるので、明示的に延ばす
+const GRID_TIMEOUT = 600_000
 
 describe('computeWindows: 4方位・非居室・収納・玄関ドア', () => {
   it('居室は外壁に接する全ての面に付く（角部屋は両面）', () => {
@@ -95,7 +97,7 @@ describe('windowStats: 提示案の不変条件と実測', () => {
       const ind = windowSidesIndependent(p)
       expect(st.rooms.map((r) => [...r.sides].sort().join(''))).toEqual(ind.map((r) => [...r.sides].sort().join('')))
     }
-  })
+  }, GRID_TIMEOUT)
   // 仕様の試算（F3）は 74.4% で、実測 75.8% は +1.4pt 高い。標本は同じ人気6条件×6 seed なので標本差ではなく、試算方法の差
   // （試算は再スコア後の安定ソートと丸めで順位を決めており、本番の選抜〔Gumbel-top-k〕の同点・端数の扱いと違う）
   it('二面採光率の退行防止の下限（人気6条件 ≥0.70。GEN_VERSION 7 の実測 75.8%。v6 は 66.7%）', () => {
@@ -132,7 +134,6 @@ const rate = (plans: Plan[]) => {
   }
   return { two: two / n, c: c / n, cCount: c, n }
 }
-const GRID_TIMEOUT = 600_000
 
 describe('標本 fixture の版', () => {
   it('gen-v9.json・gen-v9-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {

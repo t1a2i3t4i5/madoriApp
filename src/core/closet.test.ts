@@ -137,7 +137,7 @@ describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グ�
       for (const f of p.floors) for (const r of f.rooms) if (r.type === 'wash' && r.area > ROOM.wash.maxArea) washOver++
     }
     expect(grid.length).toBeGreaterThan(200)
-    // 実測（seed 1、3案が出る80条件の240案）: 中央値 8.6%。下限 0.08 はその少し下
+    // 実測（seed 1、3案が出る69条件の207案）: 中央値 8.6%。下限 0.08 はその少し下
     expect(median(grid)).toBeGreaterThanOrEqual(0.08)
     expect(washOver).toBeLessThanOrEqual(91)
   })
