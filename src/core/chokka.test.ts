@@ -87,23 +87,23 @@ describe('直下率: 独立実装との一致と、実測（GEN_VERSION 8）', (
       expect(cs.reduce((a, c) => a + c.total, 0)).toBe(b.total)
     }
   }, TIMEOUT)
-  // GEN_VERSION 8（2F の切断線の寄せ。R-SPACE-35）の実測。暫定目標（R-IDX-05）は人気6 の中央値 ≥ 55%、グリッド総二階の中央値 ≥ 50%・40%未満 ≤ 10%。
+  // GEN_VERSION 8（2F の切断線の寄せ。R-SPACE-35）の実測（GEN_VERSION 9 は選抜の変更で値が上がった。各テスト名に併記）。暫定目標（R-IDX-05）は人気6 の中央値 ≥ 55%、グリッド総二階の中央値 ≥ 50%・40%未満 ≤ 10%。
   // 退行防止の下限は、目標より少し高く、実測に余裕を持たせた値（人気6 ≥ 56%、グリッド総二階 ≥ 52%・40%未満 ≤ 10%、部分二階 ≥ 55%）
-  it('人気6: 中央値 ≥ 55%（GEN_VERSION 8 の実測 55.6。v7 は 55.9）、40%未満 ≤ 10%（実測 2.2%）', () => {
+  it('人気6: 中央値 ≥ 55%（GEN_VERSION 9 の実測 56.1。v8 は 55.6、v7 は 55.9）、40%未満 ≤ 10%（実測 2.2%）', () => {
     build()
     const xs = pct(popular)
     expect(xs).toHaveLength(90)
     expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(55)
     expect(xs.filter((x) => x < 40).length / xs.length).toBeLessThanOrEqual(0.1)
   }, TIMEOUT)
-  it('グリッド総二階（seed 1・93案）: 中央値 ≥ 52%（実測 54.4。v7 は 47.5）、40%未満 ≤ 10%（実測 8.6%。v7 は 18.3%）', () => {
+  it('グリッド総二階（seed 1・93案）: 中央値 ≥ 52%（GEN_VERSION 9 の実測 56.0。v8 は 54.4、v7 は 47.5）、40%未満 ≤ 10%（実測 4.3%。v8 は 8.6%、v7 は 18.3%）', () => {
     build()
     const xs = pct(gridFull)
     expect(xs).toHaveLength(93)
     expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(52)
     expect(xs.filter((x) => x < 40).length / xs.length).toBeLessThanOrEqual(0.1)
   }, TIMEOUT)
-  it('グリッド部分二階（seed 1・99案）: 中央値 ≥ 54%（実測 54.5。v7 は 54.3）、40%未満 ≤ 10%', () => {
+  it('グリッド部分二階（seed 1・99案）: 中央値 ≥ 54%（GEN_VERSION 9 の実測 60.3。v8 は 54.5、v7 は 54.3）、40%未満 ≤ 10%', () => {
     build()
     const xs = pct(gridPart)
     expect(xs).toHaveLength(99)

@@ -224,8 +224,8 @@ function storageRate(p: Plan): number {
  * seed による選抜（GEN_VERSION 9。R-SEL-05・R-SEL-10・R-SEL-12）:
  * 最良から8点以内の窓を Gumbel キー（温度2）の降順に並べ（乱数列は v8 と同じ）、
  * 1) 概念パス: 「考え方」(conceptKey) が選んだ案と重ならず、重なり距離が最初のしきい値を超える案を採る。
- *    1案目より個室収納の付属率が低い案、1案目より直下率が 10pt 以上低い2階建ては採らない。
- * 2) 形のパス: 重なり距離のしきい値を 0.20 → 0.15 → 0.10 と緩めて残りを埋める。
+ *    1案目より個室収納の付属率が低い案、1案目より直下率が 10pt を超えて低い2階建ては採らない（ガード）。
+ * 2) 形のパス: 重なり距離のしきい値を 0.20（ガードあり → なし）→ 0.15 → 0.10 と緩めて残りを埋める。
  * 3) 補充: 抽選順 → pool 順（距離を見ない。v8 と同じ）。pool は書き換えない。
  */
 export function selectPlans(pool: readonly ScoredPlan[], seed: number, count = 3): ScoredPlan[] {
@@ -247,23 +247,26 @@ export function selectPlans(pool: readonly ScoredPlan[], seed: number, count = 3
     const keys = new Set<string>()
     const sr0 = storageRate(first)
     const ch0 = chokkaRate(first)
+    /** U3 のガード: 1案目より収納付属率が低い、または直下率が 10pt を超えて低い案は採らない */
+    const guardOk = (c: ScoredPlan) => {
+      if (storageRate(c) < sr0) return false
+      const ch = chokkaRate(c)
+      return !(ch0 !== null && ch !== null && ch < ch0 - CHOKKA_MARGIN)
+    }
     for (const c of order) {
       if (picked.length >= count) break
       const k = conceptKey(c)
       if (keys.has(k)) continue
-      if (picked.length > 0) {
-        if (storageRate(c) < sr0) continue
-        const ch = chokkaRate(c)
-        if (ch0 !== null && ch !== null && ch < ch0 - CHOKKA_MARGIN) continue
-        if (!farEnough(c, SHAPE_STEPS[0])) continue
-      }
+      if (picked.length > 0 && !(guardOk(c) && farEnough(c, SHAPE_STEPS[0]))) continue
       picked.push(c)
       keys.add(k)
     }
-    for (const th of SHAPE_STEPS) {
+    // 形のパス: 最初の段（0.20）だけ、ガードあり → なしの2回に分ける（件数の保証は変えない）
+    const shapeSteps: [number, boolean][] = [[SHAPE_STEPS[0], true], ...SHAPE_STEPS.map((th): [number, boolean] => [th, false])]
+    for (const [th, guarded] of shapeSteps) {
       for (const c of order) {
         if (picked.length >= count) break
-        if (!picked.includes(c) && farEnough(c, th)) picked.push(c)
+        if (!picked.includes(c) && (!guarded || guardOk(c)) && farEnough(c, th)) picked.push(c)
       }
     }
   }

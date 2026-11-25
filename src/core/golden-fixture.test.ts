@@ -258,6 +258,13 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
         for (const c of v9.cases.filter((x) => x.name === name)) for (const p of c.plans) expect(keys.has(p.key), `${name} ${p.key}`).toBe(true)
       }
     }, 120_000)
+    it('fixture の grid の各案の key も候補プールにある案（条件ごと。キー重複なし）', () => {
+      for (const [id, keys] of Object.entries(v9.grid)) {
+        const pool = new Set<string>(candidatePool(copy(JSON.parse(id) as PlanConfig)).map(planKey))
+        expect(new Set(keys).size, id).toBe(keys.length)
+        for (const k of keys) expect(pool.has(k), `${id} ${k}`).toBe(true)
+      }
+    }, 300_000)
   })
 
   // 移行検証（fixture どうしの記録。現行の生成は v8）: GEN_VERSION 7 はスコア「採光」を「二面採光」に置き換えた（棄却はしないので、プールの件数・3案が出る条件は不変。順位だけが変わる）
@@ -387,7 +394,7 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       expect(quantile(hall, 0.5)).toBeLessThanOrEqual(8.5)
       expect(hall.filter((h) => h <= 8).length / hall.length).toBeGreaterThanOrEqual(0.40)
     })
-    it('グリッド2階建て: 直下率の中央値 ≥ 52%（GEN_VERSION 8 の実測 54.4%。v7 は 47.5%）、40%未満の案 ≤ 10%（実測 8.6%。v7 は 18.3%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
+    it('グリッド2階建て: 直下率の中央値 ≥ 52%（GEN_VERSION 9 の実測 56.0%。v8 は 54.4%、v7 は 47.5%）、40%未満の案 ≤ 10%（実測 4.3%。v8 は 8.6%、v7 は 18.3%）、1Fの LDK 面積の中央値 ≥ 90 セル²（v5 の値。実測 104）', () => {
       const two = gridPlans.filter((p) => p.floors.length === 2)
       expect(two.length).toBeGreaterThan(80)
       const rates = pct(two.map(chokkaRate))
