@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { backDoorCandidates, BACKDOOR_W } from './backdoor'
+import { backDoorCandidates, BACKDOOR_W, washerRoom } from './backdoor'
 import { computeDoors } from './derive'
 import { gridFullSample, gridPartSample } from './fixtureSamples'
 import { GEN_VERSION, generatePlans } from './generate'
-import { laundryRoutes, laundryStats, type LaundryStats } from './laundry'
-import { siteLayout, siteStats, DRY_D, DRY_L, type SiteRect } from './site'
+import { computeFlows } from '../lib/flow'
+import { laundryRoutes, laundryStats, makeRouter, type LaundryStats } from './laundry'
+import { siteLayout, siteStats, CAR_D, DRY_D, DRY_L, WRAP_MARGIN, type SiteRect } from './site'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, laundryIndependent, quantile } from './testing'
-import type { Plan, PlanConfig } from './types'
+import type { Plan, PlanConfig, Room } from './types'
 
 const POPULAR = [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)]
 const CFG = { parking: 1, garden: 1 }
@@ -39,14 +40,28 @@ describe('laundryStats: 洗濯動線の観測（生成・スコアには効か�
     it(`${name}: 庭へは全案 LDK を横切る（構造の不変条件）。勝手口は大半の案に付き、干す場所までは庭の約4割の長さ`, () => {
       const ss = stats(xs)
       expect(ss.length).toBeGreaterThan(50)
-      for (const s of ss) {
-        expect(s.toGarden?.crossesLdk).toBe(true)
-        expect(s.toGarden?.floors).toBe(0) // 1F の洗濯機から 1F の庭
+      for (const [i, s] of ss.entries()) {
+        const plan = xs[i]?.plan
+        const g = s.toGarden
+        expect(g).not.toBeNull()
+        expect(g?.floors).toBe(0) // 1F の洗濯機から 1F の庭
+        // 洗濯機の部屋から出て LDK で終わる。途中に個室は入らない
+        expect(g?.rooms[0]).toBe(plan ? washerRoom(plan) : undefined)
+        expect(g?.rooms[g.rooms.length - 1]?.type).toBe('ldk')
+        expect(g?.crossesLdk).toBe(true)
       }
       const withBack = ss.filter((s) => s.backDoor !== null)
       expect(rate(withBack.length, ss.length)).toBeGreaterThanOrEqual(th.cover)
       // 勝手口があれば、干す場所は勝手口（庭ではない）。なければ庭
-      for (const s of ss) expect(s.toDry).toBe(s.backDoor ? s.toDry : s.toGarden)
+      for (const [i, s] of ss.entries()) {
+        const x = xs[i]
+        if (!x) continue
+        if (!s.backDoor) { expect(s.toDry).toBe(s.toGarden); continue }
+        const bd = siteLayout(x.plan, x.cfg).backDoor
+        expect(s.toDry).not.toBe(s.toGarden)
+        expect(s.toDry?.rooms[0]).toBe(washerRoom(x.plan))
+        expect(s.toDry?.rooms[s.toDry.rooms.length - 1]).toBe(bd?.room) // 勝手口のある部屋で終わる
+      }
       const dry = med(ss, (s) => s.toDry?.len)
       const garden = med(ss, (s) => s.toGarden?.len)
       expect(dry * 0.455).toBeLessThanOrEqual(th.dryMaxM)
@@ -128,7 +143,8 @@ describe('勝手口と物干し場の導出（R-FLOW-07・R-IN-09）', () => {
           expect(c.w).toBe(BACKDOOR_W)
           expect(c.side === 'W' ? c.room.x === 0 && c.x === 0 : c.room.x + c.room.w === plan.W && c.x === plan.W).toBe(true)
           expect(c.y - BACKDOOR_W / 2 >= c.room.y && c.y + BACKDOOR_W / 2 <= c.room.y + c.room.h).toBe(true)
-          expect(c.room.type === (c.kind === 'B' ? c.room.type : 'hall')).toBe(true)
+          if (c.kind === 'B') expect(c.room).toBe(washerRoom(plan))
+          else expect(c.room.type).toBe('hall')
         }
         // B が C より先。同じ種別の中では駐車と反対の側が先
         const kinds = cs.map((c) => c.kind).join('')
@@ -158,21 +174,25 @@ describe('勝手口と物干し場の導出（R-FLOW-07・R-IN-09）', () => {
         expect(d.y >= 0 && d.y + d.h <= plan.H).toBe(true) // 建物の南端を超えない
         // 勝手口の位置が物干し場の長さの範囲にある
         expect(L.backDoor.y >= d.y && L.backDoor.y <= d.y + d.h).toBe(true)
-        expect(d.x >= L.lot.x && d.x + d.w <= L.lot.x + L.lot.w).toBe(true)
+        // 敷地（lot）は拡幅を含まない（PR-L2 まで）。拡幅の観測値を足せば物干し場が収まる
+        const lotX0 = L.lot.x - (L.backDoor.side === 'W' ? L.lotWidenByDrying : 0)
+        const lotX1 = L.lot.x + L.lot.w + (L.backDoor.side === 'E' ? L.lotWidenByDrying : 0)
+        expect(d.x >= lotX0 && d.x + d.w <= lotX1).toBe(true)
         const others = [L.building, ...L.cars, ...(L.porch ? [L.porch] : []), ...L.approach, ...L.garden, ...(L.deck ? [L.deck] : [])]
         for (const o of others) expect(overlap(d, o), JSON.stringify(c)).toBe(false)
         if (L.lotWidenByDrying > 0) widened++
-        // その側の余白は DRY_D 以上。広げたときはちょうど DRY_D（広げ幅 = DRY_D − 元の余白 > 0）
+        // lot の余白 + 観測の拡幅 = DRY_D 以上。広げたときはちょうど DRY_D（広げ幅 = DRY_D − lot の余白 > 0）
         const margin = L.backDoor.side === 'W' ? -L.lot.x : L.lot.x + L.lot.w - plan.W
-        expect(margin).toBeGreaterThanOrEqual(DRY_D)
-        if (L.lotWidenByDrying > 0) expect(margin).toBe(DRY_D)
+        expect(margin + L.lotWidenByDrying).toBeGreaterThanOrEqual(DRY_D)
+        if (L.lotWidenByDrying > 0) expect(margin + L.lotWidenByDrying).toBe(DRY_D)
+        else expect(margin).toBeGreaterThanOrEqual(DRY_D)
       }
     }
     expect(placed).toBeGreaterThan(300)
     expect(widened).toBeGreaterThan(0)
   })
 
-  it('庭の入力とは独立に物干し場を置く（庭なしでも置く）。駐車・庭を変えても勝手口の候補は同じ', () => {
+  it('設計上は庭の入力と独立に物干し場を置く（庭なしでも置く）。実測では庭の有無で物干し場が変わる案は0件', () => {
     for (const { plan } of samples.slice(0, 40)) {
       const g0 = siteLayout(plan, { parking: 1, garden: 0 })
       const g1 = siteLayout(plan, { parking: 1, garden: 1 })
@@ -196,7 +216,108 @@ describe('勝手口と物干し場の導出（R-FLOW-07・R-IN-09）', () => {
       const L = siteLayout(plan, cfg)
       expect(s.dryingSide).toBe(L.drying && L.backDoor ? L.backDoor.side : null)
       expect(s.lotWidenByDrying).toBe(L.lotWidenByDrying)
-      expect(L.lot.w - L.lotWidenByDrying).toBeGreaterThan(0)
+      // PR-L1 では拡幅は観測値のみで、lot（UI の敷地）には含まない
+      expect(L.lot).toEqual(siteLayout(plan, { ...cfg, parking: cfg.parking }).lot)
+      expect(L.lotWidenByDrying).toBeGreaterThanOrEqual(0)
+      if (L.lotWidenByDrying > 0) expect(L.drying).not.toBeNull()
     }
+  })
+
+  it('lot は物干し場の有無・拡幅で変わらない（物干し場がなくても同じ幅）', () => {
+    let widened = 0
+    for (const { plan } of samples) {
+      for (const c of COMBOS) {
+        const L = siteLayout(plan, c)
+        const nSide = L.cars.filter((x) => x.mode === 'side').length
+        const wrap = L.wrap ? WRAP_MARGIN : 2
+        expect(L.lot.w).toBe(plan.W + 2 + wrap + 6 * nSide)
+        if (L.lotWidenByDrying > 0) widened++
+      }
+    }
+    expect(widened).toBeGreaterThan(0)
+  })
+})
+
+// 実標本では通らない分岐を、ldk の位置を差し替えた合成の案で通す（siteLayout は部屋の矩形だけを読む）
+const withLdk = (plan: Plan, x: number, w: number, y?: number, h?: number): Plan => ({
+  ...plan,
+  floors: plan.floors.map((fl, i) => i === 0 ? { ...fl, rooms: fl.rooms.map((r): Room => r.type === 'ldk' ? { ...r, x, w, ...(y !== undefined ? { y } : {}), ...(h !== undefined ? { h } : {}) } : r) } : fl),
+})
+
+describe('実標本で通らない分岐（合成の案）', () => {
+  const all = [...full, ...part].map((x) => x.plan)
+
+  it('横付けの駐車と y が重なる側の候補は飛ばし、別の候補を採る', () => {
+    let hit = 0
+    for (const base of all) {
+      const ldk0 = base.floors[0]?.rooms.find((r) => r.type === 'ldk')
+      if (!ldk0) continue
+      for (const parkSide of ['W', 'E'] as const) {
+        // 駐車 2・庭なし: LDK を駐車側の端に幅 6 で置くと前庭に台が入らず、両方が横付け（奥行 4 の前庭なので台は建物の南側に食い込む）
+        const plan = withLdk(base, parkSide === 'W' ? 0 : base.W - 6, 6)
+        const L = siteLayout(plan, { parking: 2, garden: 0 })
+        if (L.side !== parkSide) continue
+        const cs = backDoorCandidates(plan, L.side)
+        const first = cs[0]
+        const sideCars = L.cars.filter((c) => c.mode === 'side')
+        if (!first || first.side !== L.side || sideCars.length === 0) continue
+        const dy0 = Math.max(0, Math.min(Math.round(first.y - 1), plan.H - DRY_L))
+        const dh = Math.min(DRY_L, plan.H - dy0)
+        if (!sideCars.some((c) => dy0 < c.y + CAR_D && c.y < dy0 + dh)) continue // 最初の候補が実際に駐車と重なる合成だけ数える
+        hit++
+        expect(L.cars.filter((c) => c.mode === 'side').length).toBe(2)
+        const bd = L.backDoor
+        // 採った候補は最初の候補ではない（飛ばした）。置いたなら、駐車とは重ならない
+        expect(bd === null || bd.kind !== first.kind || bd.side !== first.side).toBe(true)
+        if (L.drying) for (const c of sideCars) expect(overlap(L.drying, c)).toBe(false)
+      }
+    }
+    expect(hit).toBeGreaterThan(0)
+  })
+
+  it('庭の回り込みの帯と物干し場が重なる分は、庭から外す', () => {
+    let hit = 0
+    for (const base of all) {
+      const W = base.W, H = base.H
+      for (const parkSide of ['W', 'E'] as const) {
+        // LDK を駐車と反対の角に、板の全高で置く（回り込みの帯は y = 0〜H）
+        const ldkX = parkSide === 'W' ? W - 8 : 0
+        const plan = withLdk(base, ldkX, 8, 0, H)
+        const L = siteLayout(plan, { parking: 0, garden: 1 })
+        if (!L.wrap || !L.drying || L.side !== parkSide) continue
+        const band: SiteRect = { x: parkSide === 'W' ? W : -WRAP_MARGIN, y: 0, w: WRAP_MARGIN, h: H }
+        if (!overlap(band, L.drying)) continue
+        hit++
+        for (const g of L.garden) expect(overlap(g, L.drying)).toBe(false)
+        // 帯のうち物干し場でない部分は庭として残る
+        const area = L.garden.reduce((a, g) => a + Math.max(0, Math.min(g.x + g.w, band.x + band.w) - Math.max(g.x, band.x)) * Math.max(0, Math.min(g.y + g.h, band.y + band.h) - Math.max(g.y, band.y)), 0)
+        const cut = Math.max(0, Math.min(L.drying.x + L.drying.w, band.x + band.w) - Math.max(L.drying.x, band.x)) * Math.max(0, Math.min(L.drying.y + L.drying.h, band.y + band.h) - Math.max(L.drying.y, band.y))
+        expect(cut).toBeGreaterThan(0)
+        expect(area).toBeLessThanOrEqual(band.w * band.h - cut)
+      }
+    }
+    expect(hit).toBeGreaterThan(0)
+  })
+})
+
+describe('flow.ts の生活動線と laundry の経路の長さ（退行防止）', () => {
+  it('洗面が洗濯機の部屋の案で、LDK→洗面の動線の長さが laundry の洗面→LDK の経路長と一致する', () => {
+    let n = 0
+    for (const { plan } of [...popular, ...full, ...part]) {
+      const wash = washerRoom(plan)
+      const ldk = plan.floors[0]?.rooms.find((r) => r.type === 'ldk')
+      if (!wash || wash.type !== 'wash' || !ldk) continue
+      const life = computeFlows(plan, 0).find((f) => f.kind === 'life')
+      if (!life) continue
+      const cx = wash.x + wash.w / 2, cy = wash.y + wash.h / 2
+      const k = life.points.findIndex((p) => p.x === cx && p.y === cy)
+      if (k < 0) continue
+      let len = 0
+      for (let i = 0; i < k; i++) { const a = life.points[i], b = life.points[i + 1]; if (a && b) len += Math.hypot(b.x - a.x, b.y - a.y) }
+      const r = makeRouter(plan).route(wash, ldk)
+      expect(r?.len).toBeCloseTo(len, 6)
+      n++
+    }
+    expect(n).toBeGreaterThan(50)
   })
 })

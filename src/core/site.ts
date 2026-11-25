@@ -70,7 +70,7 @@ export interface SiteLayout {
   backDoor: BackDoor | null
   /** 物干し場（勝手口の外の建物の横。DRY_D × DRY_L）。backDoor がなければ null（庭ありならデッキが代わり） */
   drying: SiteRect | null
-  /** 物干し場の分だけ敷地の間口を広げた幅（セル。広げなかったら 0。lot.w に含まれる） */
+  /** 物干し場を置くのに必要な敷地の間口の広げ幅（セル。広げなくてよければ 0）。観測値のみで lot.w には含まれない（含めるのは描画と同時の PR-L2） */
   lotWidenByDrying: number
 }
 
@@ -146,8 +146,6 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
   // 横付けの駐車と y が重なる側は置けない。その側の余白が DRY_D 未満なら敷地を広げる
   let backDoor: BackDoor | null = null
   let drying: SiteRect | null = null
-  let lotX0 = x0
-  let lotX1 = x1
   let lotWidenByDrying = 0
   const sideCars = cars.filter((c) => c.mode === 'side')
   for (const bd of backDoorCandidates(plan, side)) {
@@ -159,13 +157,12 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
     drying = { x: bd.side === 'W' ? -DRY_D : W, y: dy0, w: DRY_D, h: dh }
     const have = bd.side === 'W' ? -x0 : x1 - W
     if (have < DRY_D) {
+      // 観測値のみ。lot には含めない（敷地図に物干し場が描かれる PR-L2 で、描画と同時に lot へ含める）
       lotWidenByDrying = DRY_D - have
-      if (bd.side === 'W') lotX0 = -DRY_D
-      else lotX1 = W + DRY_D
     }
     break
   }
-  const lot: SiteRect = { x: lotX0, y: -MARGIN, w: lotX1 - lotX0, h: H + D + MARGIN }
+  const lot: SiteRect = { x: x0, y: -MARGIN, w: x1 - x0, h: H + D + MARGIN }
 
   // 4. アプローチ: 玄関の南外壁の前のポーチ + 駐車（なければ道路）からの通路
   let porch: SiteRect | null = null
