@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { computeDoors, entryDoor } from './derive'
 import { generatePlans } from './generate'
-import { feasibility } from './program'
 import { ROOM, findEntry } from './rooms'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, ventLevelsIndependent, windowSidesIndependent } from './testing'
-import type { Plan, PlanConfig, Room, RoomType } from './types'
+import type { Plan, Room, RoomType } from './types'
 import { floorRect } from './types'
 import { computeWindows, windowStats } from './windows'
+import { gridFullSample, gridPartSample } from './fixtureSamples'
+import { GEN_VERSION } from './generate'
 
 const room = (type: RoomType, x: number, y: number, w: number, h: number): Room => ({
   type, name: type, x, y, w, h, area: w * h, target: ROOM[type].target, minArea: ROOM[type].minArea,
 })
 const FP = { x: 0, y: 0, W: 20, H: 14 }
+// 重い走査のテストは並列実行の負荷で既定の30秒を超えるので、明示的に延ばす
+const GRID_TIMEOUT = 600_000
 
 describe('computeWindows: 4方位・非居室・収納・玄関ドア', () => {
   it('居室は外壁に接する全ての面に付く（角部屋は両面）', () => {
@@ -94,7 +97,7 @@ describe('windowStats: 提示案の不変条件と実測', () => {
       const ind = windowSidesIndependent(p)
       expect(st.rooms.map((r) => [...r.sides].sort().join(''))).toEqual(ind.map((r) => [...r.sides].sort().join('')))
     }
-  })
+  }, GRID_TIMEOUT)
   // 仕様の試算（F3）は 74.4% で、実測 75.8% は +1.4pt 高い。標本は同じ人気6条件×6 seed なので標本差ではなく、試算方法の差
   // （試算は再スコア後の安定ソートと丸めで順位を決めており、本番の選抜〔Gumbel-top-k〕の同点・端数の扱いと違う）
   it('二面採光率の退行防止の下限（人気6条件 ≥0.70。GEN_VERSION 7 の実測 75.8%。v6 は 66.7%）', () => {
@@ -117,32 +120,9 @@ describe('windowStats: 提示案の不変条件と実測', () => {
   })
 })
 
-/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 917室。GEN_VERSION 7 までは 918室。v8 の寄せで2階のスコアが変わり選抜される案が入れ替わったため。案数は同じ 207）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 917室は仕様の 916室と 1室違う。生成に ~90 秒かかるので1度だけ作る */
-let gridCache: { full: Plan[]; part: Plan[] } | null = null
+/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 917室。GEN_VERSION 7 までは 918室。v8 の寄せで2階のスコアが変わり選抜される案が入れ替わったため。案数は同じ 207）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 917室は仕様の 916室と 1室違う。fixture（gen-v9.json・gen-v9-partial.json）の提示案の planKey から組み直す（ライブ生成しない）。版の一致は下で検査する */
 function grid(): { full: Plan[]; part: Plan[] } {
-  if (gridCache) return gridCache
-  const full: Plan[] = []
-  const part: Plan[] = []
-  for (const floors of [1, 2] as const) {
-    for (const area of [20, 23, 26, 30, 36, 40]) {
-      for (const rooms of [2, 3, 4, 5]) {
-        for (const feats of [[], ['doma'], ['void', 'study'], ['washitsu', 'laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-          const cfg: PlanConfig = { area, floors, rooms, parking: 1, garden: 1, feats }
-          if (feasibility(cfg).ok) full.push(...generatePlans(cfg, 1))
-        }
-      }
-    }
-  }
-  for (const area of [24, 28, 32, 36, 40]) {
-    for (const nr of [2, 3, 4, 5]) {
-      for (const feats of [[], ['doma'], ['void'], ['laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-        const cfg: PlanConfig = { area, floors: 2, rooms: nr, parking: 1, garden: 1, feats, story: 'partial' }
-        if (feasibility(cfg).ok) part.push(...generatePlans(cfg, 1))
-      }
-    }
-  }
-  gridCache = { full, part }
-  return gridCache
+  return { full: gridFullSample().plans, part: gridPartSample().plans }
 }
 const rate = (plans: Plan[]) => {
   let two = 0, n = 0, c = 0
@@ -154,7 +134,13 @@ const rate = (plans: Plan[]) => {
   }
   return { two: two / n, c: c / n, cCount: c, n }
 }
-const GRID_TIMEOUT = 600_000
+
+describe('標本 fixture の版', () => {
+  it('gen-v9.json・gen-v9-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+    expect(gridFullSample().genVersion).toBe(GEN_VERSION)
+    expect(gridPartSample().genVersion).toBe(GEN_VERSION)
+  })
+})
 
 describe('windowStats: feasibility グリッド（seed 1）の実測と退行防止', () => {
   it('総二階・平屋（207案・居室917室）: 二面採光率 ≥0.51（GEN_VERSION 7 の実測 53.1%。v6 は 45.3%）、通風 C ≤1.5%（実測 7室 = 0.8%。v6 は 10室）', () => {
