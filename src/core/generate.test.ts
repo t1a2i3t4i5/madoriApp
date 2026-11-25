@@ -5,7 +5,7 @@ import { planKey } from './enumerate'
 import { shortSideViolations, validatePlan } from './validate'
 import { diagnoseEmpty, fewReason, feasibility } from './program'
 import { BOUNDARY, CONDITIONS, SEEDS, ZERO_PLAN, defined, independentViolations } from './testing'
-import type { Plan, PlanConfig, Room, ScoredPlan } from './types'
+import type { Plan, PlanConfig, Room, RoomType, ScoredPlan } from './types'
 
 const POPULAR = CONDITIONS.slice(0, 3).map(({ name, cfg }): [string, PlanConfig] => [name, cfg])
 
@@ -271,9 +271,23 @@ describe('selectPlans の補充順（合成 pool）', () => {
     expect(pool).toEqual(copy)
     expect(selectPlans([], 1)).toEqual([])
   })
-  it('多様な案は多様性しきい値つきで先に選ばれる（遠い案が窓内にあれば、同位置の案より優先）', () => {
-    const far = synth(6, 49, { arch: 1 })
-    const p = [synth(0, 50), synth(0, 49.5), far]
+  it('多様な案は重なりのしきい値つきで先に選ばれる（床全体を覆う配置で、重なりが小さい案が窓内にあれば、同じ配置の案より優先）', () => {
+    // synth は部屋が床の一部だけで、どの2案も重なりが小さく距離が常に大きい。ここでは床全体を覆う部屋で重なりを作る
+    const full = (types: [RoomType, number][], total: number, arch: 0 | 1 | 2 = 0): ScoredPlan => {
+      let x = 0
+      const rooms: Room[] = types.map(([type, w]) => {
+        const r: Room = { type, name: type, x, y: 0, w, h: 10, area: w * 10, target: w * 10, minArea: 1 }
+        x += w
+        return r
+      })
+      const base = synth(0, total, { arch })
+      const plan: Plan = { W: 10, H: 10, floors: [{ label: '1F', rooms }], arch, totalArea: 100 }
+      return { ...base, ...plan, sig: planSignature(plan, false), sigM: planSignature(plan, true) }
+    }
+    const same1 = full([['ldk', 10]], 50)
+    const same2 = full([['ldk', 10]], 49.5)
+    const far = full([['ldk', 5], ['entry', 5]], 49, 1) // same1 との重なり 0.5 → 距離 0.5 > 0.20
+    const p = [same1, same2, far]
     for (const seed of SEEDS) expect(selectPlans(p, seed, 2)).toContain(far)
   })
   it('2^32 以上の seed は上位ビットを畳み込む（seed32 = 下位 ^ 上位）', () => {

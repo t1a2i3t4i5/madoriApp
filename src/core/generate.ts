@@ -7,10 +7,13 @@ import { footprintList, footprintPairs } from './slicing'
 import { STAIR_HS } from './stair'
 import { validateFloor, validatePlan } from './validate'
 import { scorePlan } from './score'
-import { planDistance, planSignature } from './diversity'
+import { planSignature } from './diversity'
+import { conceptKey, overlap } from './similarity'
+import { chokkaRate } from './chokka'
+import { privateStorageCount } from './closets'
 
 /** 生成ロジックのバージョン。アルゴリズムを変えたら上げる（URLハッシュに保存） */
-export const GEN_VERSION = 8
+export const GEN_VERSION = 9
 
 /** 外形候補の件数（縦横比 0.62〜1.62 の制限は footprintList 側で不変） */
 export const FOOTPRINT_LIMIT = 10
@@ -201,17 +204,29 @@ export function generatePlansUncached(cfg: PlanConfig, seed: number): ScoredPlan
 const WINDOW = 8
 /** Gumbel の温度（スコア差を温度2で確率に直す） */
 const TEMPERATURE = 2
-/** 3案の多様性しきい値 */
-const DIVERSITY = 0.16
+/** 概念パス・形のパスの重なりしきい値（1 − overlap がこれを超える案だけ採る。［暫定］）。形のパスは先頭から段階的に緩める */
+const SHAPE_STEPS = [0.2, 0.15, 0.1] as const
+/** 概念パスで、1案目より下がってよい直下率の幅（U3 のガード） */
+const CHOKKA_MARGIN = 0.1
 
 /** 53bit までの seed を 32bit に畳む */
 function seed32(seed: number): number {
   return (seed >>> 0) ^ (Math.floor(seed / 2 ** 32) >>> 0)
 }
 
+/** 個室収納の付属率（個室がなければ 1）。収納ガードの比較用 */
+function storageRate(p: Plan): number {
+  const { with: w, total } = privateStorageCount(p)
+  return total === 0 ? 1 : w / total
+}
+
 /**
- * seed による選抜: 最良から8点以内の窓の中で Gumbel-top-k 抽選（温度2）→ 多様性しきい値つきの貪欲で最大3案。
- * 足りなければ抽選順、続いて pool 順で補充する。pool は書き換えない。
+ * seed による選抜（GEN_VERSION 9。R-SEL-05・R-SEL-10・R-SEL-12）:
+ * 最良から8点以内の窓を Gumbel キー（温度2）の降順に並べ（乱数列は v8 と同じ）、
+ * 1) 概念パス: 「考え方」(conceptKey) が選んだ案と重ならず、重なり距離が最初のしきい値を超える案を採る。
+ *    1案目より個室収納の付属率が低い案、1案目より直下率が 10pt 以上低い2階建ては採らない。
+ * 2) 形のパス: 重なり距離のしきい値を 0.20 → 0.15 → 0.10 と緩めて残りを埋める。
+ * 3) 補充: 抽選順 → pool 順（距離を見ない。v8 と同じ）。pool は書き換えない。
  */
 export function selectPlans(pool: readonly ScoredPlan[], seed: number, count = 3): ScoredPlan[] {
   const best = pool[0]
@@ -225,9 +240,32 @@ export function selectPlans(pool: readonly ScoredPlan[], seed: number, count = 3
     })
   const order = keyed.slice().sort((a, b) => b.key - a.key).map((k) => k.p)
   const picked: ScoredPlan[] = []
-  for (const c of order) {
-    if (picked.length >= count) break
-    if (picked.every((p) => planDistance(p, c) > DIVERSITY)) picked.push(c)
+  const farEnough = (c: ScoredPlan, th: number) => picked.every((p) => 1 - overlap(p, c) > th)
+
+  const first = order[0]
+  if (first) {
+    const keys = new Set<string>()
+    const sr0 = storageRate(first)
+    const ch0 = chokkaRate(first)
+    for (const c of order) {
+      if (picked.length >= count) break
+      const k = conceptKey(c)
+      if (keys.has(k)) continue
+      if (picked.length > 0) {
+        if (storageRate(c) < sr0) continue
+        const ch = chokkaRate(c)
+        if (ch0 !== null && ch !== null && ch < ch0 - CHOKKA_MARGIN) continue
+        if (!farEnough(c, SHAPE_STEPS[0])) continue
+      }
+      picked.push(c)
+      keys.add(k)
+    }
+    for (const th of SHAPE_STEPS) {
+      for (const c of order) {
+        if (picked.length >= count) break
+        if (!picked.includes(c) && farEnough(c, th)) picked.push(c)
+      }
+    }
   }
   for (const list of [order, pool]) {
     for (const c of list) {
