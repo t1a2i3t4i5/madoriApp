@@ -4,6 +4,8 @@ import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
+import { SiteSvg } from './SiteSvg'
+import { siteCaption, siteLayout } from '../core/site'
 import { floorAreaLabel, meters } from '../lib/format'
 import { storageCount } from '../lib/metrics'
 import { clampFloor } from '../lib/floor'
@@ -38,15 +40,20 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
     >
       <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-1.5 right-1.5 z-10" />
       <div className="border-b border-line bg-paper p-1 print:hidden">
-        <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+        <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} sweepWindows={cfg.garden > 0} scale={scale} />
       </div>
       {/* 印刷専用: 画面は表示中の階だけなので、印刷時は全階を並べる（pattern id は画面用と分ける） */}
       <div data-print-floors className="hidden gap-2 print:grid print:grid-cols-2" aria-hidden="true">
         {plan.floors.map((_, fi) => (
           <div key={fi} className="border border-plan-line bg-paper p-1.5">
-            <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} scale={scale} />
+            <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} sweepWindows={cfg.garden > 0} scale={scale} />
           </div>
         ))}
+        {/* 全階の後に敷地図を1つ足す（R-DRAW-27） */}
+        <div className="border border-plan-line bg-paper p-1.5">
+          <SiteSvg cfg={cfg} plan={plan} uid={`${uidPrefix}${index}s`} />
+          <p className="mt-1 text-[9px] leading-snug text-ink2">{siteCaption(siteLayout(plan, cfg))}</p>
+        </div>
       </div>
       <div className="p-4 pt-3">
         {cfg.floors === 2 && <div className="mb-3 -mt-0.5"><FloorTabs value={floor} onChange={setFloor} /></div>}

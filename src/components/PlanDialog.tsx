@@ -3,6 +3,7 @@ import type { PlanConfig, ScoredPlan } from '../core/types'
 import { SCORE_WEIGHTS } from '../core/score'
 import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
+import { siteCaption, siteLayout } from '../core/site'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
@@ -104,7 +105,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
           </span>
         </div>
         <div ref={svgBoxRef} className="mt-3 rounded-2xl border border-plan-line bg-paper p-2">
-          <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip showFurniture={furniture} showFlow={flow} />
+          <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip sweepWindows={cfg.garden > 0} showFurniture={furniture} showFlow={flow} />
         </div>
         <div className="mt-4 grid gap-[18px] max-[640px]:grid-cols-1 min-[641px]:grid-cols-2">
           <div>
@@ -137,8 +138,9 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
               </div>
               )
             })}
-            <h3 className="mt-[18px] mb-2 text-[13px] font-bold">敷地のイメージ（南道路）</h3>
-            <div className="rounded-xl border border-plan-line bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} /></div>
+            <h3 className="mt-[18px] mb-2 text-[13px] font-bold">敷地の配置（南道路）</h3>
+            <div className="rounded-xl border border-plan-line bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} uid="dlgsite" /></div>
+            <p className="mt-2 text-[11.5px] leading-[1.7] text-ink2">{siteCaption(siteLayout(plan, cfg))}</p>
           </div>
         </div>
       </div>

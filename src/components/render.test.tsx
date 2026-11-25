@@ -9,6 +9,7 @@ import { FloorSvg, shimoyaRects } from './FloorSvg'
 import { Gallery } from './Gallery'
 import { PlanCard } from './PlanCard'
 import { PlanDialog } from './PlanDialog'
+import { SiteSvg } from './SiteSvg'
 
 /** 描画で例外が出ないことの煙テスト（SSR）。見た目の確認は別途ブラウザで行う */
 describe('コンポーネントの描画', () => {
@@ -167,6 +168,54 @@ describe('コンポーネントの描画', () => {
     // pattern id が画面用と印刷用で重複しない
     const ids = [...html.matchAll(/<pattern id="([^"]+)"/g)].map((m) => m[1])
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('SiteSvg: 駐車の台数・庭・デッキ・生け垣・道路が配置どおりに出る（駐車・庭を変えると図が変わる）', () => {
+    const plan = defined(plans[0])
+    const site = (parking: number, garden: number) => renderToStaticMarkup(<SiteSvg cfg={{ ...cfg, parking, garden }} plan={plan} uid="t" />)
+    const htmls = new Set<string>()
+    for (const parking of [0, 1, 2]) for (const garden of [0, 1, 2]) htmls.add(site(parking, garden))
+    expect(htmls.size).toBe(9)
+    expect(site(2, 1)).toContain('駐車 2台')
+    expect(site(0, 1)).not.toContain('駐車')
+    expect(site(1, 1)).toContain('>庭</text>')
+    expect(site(1, 1)).toContain('デッキ')
+    expect(site(1, 0)).toContain('生け垣')
+    expect(site(1, 0)).not.toContain('>庭</text>')
+    expect(site(1, 1)).toContain('南道路')
+    // 間取りの簡略版: LDK と玄関のラベル。家具・動線は描かない
+    expect(site(1, 1)).toContain('>LDK</text>')
+    expect(site(1, 1)).not.toContain('動線')
+    // 図面の pattern id と衝突しない（uid 付き）
+    expect(site(1, 1)).toContain('id="deckt"')
+  })
+
+  it('FloorSvg: 庭ありの 1F は LDK の南の窓を掃き出しに描き分け、2F・庭なしでは描かない。窓の線（青の二重線）の本数は変わらない', () => {
+    const plan = defined(plans.find((p) => p.floors.length === 2))
+    const base = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" />)
+    const sweep = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" sweepWindows />)
+    const count = (h: string, re: RegExp) => (h.match(re) ?? []).length
+    expect(count(sweep, /<path d="M [\d.]+ [\d.]+ v 0\.7 M/g)).toBeGreaterThan(0)
+    expect(count(base, /<path d="M [\d.]+ [\d.]+ v 0\.7 M/g)).toBe(0)
+    expect(count(sweep, /stroke="#2f7fb0"/g)).toBeGreaterThan(count(base, /stroke="#2f7fb0"/g))
+    expect(count(sweep, /<line /g)).toBe(count(base, /<line /g))
+    expect(count(renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={1} uid="t" sweepWindows />), /v 0\.7 M/g)).toBe(0)
+  })
+
+  it('PlanCard: 印刷専用ブロックの全階の後に敷地図が足される。画面用の図面・PNG の対象（表示中の階の図面）には敷地図を入れない', () => {
+    const plan = defined(plans.find((p) => p.floors.length === 2))
+    const html = renderToStaticMarkup(<PlanCard cfg={cfg} plan={plan} index={0} scale={{ maxW: plan.W, maxH: plan.H }} onOpen={noop} starred={false} onToggleStar={noop} />)
+    const printPart = html.slice(html.indexOf('data-print-floors'))
+    expect(printPart.indexOf('2Fの間取り図')).toBeLessThan(printPart.indexOf('敷地の配置図'))
+    expect(html.slice(0, html.indexOf('data-print-floors'))).not.toContain('敷地の配置図')
+    expect(printPart).toContain('敷地の目安')
+    const ids = [...html.matchAll(/<pattern id="([^"]+)"/g)].map((m) => m[1])
+    expect(new Set(ids).size).toBe(ids.length)
+    // PNG 書き出しは PlanDialog の図面の箱（svgBoxRef）の最初の svg だけを使う。敷地図はその箱の外にある
+    const dlg = readFileSync(new URL('./PlanDialog.tsx', import.meta.url), 'utf8')
+    const box = dlg.slice(dlg.indexOf('<div ref={svgBoxRef}'), dlg.indexOf('</div>', dlg.indexOf('<div ref={svgBoxRef}')))
+    expect(box).toContain('<FloorSvg')
+    expect(box).not.toContain('SiteSvg')
   })
 
   it('クローゼット付きの案: カードに「＋収納 n室」、部屋一覧に「＋CL」', () => {
