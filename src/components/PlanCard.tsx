@@ -5,7 +5,7 @@ import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
-import { siteCaption, siteLayout } from '../core/site'
+import { explainSite, siteCaption, siteLayout } from '../core/site'
 import { floorAreaLabel, meters } from '../lib/format'
 import { storageCount } from '../lib/metrics'
 import { clampFloor } from '../lib/floor'
@@ -69,7 +69,11 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
             <span key={t} className="rounded-full border border-line bg-chip px-2.5 py-0.5 text-[11.5px] font-medium text-ink2">{t}</span>
           ))}
         </p>
-        <p className="mb-3 text-[12.5px] leading-[1.8] text-ink2">{explainPlan(cfg, plan)}</p>
+        <p className="mb-3 text-[12.5px] leading-[1.8] text-ink2">
+          {explainPlan(cfg, plan)}
+          {/* 敷地の文は explainPlan とは別（R-TEXT-10）。解説文の後に続ける */}
+          {explainSite(cfg, plan) && <span data-site-text> {explainSite(cfg, plan)}</span>}
+        </p>
         <div className="flex items-center gap-3 text-[12px] text-ink2">
           <span>スコア</span>
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface2"><i className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, plan.score.total))}%` }} /></span>

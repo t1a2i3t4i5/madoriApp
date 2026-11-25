@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { explainPlan } from '../core/explain'
+import { explainSite } from '../core/site'
 import { enumeratePlans, galleryPlans } from '../core/enumerate'
 import { CONDITIONS, PARTIAL_CONDITIONS, defined } from '../core/testing'
 import { addFavorite } from '../lib/favorites'
@@ -8,6 +10,7 @@ import { FavoritesShelf } from './FavoritesShelf'
 import { FloorSvg, shimoyaRects } from './FloorSvg'
 import { Gallery } from './Gallery'
 import { PlanCard } from './PlanCard'
+import { ConditionForm } from './ConditionForm'
 import { PlanDialog } from './PlanDialog'
 import { SiteSvg } from './SiteSvg'
 
@@ -216,6 +219,26 @@ describe('コンポーネントの描画', () => {
     const box = dlg.slice(dlg.indexOf('<div ref={svgBoxRef}'), dlg.indexOf('</div>', dlg.indexOf('<div ref={svgBoxRef}')))
     expect(box).toContain('<FloorSvg')
     expect(box).not.toContain('SiteSvg')
+  })
+
+  it('敷地の文: カードは解説文の後、拡大表示は敷地図の下に出る。explainPlan の文には混ぜない。駐車・庭を変えると文が変わる', () => {
+    const plan = defined(plans[0])
+    const site = explainSite(cfg, plan)
+    expect(site).not.toBe('')
+    expect(explainPlan(cfg, plan)).not.toContain(site)
+    const card = renderToStaticMarkup(<PlanCard cfg={cfg} plan={plan} index={0} scale={{ maxW: plan.W, maxH: plan.H }} onOpen={noop} starred={false} onToggleStar={noop} />)
+    expect(card).toContain(site)
+    expect(card.indexOf(explainPlan(cfg, plan))).toBeLessThan(card.indexOf(site))
+    const dlg = renderToStaticMarkup(<PlanDialog cfg={cfg} plan={plan} initialFloor={0} onClose={noop} starred={false} onToggleStar={noop} />)
+    expect(dlg.indexOf('敷地の配置図')).toBeLessThan(dlg.indexOf(site))
+    const other = renderToStaticMarkup(<PlanCard cfg={{ ...cfg, parking: 0, garden: 0 }} plan={plan} index={0} scale={{ maxW: plan.W, maxH: plan.H }} onOpen={noop} starred={false} onToggleStar={noop} />)
+    expect(other).not.toContain(site)
+    expect(other).toContain('生け垣')
+  })
+
+  it('ConditionForm: 駐車場・庭は生成に影響しない旨の注記がある', () => {
+    const html = renderToStaticMarkup(<ConditionForm state={{ ...cfg, seed: 1 }} onChange={noop} onGenerate={noop} onRandom={noop} />)
+    expect(html).toContain('生成には影響しません')
   })
 
   it('クローゼット付きの案: カードに「＋収納 n室」、部屋一覧に「＋CL」', () => {

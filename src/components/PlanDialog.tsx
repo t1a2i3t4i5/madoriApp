@@ -3,7 +3,7 @@ import type { PlanConfig, ScoredPlan } from '../core/types'
 import { SCORE_WEIGHTS } from '../core/score'
 import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
-import { siteCaption, siteLayout } from '../core/site'
+import { explainSite, siteCaption, siteLayout } from '../core/site'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
@@ -140,7 +140,8 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
             })}
             <h3 className="mt-[18px] mb-2 text-[13px] font-bold">敷地の配置（南道路）</h3>
             <div className="rounded-xl border border-plan-line bg-paper p-2"><SiteSvg cfg={cfg} plan={plan} uid="dlgsite" /></div>
-            <p className="mt-2 text-[11.5px] leading-[1.7] text-ink2">{siteCaption(siteLayout(plan, cfg))}</p>
+            {explainSite(cfg, plan) && <p className="mt-2 text-[12.5px] leading-[1.8] text-ink2">{explainSite(cfg, plan)}</p>}
+            <p className="mt-1 text-[11.5px] leading-[1.7] text-ink2">{siteCaption(siteLayout(plan, cfg))}</p>
           </div>
         </div>
       </div>
