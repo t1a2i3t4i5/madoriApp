@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { chokkaBreakdown, chokkaRate } from './chokka'
-import { generatePlans } from './generate'
-import { feasibility } from './program'
+import { GEN_VERSION, generatePlans } from './generate'
+import { gridFullSample, gridPartAltSample } from './fixtureSamples'
 import { ROOM } from './rooms'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, chokkaRate as chokkaRateIndependent, quantile } from './testing'
-import type { Plan, PlanConfig, Room, RoomType } from './types'
+import type { Plan, Room, RoomType } from './types'
 
 const room = (type: RoomType, x: number, y: number, w: number, h: number): Room => ({
   type, name: type, x, y, w, h, area: w * h, target: ROOM[type].target, minArea: ROOM[type].minArea,
@@ -41,8 +41,8 @@ describe('chokkaRate / chokkaBreakdown: 小さな手計算の例', () => {
 
 /** 提示案の標本。人気6＝CONDITIONS の先頭3件＋PARTIAL_CONDITIONS の先頭3件 × SEEDS（108案、うち2階建て90案）。グリッド＝feasibility グリッド × seed 1 の2階建て */
 const popular: Plan[] = []
-const gridFull: Plan[] = []
-const gridPart: Plan[] = []
+let gridFull: Plan[] = []
+let gridPart: Plan[] = []
 let built = false
 function build() {
   if (built) return
@@ -50,18 +50,18 @@ function build() {
   for (const { cfg } of [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)]) {
     for (const s of SEEDS) popular.push(...generatePlans({ ...cfg, feats: [...cfg.feats] }, s))
   }
-  for (const area of [20, 23, 26, 30, 36, 40]) {
-    for (const rooms of [2, 3, 4, 5]) {
-      for (const feats of [[], ['doma'], ['void', 'study'], ['washitsu', 'laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-        const cfg: PlanConfig = { area, floors: 2, rooms, parking: 1, garden: 1, feats }
-        if (feasibility(cfg).ok) gridFull.push(...generatePlans(cfg, 1))
-        const pc: PlanConfig = { ...cfg, story: 'partial' }
-        if (feasibility(pc).ok) gridPart.push(...generatePlans(pc, 1))
-      }
-    }
-  }
+  // グリッドは fixture の提示案の planKey から組み直す（ライブ生成しない）。総二階は 2階建ての条件だけ
+  gridFull = gridFullSample().groups.filter((g) => g.every((p) => p.floors.length === 2)).flat()
+  gridPart = gridPartAltSample().plans
 }
 const TIMEOUT = 600_000
+
+describe('標本 fixture の版', () => {
+  it('gen-v9.json・gen-v9-samples.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+    expect(gridFullSample().genVersion).toBe(GEN_VERSION)
+    expect(gridPartAltSample().genVersion).toBe(GEN_VERSION)
+  })
+})
 const pct = (ps: Plan[]) => ps.map((p) => (chokkaRate(p) ?? NaN) * 100).filter((x) => !Number.isNaN(x))
 
 describe('直下率: 独立実装との一致と、実測（GEN_VERSION 8）', () => {

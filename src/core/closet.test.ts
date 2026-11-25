@@ -3,8 +3,8 @@ import { carveFloor } from './carve'
 import { privateStorageCount, storageOf, storageRatio } from './closets'
 import { computeDoors, sharedEdge } from './derive'
 import { planFromKey, planKey } from './enumerate'
-import { candidatePool, generatePlans } from './generate'
-import { feasibility } from './program'
+import { GEN_VERSION, candidatePool, generatePlans } from './generate'
+import { gridFullSample } from './fixtureSamples'
 import { ROOM } from './rooms'
 import { SCORE_WEIGHTS, scorePlan } from './score'
 import {
@@ -13,7 +13,7 @@ import {
 } from './testing'
 import { layoutBand } from './slicing'
 import { cell } from './rooms'
-import type { Plan, PlanConfig, Room, RoomType } from './types'
+import type { Plan, Room, RoomType } from './types'
 
 const ALL = [...CONDITIONS, ...PARTIAL_CONDITIONS]
 const POPULAR = [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)]
@@ -128,27 +128,19 @@ describe('収納率の退行防止（人気6条件 × 6 seed、feasibility グ�
   })
 
   it('グリッド（fixture と同じ条件）: 収納率の中央値 ≥ 8%。洗面の最大面積超過は実測（91室／240案）以下', () => {
+    // fixture（gen-v9.json）の提示案の planKey から組み直す（ライブ生成しない）
+    expect(gridFullSample().genVersion).toBe(GEN_VERSION)
     const grid: number[] = []
     let washOver = 0
-    for (const floors of [1, 2] as const) {
-      for (const area of [20, 23, 26, 30, 36, 40]) {
-        for (const rooms of [2, 3, 4, 5]) {
-          for (const feats of [[], ['doma'], ['void', 'study'], ['washitsu', 'laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-            const cfg: PlanConfig = { area, floors, rooms, parking: 1, garden: 1, feats }
-            if (!feasibility(cfg).ok) continue
-            for (const p of generatePlans(cfg, 1)) {
-              grid.push(storageRatioIndependent(p))
-              for (const f of p.floors) for (const r of f.rooms) if (r.type === 'wash' && r.area > ROOM.wash.maxArea) washOver++
-            }
-          }
-        }
-      }
+    for (const p of gridFullSample().plans) {
+      grid.push(storageRatioIndependent(p))
+      for (const f of p.floors) for (const r of f.rooms) if (r.type === 'wash' && r.area > ROOM.wash.maxArea) washOver++
     }
     expect(grid.length).toBeGreaterThan(200)
     // 実測（seed 1、3案が出る80条件の240案）: 中央値 8.6%。下限 0.08 はその少し下
     expect(median(grid)).toBeGreaterThanOrEqual(0.08)
     expect(washOver).toBeLessThanOrEqual(91)
-  }, 180_000) // 192条件のプールを構築するので、並列実行の負荷でも収まるよう長めにする
+  })
 })
 
 describe('スコア: 個室収納', () => {

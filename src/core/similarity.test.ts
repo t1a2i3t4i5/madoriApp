@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { generatePlans } from './generate'
+import { GEN_VERSION, generatePlans } from './generate'
+import { gridFullSample, gridPartAltSample } from './fixtureSamples'
 import type { ScoredPlan } from './types'
-import { feasibility } from './program'
 import { OVERLAP_GRID, SIMILAR_OVERLAP, conceptKey, overlap, trioSimilarity } from './similarity'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, conceptKeyIndependent, overlapIndependent } from './testing'
-import type { Plan, PlanConfig, Room, RoomType } from './types'
+import type { Plan, Room, RoomType } from './types'
 import { ROOM } from './rooms'
 
 const room = (type: RoomType, x: number, y: number, w: number, h: number): Room => ({
@@ -122,8 +122,8 @@ describe('overlap / conceptKey: 手計算の例', () => {
 
 /** 標本: 人気6 × SEEDS、グリッド seed 1（総二階・平屋／部分二階） */
 const popular: Plan[][] = []
-const gridFull: Plan[][] = []
-const gridPart: Plan[][] = []
+let gridFull: Plan[][] = []
+let gridPart: Plan[][] = []
 let built = false
 function build() {
   if (built) return
@@ -131,22 +131,18 @@ function build() {
   for (const { cfg } of [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)]) {
     for (const s of SEEDS) popular.push(generatePlans({ ...cfg, feats: [...cfg.feats] }, s))
   }
-  for (const area of [20, 23, 26, 30, 36, 40]) {
-    for (const floors of [1, 2] as const) {
-      for (const rooms of [2, 3, 4, 5]) {
-        for (const feats of [[], ['doma'], ['void', 'study'], ['washitsu', 'laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-          const cfg: PlanConfig = { area, floors, rooms, parking: 1, garden: 1, feats }
-          if (feasibility(cfg).ok) gridFull.push(generatePlans(cfg, 1))
-          if (floors === 2) {
-            const pc: PlanConfig = { ...cfg, story: 'partial' }
-            if (feasibility(pc).ok) gridPart.push(generatePlans(pc, 1))
-          }
-        }
-      }
-    }
-  }
+  // グリッドは fixture の提示案の planKey から組み直す（ライブ生成しない）。条件ごとの3案を1組とする
+  gridFull = gridFullSample().groups
+  gridPart = gridPartAltSample().groups
 }
 const TIMEOUT = 600_000
+
+describe('標本 fixture の版', () => {
+  it('gen-v9.json・gen-v9-samples.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+    expect(gridFullSample().genVersion).toBe(GEN_VERSION)
+    expect(gridPartAltSample().genVersion).toBe(GEN_VERSION)
+  })
+})
 const r3 = (x: number) => Math.round(x * 1000) / 1000
 const trios = (s: Plan[][]) => s.filter((t) => t.length >= 2)
 

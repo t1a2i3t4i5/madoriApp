@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:archive": "vitest run --config vitest.archive.config.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

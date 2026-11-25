@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { generatePlans } from './generate'
+import { GEN_VERSION, generatePlans } from './generate'
+import { gridFullSample, gridPartSample } from './fixtureSamples'
 import { findEntry } from './rooms'
 import { explainSite, siteCaption, siteLayout, siteStats, type SiteLayout, type SiteRect } from './site'
-import { feasibility } from './program'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, quantile } from './testing'
 import type { Plan, PlanConfig } from './types'
 
@@ -219,33 +219,17 @@ describe('explainSite: 当てはまる事実だけを書く', () => {
   })
 })
 
-/** 提示案の標本（窓・直下率の仕様と同じ feasibility グリッド・seed 1。総二階・平屋 207案／部分二階 132案）。生成に ~90 秒かかるので1度だけ作る */
-let gridCache: { full: Plan[]; part: Plan[] } | null = null
+/** 提示案の標本（窓・直下率の仕様と同じ feasibility グリッド・seed 1。総二階・平屋 207案／部分二階 132案）。fixture の提示案の planKey から組み直す（ライブ生成しない） */
 function grid(): { full: Plan[]; part: Plan[] } {
-  if (gridCache) return gridCache
-  const full: Plan[] = []
-  const part: Plan[] = []
-  for (const floors of [1, 2] as const) {
-    for (const area of [20, 23, 26, 30, 36, 40]) {
-      for (const rooms of [2, 3, 4, 5]) {
-        for (const feats of [[], ['doma'], ['void', 'study'], ['washitsu', 'laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-          const cfg: PlanConfig = { area, floors, rooms, parking: 1, garden: 1, feats }
-          if (feasibility(cfg).ok) full.push(...generatePlans(cfg, 1))
-        }
-      }
-    }
-  }
-  for (const area of [24, 28, 32, 36, 40]) {
-    for (const nr of [2, 3, 4, 5]) {
-      for (const feats of [[], ['doma'], ['void'], ['laundry', 'pantry', 'wic']] as PlanConfig['feats'][]) {
-        const cfg: PlanConfig = { area, floors: 2, rooms: nr, parking: 1, garden: 1, feats, story: 'partial' }
-        if (feasibility(cfg).ok) part.push(...generatePlans(cfg, 1))
-      }
-    }
-  }
-  gridCache = { full, part }
-  return gridCache
+  return { full: gridFullSample().plans, part: gridPartSample().plans }
 }
+
+describe('標本 fixture の版', () => {
+  it('gen-v9.json・gen-v9-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+    expect(gridFullSample().genVersion).toBe(GEN_VERSION)
+    expect(gridPartSample().genVersion).toBe(GEN_VERSION)
+  })
+})
 
 const avg = (xs: number[]) => (xs.length === 0 ? 0 : xs.reduce((a, b) => a + b, 0) / xs.length)
 const pct = (n: number, d: number) => (d === 0 ? 0 : n / d)
