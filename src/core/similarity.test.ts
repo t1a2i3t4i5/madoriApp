@@ -37,12 +37,85 @@ describe('overlap / conceptKey: 手計算の例', () => {
   })
   it('概念キー: 南面の並び（畳み込み・反転正規化）+ 階段・洗面の位置', () => {
     // 南面は LDK 1室。1F の LDK は全幅で中央 → 階段（中央の列）は C
-    expect(conceptKey(a)).toBe('ldk|stC|wsXN')
+    expect(conceptKey(a)).toBe('ldk|stC|wsEN')
     expect(conceptKey(mirrorPlan(a))).toBe(conceptKey(a))
     const p = flat([room('entry', 0, 4, 4, 4), room('doma', 4, 4, 2, 4), room('kitchen', 6, 4, 2, 4), room('ldk', 8, 4, 4, 4), room('stair', 8, 0, 4, 4), room('wash', 0, 0, 4, 4)])
     // 南面: entry(+doma 畳む) > ldk(kitchen と ldk は続くので1つ)。階段は東端で LDK（東）と同じ側、洗面は反対側・北
     expect(conceptKey(p)).toBe(conceptKeyIndependent(p))
     expect(conceptKey(p)).toBe('entry>ldk|st=|ws!N')
+  })
+  const north = (stairX: number, washX: number) => [room('stair', stairX, 0, 4, 4), room('wash', washX, 0, 4, 4)]
+  it('階段の東西だけが違う案は、LDK が中央でも別のキーになる（階段の位置を捨てない）', () => {
+    const south = [room('ldk', 0, 4, 12, 4)]
+    const east = flat([...south, ...north(8, 4), room('hall', 0, 0, 4, 4)])
+    const west = flat([...south, ...north(0, 4), room('hall', 8, 0, 4, 4)])
+    // 洗面は中央。LDK も中央なので洗面で向きを決められず、階段の側を東にそろえる → どちらも 'E'（反転で同じ案）
+    expect(conceptKey(east)).toBe('ldk|stE|wsCN')
+    expect(conceptKey(west)).toBe(conceptKey(east))
+    // LDK が中央なら洗面の側を東にそろえる。洗面が東・階段が西
+    const sep = flat([...south, ...north(0, 8), room('hall', 4, 0, 4, 4)])
+    expect(conceptKey(sep)).toBe('ldk|stW|wsEN')
+    expect(conceptKey(sep)).toBe(conceptKeyIndependent(sep))
+    expect(conceptKey(sep)).not.toBe(conceptKey(east))
+  })
+  it('LDK が西に寄る案では、階段が LDK と同じ側／反対側で別のキー（反転では変わらない）', () => {
+    const base = [room('ldk', 0, 4, 4, 4), room('entry', 4, 4, 8, 4)]
+    const near = flat([...base, room('stair', 0, 0, 4, 4), room('hall', 4, 0, 8, 4)])
+    const far = flat([...base, room('stair', 8, 0, 4, 4), room('hall', 0, 0, 8, 4)])
+    expect(conceptKey(near)).toBe('entry>ldk|st=|ws-')
+    expect(conceptKey(far)).toBe('entry>ldk|st!|ws-')
+    expect(conceptKey(mirrorPlan(far))).toBe(conceptKey(far))
+  })
+  it('2階の主寝室と洋室の並びだけが違う2案は同じキー（U1）。書斎との並びは区別する', () => {
+    const f1 = [room('entry', 0, 4, 4, 4), room('ldk', 4, 4, 8, 4), room('stair', 0, 0, 4, 4)]
+    const two = (south2: RoomType[]): Plan => ({
+      W: 12, H: 8, arch: 0, totalArea: 192,
+      floors: [
+        { label: '1F', rooms: f1 },
+        { label: '2F', rooms: south2.map((t, i) => room(t, i * 4, 4, 4, 4)) },
+      ],
+    }) as Plan
+    const mb = two(['master', 'bed', 'study'])
+    const bm = two(['bed', 'master', 'study'])
+    expect(conceptKey(mb)).toBe(conceptKey(bm))
+    expect(conceptKey(mb)).toBe(conceptKeyIndependent(mb))
+    expect(conceptKey(mb)).toBe('entry>ldk/bed>study|stE|ws-')
+    expect(conceptKey(two(['study', 'bed', 'master']))).not.toBe(conceptKey(mb))
+    // 1F の主寝室（平屋）は畳まない
+    expect(conceptKey(flat([room('master', 0, 4, 6, 4), room('bed', 6, 4, 6, 4)]))).toBe('bed>master|st-|ws-')
+  })
+  it('部分二階は 2F の板に正規化して比べる（手計算）', () => {
+    const ldk = room('ldk', 0, 0, 12, 8)
+    // a: 2F の板は東半分 (x 6〜12)。北から見て bed 3 + store 3。b: 全幅の板で bed 4 + store 8
+    const a: Plan = {
+      W: 12, H: 8, arch: 0, totalArea: 144,
+      floors: [
+        { label: '1F', rooms: [ldk] },
+        { label: '2F', fp: { x: 6, y: 0, W: 6, H: 8 }, rooms: [room('bed', 6, 0, 3, 8), room('store', 9, 0, 3, 8)] },
+      ],
+    } as Plan
+    const b: Plan = {
+      W: 12, H: 8, arch: 0, totalArea: 192,
+      floors: [
+        { label: '1F', rooms: [ldk] },
+        { label: '2F', rooms: [room('bed', 0, 0, 4, 8), room('store', 4, 0, 8, 8)] },
+      ],
+    } as Plan
+    // 1F は一致 1。2F は板に正規化すると bed [0,1/2) と [0,1/3) → 1/3、store [1/2,1) と [1/3,1) → 1/2 で 5/6（反転は 1/6 で小さい）
+    const expected = (1 + 5 / 6) / 2
+    expect(overlap(a, b)).toBeCloseTo(expected, 12)
+    expect(overlap(b, a)).toBeCloseTo(expected, 12)
+    expect(overlapIndependent(a, b)).toBeCloseTo(expected, 12)
+  })
+  it('標本点が辺に乗っても、独立実装と一致する（整数で比べる）', () => {
+    // 幅 9・n=24: 辺 x=3 は標本の境（9/3 = 3 → 24/3 = 8）と標本点の間。幅 7・n=14 は辺が標本点に乗る例
+    const mk = (W: number, cut: number): Plan => flat([room('bed', 0, 0, cut, 7), room('store', cut, 0, W - cut, 7)], W, 7)
+    for (const [W, cut, n] of [[7, 3, 14], [9, 3, 24], [7, 1, 7], [5, 2, 10]] as const) {
+      const a = mk(W, cut)
+      const b = flat([room('bed', 0, 0, W - cut, 7), room('store', W - cut, 0, cut, 7)], W, 7)
+      expect(overlap(a, b, n)).toBe(overlapIndependent(a, b, n))
+      expect(overlap(a, b, n)).toBe(overlap(b, a, n))
+    }
   })
 })
 
@@ -126,12 +199,12 @@ describe('現状の似通い度の観測（GEN_VERSION 8。上限・下限は付
     // GEN_VERSION 8 の実測（design.md R-SEL-12）。似通った組 = 重なり最大 ≥ 0.8、conceptAll/One = 概念キー K3 が3案とも違う／1種類だけ、
     // archDiffSimilar = arch が違うのに重なり ≥ 0.8 のペア数/全ペア数
     expect(got).toEqual({
-      popular: { trios: 36, similarRate: 0.5, conceptAll: 0.389, conceptOne: 0.278, archDiffSimilar: '16/108' },
-      gridFull: { trios: 69, similarRate: 0.652, conceptAll: 0.42, conceptOne: 0.348, archDiffSimilar: '17/207' },
-      gridPart: { trios: 33, similarRate: 0.545, conceptAll: 0.939, conceptOne: 0, archDiffSimilar: '15/99' },
+      popular: { trios: 36, similarRate: 0.5, conceptAll: 0.111, conceptOne: 0.472, archDiffSimilar: '16/108' },
+      gridFull: { trios: 69, similarRate: 0.652, conceptAll: 0.232, conceptOne: 0.377, archDiffSimilar: '17/207' },
+      gridPart: { trios: 33, similarRate: 0.545, conceptAll: 0.545, conceptOne: 0.03, archDiffSimilar: '15/99' },
     })
   }, TIMEOUT)
-  it('標本の細かさ 16・32 でも、似通った組の割合の結論（人気6 は多数派、グリッド総二階・平屋は半数前後）は変わらない', () => {
+  it('標本の細かさ 16・32 でも、似通った組の割合は 24 の値から ±0.06 以内（U7。CLAUDE.md・design.md と同じ許容幅）', () => {
     build()
     const out: Record<string, number[]> = {}
     for (const [name, s] of [['popular', popular], ['gridFull', gridFull], ['gridPart', gridPart]] as const) {
@@ -140,8 +213,8 @@ describe('現状の似通い度の観測（GEN_VERSION 8。上限・下限は付
     console.log('similarity grid sensitivity (16/24/32)', JSON.stringify(out))
     for (const v of Object.values(out)) {
       const [lo, mid, hi] = v as [number, number, number]
-      expect(Math.abs(lo - mid)).toBeLessThanOrEqual(0.1)
-      expect(Math.abs(hi - mid)).toBeLessThanOrEqual(0.1)
+      expect(Math.abs(lo - mid)).toBeLessThanOrEqual(0.06)
+      expect(Math.abs(hi - mid)).toBeLessThanOrEqual(0.06)
     }
   }, TIMEOUT)
 })
