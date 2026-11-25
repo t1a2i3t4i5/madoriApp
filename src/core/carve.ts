@@ -14,6 +14,36 @@ import { mouthRuleOk } from './circulation'
  * 純関数: rooms は書き換えず新しい配列を返す。既存の付属収納（Room.of）はそのまま引き継ぐ
  */
 export function carveFloor(rooms0: readonly Room[]): Room[] {
+  const memo = activeMemo
+  if (!memo) return carveFloorRaw(rooms0)
+  const key = JSON.stringify(rooms0)
+  let hit = memo.get(key)
+  if (!hit) {
+    hit = carveFloorRaw(rooms0)
+    memo.set(key, hit)
+  }
+  return hit
+}
+
+/** withCarveMemo の呼び出し中だけ有効なメモ（グローバルなキャッシュにはしない。呼び出しが終われば捨てる） */
+let activeMemo: Map<string, Room[]> | null = null
+
+/**
+ * fn の実行中だけ carveFloor の結果を入力の内容でメモする（プール構築の高速化。結果は不変）。
+ * carveFloor は HALL_RULES を読むので、呼び出しをまたいで持ち越さない。入れ子では外側のメモを使う。
+ * 返った部屋の配列はメモと共有するので、呼び出し側は書き換えないこと
+ */
+export function withCarveMemo<T>(fn: () => T): T {
+  if (activeMemo) return fn()
+  activeMemo = new Map()
+  try {
+    return fn()
+  } finally {
+    activeMemo = null
+  }
+}
+
+function carveFloorRaw(rooms0: readonly Room[]): Room[] {
   let st = start(rooms0)
   st = reassignStores(st)
   st = carveHallEnds(st)
