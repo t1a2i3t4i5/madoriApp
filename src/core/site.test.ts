@@ -28,6 +28,7 @@ function parts(L: SiteLayout): { name: string; r: SiteRect }[] {
     ...L.approach.map((r, i) => ({ name: `approach${i}`, r })),
     ...L.garden.map((r, i) => ({ name: `garden${i}`, r })),
     ...(L.deck ? [{ name: 'deck', r: L.deck }] : []),
+    ...(L.drying ? [{ name: 'drying', r: L.drying }] : []),
   ]
 }
 
@@ -119,7 +120,8 @@ describe('siteLayout: 配置の不変条件（全標本×駐車0〜2×庭0〜2�
         const nSide = L.cars.filter((x) => x.mode === 'side').length
         const base = siteLayout(plan, { parking: 0, garden: c.garden })
         // 敷地の間口 = 基準 + 6×横付けの台数（庭の回り込みの余白は同じ庭の設定で共通）
-        expect(L.lot.w).toBe(base.lot.w + 6 * nSide)
+        // 物干し場による拡幅（lotWidenByDrying）は別に数える
+        expect(L.lot.w - L.lotWidenByDrying).toBe(base.lot.w - base.lotWidenByDrying + 6 * nSide)
       }
     }
   })

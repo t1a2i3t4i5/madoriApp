@@ -640,3 +640,69 @@ export function conceptKeyIndependent(plan: Plan): string {
   const wy = wash ? (wash.y + wash.h / 2 < plan.H / 2 ? 'N' : 'S') : ''
   return `${k2}|st${rel(stair)}|ws${rel(wash)}${wy}`
 }
+
+/**
+ * 洗濯動線の独立実装（laundry.ts・backdoor.ts とは別に、セルの格子で素朴に数える。R-IDX-11）。
+ * 経路の長さは別の値になるので比べるのは種別だけ: 洗濯機の部屋の種別・勝手口の候補が成り立つか（B: 洗濯機の部屋、C: 1F ホールの
+ * 東西の外壁に接触 2 セル以上）・洗面に LDK からしか入れないか・主寝室の階。
+ * ドアのつながり（doorsOf）は呼び出し側が渡す（derive.ts を core/testing に依存させない）。
+ * `mustCrossLdk` は、洗濯機の部屋から 1F ホールへ LDK を通らずには（ドア・開口のつながりで）届かないとき true
+ * （laundryRoutes の C が LDK を横切ると言うはずの必要条件。最短経路が横切るかは長さによるので、逆は言えない）
+ */
+export function laundryIndependent(
+  plan: Plan,
+  doorsOf: (rooms: Room[]) => { a: Room; b: Room }[],
+): {
+  washer: 'laundry' | 'wash' | null
+  candB: boolean
+  candC: boolean
+  washOnlyFromLdk: boolean
+  masterFloor: number | null
+  mustCrossLdk: boolean
+} {
+  const fl = plan.floors[0]
+  const rooms = fl?.rooms ?? []
+  const owner: (Room | undefined)[][] = Array.from({ length: plan.H }, () => Array.from({ length: plan.W }, () => undefined))
+  for (const r of rooms) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const row = owner[y]; if (row) row[x] = r }
+  const west = (r: Room) => { let n = 0; for (let y = 0; y < plan.H; y++) if (owner[y]?.[0] === r) n++; return n }
+  const east = (r: Room) => { let n = 0; for (let y = 0; y < plan.H; y++) if (owner[y]?.[plan.W - 1] === r) n++; return n }
+  const w = rooms.find((r) => r.type === 'laundry') ?? rooms.find((r) => r.type === 'wash')
+  const hall = rooms.find((r) => r.type === 'hall')
+  // 洗面の隣（辺を共有する長さ 2 セル以上）の部屋の種別
+  const wash = rooms.find((r) => r.type === 'wash')
+  const near = new Map<Room, number>()
+  if (wash) {
+    for (let y: number = wash.y; y < wash.y + wash.h; y++) for (let x: number = wash.x; x < wash.x + wash.w; x++) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const o: Room | undefined = owner[y + dy]?.[x + dx]
+        if (o && o !== wash) near.set(o, (near.get(o) ?? 0) + 1)
+      }
+    }
+  }
+  const nearTypes = new Set([...near.entries()].filter(([, n]) => n >= 2).map(([r]) => r.type))
+  const master = plan.floors.findIndex((f) => f.rooms.some((r) => r.type === 'master'))
+  // LDK を通らずに洗濯機の部屋 → ホールへ届くか（ドアのつながりの幅優先探索）
+  let mustCross = false
+  if (w && hall) {
+    const doors = doorsOf(rooms)
+    const seen = new Set<Room>([w])
+    const queue = [w]
+    while (queue.length) {
+      const cur = queue.shift() as Room
+      for (const d of doors) {
+        const o = d.a === cur ? d.b : d.b === cur ? d.a : null
+        if (!o || seen.has(o) || o.type === 'ldk') continue
+        seen.add(o); queue.push(o)
+      }
+    }
+    mustCross = !seen.has(hall)
+  }
+  return {
+    washer: w ? (w.type === 'laundry' ? 'laundry' : 'wash') : null,
+    candB: !!w && (west(w) >= 2 || east(w) >= 2),
+    candC: !!hall && (west(hall) >= 2 || east(hall) >= 2),
+    washOnlyFromLdk: !!wash && nearTypes.has('ldk') && !nearTypes.has('hall') && !nearTypes.has('entry') && !nearTypes.has('doma'),
+    masterFloor: master >= 0 ? master : null,
+    mustCrossLdk: mustCross,
+  }
+}
