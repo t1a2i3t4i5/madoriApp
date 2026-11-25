@@ -106,7 +106,7 @@ export function ConditionForm({ state, onChange, onGenerate, onRandom }: Props) 
       />
       <Seg label="個室数（主寝室ふくむ）" value={state.rooms} options={[2, 3, 4, 5].map((v) => ({ v, text: `${v}室` }))} onChange={(rooms) => onChange({ rooms })} />
       <Seg label="駐車場" value={state.parking} options={[{ v: 0, text: 'なし' }, { v: 1, text: '1台' }, { v: 2, text: '2台' }]} onChange={(parking) => onChange({ parking })} />
-      <Seg label="庭" value={state.garden} options={[{ v: 0, text: 'なし' }, { v: 1, text: '小さめ' }, { v: 2, text: '広め' }]} onChange={(garden) => onChange({ garden })} />
+      <Seg label="庭" value={state.garden} options={[{ v: 0, text: 'なし' }, { v: 1, text: '小さめ' }, { v: 2, text: '広め' }]} onChange={(garden) => onChange({ garden })} note="駐車場・庭は敷地の配置図に反映します（生成には影響しません）。" />
       <div className={ROW}>
         <div className={`mb-2.5 ${LBL}`}>こだわり</div>
         <div className="flex flex-wrap gap-2">

@@ -36,6 +36,8 @@ export interface FloorSvgProps {
   uid: string
   kitchenFace?: boolean
   siteStrip?: boolean
+  /** 庭ありの案: 1階の LDK の南の main の窓を掃き出し（窓の線を外壁の外へ延ばした記号）に描き分ける。窓の導出は変えない（R-DRAW-26） */
+  sweepWindows?: boolean
   /** 家具を描く（拡大表示用） */
   showFurniture?: boolean
   /** 動線（来客・生活）を重ねる（拡大表示用） */
@@ -228,7 +230,7 @@ function windowLine(wd: WindowSeg, fp: FloorRect) {
   return { horizontal: false, main: { x1: x, y1: wd.a, x2: x, y2: wd.b } }
 }
 
-export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurniture, showFlow, scale }: FloorSvgProps) {
+export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, sweepWindows, showFurniture, showFlow, scale }: FloorSvgProps) {
   const fl = plan.floors[floorIdx]
   const { W, H } = plan
   const fp = floorRect(plan, floorIdx)
@@ -344,6 +346,14 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, showFurn
           )
         })}
       </g>
+      {/* 掃き出し窓の記号: LDK の南の main の窓の両端から外壁の外へ短い線（庭へ出られる大開口）。窓の導出（kind・位置）は変えない */}
+      {sweepWindows && floorIdx === 0 && (
+        <g stroke="#2f7fb0" strokeWidth={0.14} fill="none">
+          {windows.filter((wd) => wd.kind === 'main' && wd.side === 'S' && wd.room.type === 'ldk').map((wd, i) => (
+            <path key={i} d={`M ${wd.a} ${fpBottom} v 0.7 M ${wd.b} ${fpBottom} v 0.7`} />
+          ))}
+        </g>
+      )}
       {/* 付属収納の折れ戸／引戸（弧なし）。壁を抜くので壁より後に描く。折れ戸があるときだけ */}
       {doors.some((d) => d.kind === 'fold') && (
         <g>{doors.map((d, i) => (d.kind === 'fold' ? <FoldDoor key={i} d={d} /> : null))}</g>
