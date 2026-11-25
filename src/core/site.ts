@@ -1,3 +1,4 @@
+import { backDoorCandidates, type BackDoor } from './backdoor'
 import { findEntry } from './rooms'
 import type { Plan, PlanConfig } from './types'
 
@@ -30,6 +31,9 @@ export const DECK_MAX_W = 8
 /** LDK の南面の空き間口の下限（庭なし・庭あり）。下回るときは駐車を建物の横へ出す */
 export const MIN_FREE = 4
 export const MIN_FREE_GARDEN = 6
+/** 物干し場（勝手口の外。サービスヤード）の奥行（建物から離れる向き）・長さ（物干し竿 1 本分）［暫定］。R-IN-09 */
+export const DRY_D = 4
+export const DRY_L = 6
 
 export interface SiteCar extends SiteRect {
   /** front = 前庭に並べる／side = 建物の横（敷地を広げて置く） */
@@ -59,6 +63,15 @@ export interface SiteLayout {
   ldkFreeFront: number
   /** 前庭の奥行（セル） */
   frontDepth: number
+  /**
+   * 勝手口（洗濯機の部屋の東西の外壁、なければ 1F ホールの東西の端。R-FLOW-07）。物干し場が置けない案は null。
+   * `computeDoors`・スコアには入れない
+   */
+  backDoor: BackDoor | null
+  /** 物干し場（勝手口の外の建物の横。DRY_D × DRY_L）。backDoor がなければ null（庭ありならデッキが代わり） */
+  drying: SiteRect | null
+  /** 物干し場を置くのに必要な敷地の間口の広げ幅（セル。広げなくてよければ 0）。観測値のみで lot.w には含まれない（含めるのは描画と同時の PR-L2） */
+  lotWidenByDrying: number
 }
 
 const clamp02 = (v: number) => Math.max(0, Math.min(2, Math.round(Number.isFinite(v) ? v : 0)))
@@ -115,9 +128,9 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
   const wrap = garden > 0 && !!ldk && (side === 'W' ? ldk.x + ldk.w === W : ldk.x === 0)
   const mSide = MARGIN + CAR_W * nSide
   const mOpp = wrap ? WRAP_MARGIN : MARGIN
+  // 庭の範囲の基準（物干し場による拡幅は含めない。庭の形は物干し場の有無で変えない）
   const x0 = side === 'W' ? -mSide : -mOpp
   const x1 = side === 'W' ? W + mOpp : W + mSide
-  const lot: SiteRect = { x: x0, y: -MARGIN, w: x1 - x0, h: H + D + MARGIN }
   const building: SiteRect = { x: 0, y: 0, w: W, h: H }
 
   const carY = H + D - CAR_D
@@ -128,6 +141,28 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
   for (let j = 0; j < nSide; j++) {
     cars.push({ x: side === 'W' ? -(MARGIN + CAR_W * (j + 1)) : W + MARGIN + CAR_W * j, y: carY, w: CAR_W, h: CAR_D, mode: 'side' })
   }
+
+  // 3b. 勝手口と物干し場（R-FLOW-07・R-IN-09）: 候補を先頭から試し、最初に物干し場が置けるものを採る。
+  // 横付けの駐車と y が重なる側は置けない。その側の余白が DRY_D 未満なら敷地を広げる
+  let backDoor: BackDoor | null = null
+  let drying: SiteRect | null = null
+  let lotWidenByDrying = 0
+  const sideCars = cars.filter((c) => c.mode === 'side')
+  for (const bd of backDoorCandidates(plan, side)) {
+    const dy0 = Math.max(0, Math.min(Math.round(bd.y - 1), H - DRY_L))
+    const dh = Math.min(DRY_L, H - dy0)
+    if (dh < 2) continue
+    if (bd.side === side && sideCars.some((c) => overlapLen(dy0, dy0 + dh, c.y, c.y + c.h) > 0)) continue
+    backDoor = bd
+    drying = { x: bd.side === 'W' ? -DRY_D : W, y: dy0, w: DRY_D, h: dh }
+    const have = bd.side === 'W' ? -x0 : x1 - W
+    if (have < DRY_D) {
+      // 観測値のみ。lot には含めない（敷地図に物干し場が描かれる PR-L2 で、描画と同時に lot へ含める）
+      lotWidenByDrying = DRY_D - have
+    }
+    break
+  }
+  const lot: SiteRect = { x: x0, y: -MARGIN, w: x1 - x0, h: H + D + MARGIN }
 
   // 4. アプローチ: 玄関の南外壁の前のポーチ + 駐車（なければ道路）からの通路
   let porch: SiteRect | null = null
@@ -192,6 +227,8 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
       gardenRects = gardenRects.flatMap((r) => subtract(r, hole))
     }
     if (wrap && ldk) gardenRects.push({ x: side === 'W' ? W : -WRAP_MARGIN, y: ldk.y, w: WRAP_MARGIN, h: H - ldk.y })
+    // 回り込みの帯と物干し場が重なる分は、物干し場を優先して庭から外す
+    if (drying) gardenRects = gardenRects.flatMap((r) => subtract(r, drying as SiteRect))
   }
 
   // 7. 植栽（目隠し）: 庭なしのとき、LDK の南面の空き間口の前の敷地境界に生け垣の線
@@ -203,7 +240,7 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
     if (a1 > a0) hedge.push({ x1: a0, y1: H + D, x2: a1, y2: H + D })
   }
 
-  return { lot, building, cars, porch, approach, garden: gardenRects, deck, hedge, side, wrap, ldkFreeFront, frontDepth: D }
+  return { lot, building, cars, porch, approach, garden: gardenRects, deck, hedge, side, wrap, ldkFreeFront, frontDepth: D, backDoor, drying, lotWidenByDrying }
 }
 
 export interface SiteStats {
@@ -220,6 +257,9 @@ export interface SiteStats {
   ldkByHedge: number
   /** 前庭に並べた台数・建物の横に出した台数 */
   carMode: { front: number; side: number }
+  /** 物干し場の側（勝手口の側。物干し場がなければ null）と、物干し場による敷地の間口の拡幅（セル）。観測のみ */
+  dryingSide: 'W' | 'E' | null
+  lotWidenByDrying: number
   /** 敷地の目安（坪・間口と奥行のセル数） */
   lotArea: number
   lotW: number
@@ -240,6 +280,8 @@ export function siteStats(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Plan
     ldkByGarden: L.garden.length > 0 ? free : 0,
     ldkByHedge: L.hedge.length > 0 ? free : 0,
     carMode: { front: L.cars.filter((c) => c.mode === 'front').length, side: L.cars.filter((c) => c.mode === 'side').length },
+    dryingSide: L.drying && L.backDoor ? L.backDoor.side : null,
+    lotWidenByDrying: L.lotWidenByDrying,
     lotArea: (L.lot.w * L.lot.h) / 16,
     lotW: L.lot.w,
     lotH: L.lot.h,
