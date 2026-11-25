@@ -547,3 +547,96 @@ export function ventLevelsIndependent(
   })
   return out
 }
+
+/** 粗い種別の表（`overlapIndependent` 用。similarity.ts の `COARSE` とは別に持つ） */
+const COARSE_INDEPENDENT: Record<string, string> = {
+  master: 'S', bed: 'S', study: 'S', washitsu: 'S',
+  bath: 'W', wash: 'W', wc: 'W', laundry: 'W',
+  pantry: 'R', wic: 'R', store: 'R', closet: 'R',
+  ldk: 'L', kitchen: 'L', entry: 'E', doma: 'E', hall: 'H', stair: 'T', void: 'V',
+}
+
+/**
+ * 部屋配置の重なりの独立実装（similarity.ts の overlap とは別の計算法: 標本点ごとに部屋を総当たりで探し、反転は板と部屋の x を折り返す）。
+ * 標本点の位置は整数（座標を 2n 倍）で比べ、辺上の点が丸め誤差で分かれないようにする
+ */
+export function overlapIndependent(a: Plan, b: Plan, n = 24): number {
+  const kindAt = (p: Plan, f: number, i: number, j: number, mirror: boolean): string | null => {
+    const fl = p.floors[f]
+    if (!fl) return null
+    const rc = fl.fp ?? { x: 0, y: 0, W: p.W, H: p.H }
+    // 反転は板と部屋の x を折り返した座標系で判定する
+    const fx = (x: number, w: number) => (mirror ? p.W - x - w : x)
+    // 標本点の座標の 2n 倍（整数）
+    const px = 2 * n * fx(rc.x, rc.W) + (2 * i + 1) * rc.W
+    const py = 2 * n * rc.y + (2 * j + 1) * rc.H
+    const r = fl.rooms.find((q) => {
+      const qx = 2 * n * fx(q.x, q.w)
+      return qx <= px && px < qx + 2 * n * q.w && 2 * n * q.y <= py && py < 2 * n * (q.y + q.h)
+    })
+    return r ? (COARSE_INDEPENDENT[r.type] ?? null) : null
+  }
+  const floors = Math.max(a.floors.length, b.floors.length)
+  const score = (a: Plan, b: Plan, mirror: boolean): number => {
+    let hit = 0
+    for (let f = 0; f < floors; f++) {
+      for (let j = 0; j < n; j++) {
+        for (let i = 0; i < n; i++) {
+          const ka = kindAt(a, f, i, j, false)
+          const kb = kindAt(b, f, i, j, mirror)
+          if (ka !== null && ka === kb) hit++
+        }
+      }
+    }
+    return hit
+  }
+  const best = (x: Plan, y: Plan) => Math.max(score(x, y, false), score(x, y, true))
+  return (best(a, b) + best(b, a)) / (2 * floors * n * n)
+}
+
+/**
+ * 概念キー K3 の独立実装（similarity.ts の conceptKey とは別の計算法: 南の辺の上のセルを列ごとに走査し、
+ * 向きは「LDK が西 → 洗面が東 → 階段が東」の優先順で、板と部屋を折り返した側から選ぶ）。
+ * 同じ定義の文字列を返す（K2 は全階の南面の並びを、反転で小さい方に正規化。2階以上は主寝室と洋室を畳む）
+ */
+export function conceptKeyIndependent(plan: Plan): string {
+  const head: Record<string, string | null> = {
+    wic: 'master', kitchen: 'ldk', pantry: 'ldk', doma: 'entry', bath: 'wash', laundry: 'wash', store: null, closet: null, hall: null,
+  }
+  const perFloor = plan.floors.map((fl, f) => {
+    const rc = fl.fp ?? { x: 0, y: 0, W: plan.W, H: plan.H }
+    const seq: string[] = []
+    for (let x = rc.x; x < rc.x + rc.W; x++) {
+      const r = fl.rooms.find((q) => q.x <= x && x < q.x + q.w && q.y <= rc.y + rc.H - 1 && rc.y + rc.H - 1 < q.y + q.h)
+      if (!r) continue
+      let t = r.type in head ? head[r.type] : r.type
+      if (f >= 1 && t === 'master') t = 'bed'
+      if (t && seq[seq.length - 1] !== t) seq.push(t)
+    }
+    return seq
+  })
+  const a = perFloor.map((s) => s.join('>')).join('/')
+  const b = perFloor.map((s) => s.slice().reverse().join('>')).join('/')
+  const k2 = a < b || a === b ? a : b
+  const f1 = plan.floors[0]?.rooms ?? []
+  const find = (t: string) => f1.find((r) => r.type === t)
+  // 板の中心から幅の 1/6 以内なら中央（-1 西・1 東）。mirror = 左右を折り返して見る
+  const zone = (r: Room | undefined, mirror: boolean): number => {
+    if (!r) return 0
+    const c2 = mirror ? 2 * plan.W - (2 * r.x + r.w) : 2 * r.x + r.w
+    return 6 * Math.abs(c2 - plan.W) <= 2 * plan.W ? 0 : c2 < plan.W ? -1 : 1
+  }
+  const ldk = find('ldk')
+  const wash = find('wash')
+  const stair = find('stair')
+  // 向き（折り返すか）: LDK が東なら折り返す。LDK が中央なら洗面が西なら、洗面が中央なら階段が西なら折り返す
+  const mirror = zone(ldk, false) !== 0 ? zone(ldk, false) === 1 : zone(wash, false) !== 0 ? zone(wash, false) === -1 : zone(stair, false) === -1
+  const rel = (r: Room | undefined): string => {
+    if (!r) return '-'
+    const z = zone(r, mirror)
+    if (z === 0) return 'C'
+    return zone(ldk, mirror) !== 0 ? (z === -1 ? '=' : '!') : z === 1 ? 'E' : 'W'
+  }
+  const wy = wash ? (wash.y + wash.h / 2 < plan.H / 2 ? 'N' : 'S') : ''
+  return `${k2}|st${rel(stair)}|ws${rel(wash)}${wy}`
+}
