@@ -236,12 +236,12 @@ export interface BuildFootprint {
 }
 
 /** 北帯の高さ。2階建てで変種が hN を持たないとき（正規形・変種なし）は STAIR_HS の先頭。平屋は undefined */
-function effectiveHN(cfg: PlanConfig, v: Variant): 5 | 6 | undefined {
+export function effectiveHN(cfg: PlanConfig, v: Variant): 5 | 6 | undefined {
   return cfg.floors === 2 ? (v.hN ?? STAIR_HS[0]) : undefined
 }
 
 /** 北帯（階段のある帯）の高さを hN に固定する（GEN_VERSION 6。上下階で同じ高さ → 階段が 4×hN で一致する）。他の帯は変えない */
-function withNorthH(bands: Band[], hN: number | undefined): Band[] {
+export function withNorthH(bands: Band[], hN: number | undefined): Band[] {
   if (hN === undefined) return bands
   return bands.map((b, i): Band => (i === 0 ? { cells: b.cells, fixedH: hN } : b))
 }
