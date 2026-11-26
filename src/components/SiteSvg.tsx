@@ -5,6 +5,7 @@ import { ROOM, findEntry } from '../core/rooms'
 import { entryDoor } from '../core/derive'
 import { computeWindows } from '../core/windows'
 import { CAR_D, CAR_W, siteLayout, type SiteRect } from '../core/site'
+import type { BackDoor } from '../core/backdoor'
 
 /** 敷地図（配置図）。siteLayout の結果に、1階の間取りの簡略版（部屋の外形・LDK と玄関のラベル・玄関ドア・LDK の南の窓）を重ねる。
  * 生成には関係しない（R-IN-05〜07、R-DRAW-25）。家具・動線は描かない */
@@ -25,6 +26,38 @@ function Car({ r, front }: { r: SiteRect; front: boolean }) {
       <Rect box={r} fill="#d8d9d8" stroke="#9a9d9e" strokeWidth={0.15} />
       <rect x={cx - 1.7} y={r.y + (front ? 2.2 : 1.8)} width={3.4} height={CAR_D - 4.4} rx={0.9} fill="#aeb9bf" />
       <rect x={cx - 1.2} y={r.y + 3.4} width={2.4} height={1.6} rx={0.4} fill="#c9d3d8" />
+    </g>
+  )
+}
+
+/** 物干し場（勝手口の外のサービスヤード）: 舗装の矩形に物干し竿 2 本（長さ方向の線）と支柱 */
+function Drying({ r }: { r: SiteRect }) {
+  const xs = [r.x + r.w * 0.33, r.x + r.w * 0.67]
+  return (
+    <g>
+      <Rect box={r} fill="#e9e6da" stroke="#b5ad96" strokeWidth={0.12} />
+      {xs.map((x, i) => (
+        <g key={i}>
+          <line x1={x} y1={r.y + 0.5} x2={x} y2={r.y + r.h - 0.5} stroke="#5f9bbd" strokeWidth={0.18} />
+          <line x1={x - 0.4} y1={r.y + 0.5} x2={x + 0.4} y2={r.y + 0.5} stroke="#5f9bbd" strokeWidth={0.16} />
+          <line x1={x - 0.4} y1={r.y + r.h - 0.5} x2={x + 0.4} y2={r.y + r.h - 0.5} stroke="#5f9bbd" strokeWidth={0.16} />
+        </g>
+      ))}
+      <text x={r.x + r.w / 2} y={r.y + r.h / 2 + 0.35} fontSize={0.85} fill="#4d7690" textAnchor="middle" stroke="#e9e6da" strokeWidth={0.3} strokeLinejoin="round" paintOrder="stroke">物干し</text>
+    </g>
+  )
+}
+
+/** 勝手口（敷地図の簡略版。外壁に片開き戸の記号。FloorSvg の BackDoorMark と同じ形） */
+function BackDoorSite({ bd }: { bd: BackDoor }) {
+  const r = bd.w
+  const hy = bd.y + r / 2
+  const ty = bd.y - r / 2
+  const out = bd.side === 'W' ? -1 : 1
+  return (
+    <g>
+      <line x1={bd.x} y1={ty} x2={bd.x} y2={hy} stroke="#fdfcf8" strokeWidth={0.46} />
+      <path d={`M ${bd.x} ${hy} L ${bd.x + out * r} ${hy} A ${r} ${r} 0 0 ${bd.side === 'W' ? 1 : 0} ${bd.x} ${ty} Z`} fill="rgba(90,90,90,0.07)" stroke="#5a5a5a" strokeWidth={0.1} />
     </g>
   )
 }
@@ -85,6 +118,8 @@ export function SiteSvg({ cfg, plan, uid = 'site' }: { cfg: PlanConfig; plan: Pl
       })()}
       {/* ウッドデッキ */}
       {L.deck && <><Rect box={L.deck} fill={`url(#deck${uid})`} stroke="#a58b5e" strokeWidth={0.12} /><text x={L.deck.x + L.deck.w / 2} y={L.deck.y + L.deck.h + 1.25} fontSize={1.0} fill="#7a6540" textAnchor="middle">デッキ</text></>}
+      {/* 物干し場（勝手口の外） */}
+      {L.drying && <Drying r={L.drying} />}
       {/* 建物（1階の簡略版） */}
       <g>
         {rooms.map((r, i) => <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={fillOf(r)} stroke={INK} strokeWidth={0.1} />)}
@@ -99,6 +134,7 @@ export function SiteSvg({ cfg, plan, uid = 'site' }: { cfg: PlanConfig; plan: Pl
             {sweep && <path d={`M ${w.a} ${fp.y + fp.H} v 0.7 M ${w.b} ${fp.y + fp.H} v 0.7`} strokeWidth={0.16} />}
           </g>
         ))}
+        {L.backDoor && L.drying && <BackDoorSite bd={L.backDoor} />}
         {entry && entry.y + entry.h === fp.y + fp.H && <path d={entryDoor(entry, fp.y + fp.H).path} fill="rgba(90,90,90,0.07)" stroke="#5a5a5a" strokeWidth={0.1} />}
       </g>
       {/* 生け垣（庭なし）: 敷地の南の境界の線に丸い植栽 */}

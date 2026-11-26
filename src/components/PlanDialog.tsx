@@ -68,7 +68,8 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
   }, [])
   const name = planName(cfg, plan)
   const siteText = explainSite(cfg, plan)
-  const siteNote = siteCaption(siteLayout(plan, cfg))
+  const site = siteLayout(plan, cfg)
+  const siteNote = siteCaption(site)
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-scrim px-3 py-[18px]" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-[900px] rounded-2xl bg-surface p-6 shadow-panel max-[640px]:p-4">
@@ -107,7 +108,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
           </span>
         </div>
         <div ref={svgBoxRef} className="mt-3 rounded-2xl border border-plan-line bg-paper p-2">
-          <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip sweepWindows={cfg.garden > 0} showFurniture={furniture} showFlow={flow} />
+          <FloorSvg plan={plan} floorIdx={floor} uid="dlg" kitchenFace={cfg.feats.includes('kitchenFace')} siteStrip sweepWindows={cfg.garden > 0} backDoor={site.backDoor} showFurniture={furniture} showFlow={flow} />
         </div>
         <div className="mt-4 grid gap-[18px] max-[640px]:grid-cols-1 min-[641px]:grid-cols-2">
           <div>
