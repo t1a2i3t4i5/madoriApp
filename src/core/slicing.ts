@@ -1,6 +1,6 @@
 import type { Band, Cell, Footprint, FootprintPair, Room } from './types'
 import { clamp } from './rng'
-import { minShort } from './rooms'
+import { bandHall, minShort } from './rooms'
 
 export interface WaterfillItem {
   min: number
@@ -231,7 +231,7 @@ function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort 
       return {
         min,
         // 短辺の下限が面積由来の上限を上回るときは、上限を下限に合わせる。上限は最大面積を超えないよう切り捨てる
-        max: Math.max(3, Math.floor(c.maxArea / h), base) + add,
+        max: Math.max(2, Math.floor(c.maxArea / h), base) + add,
         w: Math.max(1, c.target / h) + add,
       }
     })
@@ -288,7 +288,7 @@ function tryBand(cells: Cell[], W: number, y: number, h: number, ignoreMinShort 
  * ホール（type hall）がなければ何もしない。入力は書き換えない
  */
 function capClosets(rooms: Room[]): Room[] {
-  const hall = rooms.find((r) => r.type === 'hall')
+  const hall = bandHall(rooms)
   if (!hall) return rooms
   const out: Room[] = []
   for (const r of rooms) {

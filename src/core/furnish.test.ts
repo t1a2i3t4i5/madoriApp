@@ -21,7 +21,7 @@ function allPlans(): { cfg: PlanConfig; plan: ScoredPlan }[] {
 const PLANS = allPlans()
 
 /** ラベルを省略した部屋の割合の上限（記録用。実測は下のコメント） */
-const OMIT_MAX = 0.05
+const OMIT_MAX = 0.065
 
 /** 洋室（bed）のうち pred を満たす部屋の数と、ベッドと机を全て置けた数 */
 function bedStat(pred: (r: Room) => boolean): { ok: number; total: number } {
@@ -142,7 +142,7 @@ describe('家具配置 furnish', () => {
 
     it('ラベルを置けずに省略した部屋の割合（記録用の上限）', () => {
       const { rooms, omitted } = spotStats()
-      // 実測 51/1230（4.1%）。家具のある部屋のうち、従来の描画でも省く部屋（幅不足）を含む。上限は実測に余裕を足した値
+      // 実測 66/1229（5.4%。GEN_VERSION 9 は 51/1230 = 4.1%）。家具のある部屋のうち、従来の描画でも省く部屋（幅不足）を含む。上限は実測に余裕を足した値
       expect(omitted / rooms, `omitted ${omitted}/${rooms}`).toBeLessThanOrEqual(OMIT_MAX)
     })
 
@@ -150,8 +150,8 @@ describe('家具配置 furnish', () => {
       const { byType } = spotStats()
       const w = byType['bed']
       expect(w?.rooms).toBeGreaterThan(100)
-      // 実測 51/570（8.9%。全体の省略 51 件はすべて洋室）。上限は実測に余裕を足した値
-      expect((w?.omitted ?? 0) / (w?.rooms ?? 1), `bed ${w?.omitted}/${w?.rooms}`).toBeLessThanOrEqual(0.1)
+      // 実測 66/570（11.6%。全体の省略 66 件はすべて洋室。GEN_VERSION 9 は 51/570 = 8.9%）。上限は実測に余裕を足した値
+      expect((w?.omitted ?? 0) / (w?.rooms ?? 1), `bed ${w?.omitted}/${w?.rooms}`).toBeLessThanOrEqual(0.14)
     })
 
     it('家具のない部屋は undefined（従来どおり中央に描く）', () => {

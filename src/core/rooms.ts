@@ -47,6 +47,13 @@ export const MIN_SHORT: Partial<Record<RoomType, number>> = {
 export function findEntry<T extends Room>(rooms: readonly T[]): T | undefined {
   return rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'doma')
 }
+/** 玄関ホール（列の積みで玄関・土間の北に作るホール。GEN_VERSION 10。R-SPACE-46）の表示名 */
+export const ENTRY_HALL = '玄関ホール'
+export const isEntryHall = (r: Room): boolean => r.type === 'hall' && r.name === ENTRY_HALL
+/** 帯のホール（玄関ホールを除く最初のホール）。ホールが1室しかない階ではそのホール */
+export function bandHall<T extends Room>(rooms: readonly T[]): T | undefined {
+  return rooms.find((r) => r.type === 'hall' && r.name !== ENTRY_HALL)
+}
 export const minShort = (t: RoomType): number => MIN_SHORT[t] ?? 0
 
 export function cell(type: RoomType, opts?: Partial<Cell>): Cell {

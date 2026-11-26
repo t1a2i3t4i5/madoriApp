@@ -1,11 +1,11 @@
 /// <reference types="node" />
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { GEN_VERSION, candidatePool } from './generate'
 import { planKey } from './enumerate'
 import { BOUNDARY, CONDITIONS, SEEDS, canon } from './testing'
 import { shortSideViolations } from './validate'
+import { ROOM } from './rooms'
 import type { PlanConfig, Room } from './types'
 
 /**
@@ -19,10 +19,10 @@ const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}.json`, import.meta.u
 const FIXTURE_V3 = new URL('./__fixtures__/gen-v3.json', import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4.json', import.meta.url)
 const FIXTURE_V6 = new URL('./__fixtures__/gen-v6.json', import.meta.url)
+const FIXTURE_V9 = new URL('./__fixtures__/gen-v9.json', import.meta.url)
 const FIXTURE_V8 = new URL('./__fixtures__/gen-v8.json', import.meta.url)
 const FIXTURE_V7 = new URL('./__fixtures__/gen-v7.json', import.meta.url)
 /** v7 のコードで記録した、候補プールの条件ごとの「key|1F の部屋」の sha256（v7 → v8 で 1F が不変であることの固定） */
-const FIXTURE_V7_F1 = new URL('./__fixtures__/gen-v7-f1sig.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-grid-stairs.json', import.meta.url)
 
@@ -113,18 +113,11 @@ describe('過去の版からの移行検証（総二階・平屋）', () => {
   describe('v7 → v8 の移行（2F の切断線の寄せ）', () => {
     let v7: Fixture
     let now: Fixture // v8 の記録どうしの比較（現行は v9）
-    let f1sig: Record<string, string>
     beforeAll(() => {
       v7 = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture
       now = JSON.parse(readFileSync(FIXTURE_V8, 'utf8')) as Fixture
-      f1sig = JSON.parse(readFileSync(FIXTURE_V7_F1, 'utf8')) as typeof f1sig
     })
-    it('1F の部屋は、候補プールのすべての案で v7 と同一（key の集合も同一。v7 のコードで記録した条件ごとのハッシュと一致）', () => {
-      for (const { name, cfg } of [...CONDITIONS, ...BOUNDARY]) {
-        const lines = candidatePool(copy(cfg)).map((p) => `${planKey(p)}|${(p.floors[0]?.rooms ?? []).map((r) => `${r.type}:${r.x},${r.y},${r.w},${r.h}`).join(';')}`).sort()
-        expect(createHash('sha256').update(JSON.stringify(lines)).digest('hex'), name).toBe(f1sig[name])
-      }
-    }, 120_000)
+    // 「1F の部屋は v7 と同一」（v7 のコードで記録したハッシュとライブ生成の比較）は、GEN_VERSION 10 で 1F にも列の積みが入り成り立たなくなったので外した
     it('候補プールの件数は条件ごとに v7 と完全一致', () => {
       expect(v7.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
       for (const [i, p] of now.pools.entries()) {
@@ -143,13 +136,50 @@ describe('過去の版からの移行検証（総二階・平屋）', () => {
     })
   })
 
+  // 移行検証: GEN_VERSION 10 は列の積み（R-SPACE-43）・玄関ホール（R-SPACE-46）・トイレ等の幅の上限の下駄の撤去を入れる。プールの形が変わる
+  describe('v9 → v10 の移行（列の積み）', () => {
+    let v9: Fixture
+    let v10: Fixture
+    beforeAll(() => {
+      v9 = JSON.parse(readFileSync(FIXTURE_V9, 'utf8')) as Fixture
+      v10 = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
+    })
+    it('grid: 条件の集合と、3案が出る条件の集合・件数は v9 と同一（69 件）。named 条件の提示件数も同一', () => {
+      expect(v9.genVersion).toBe(9)
+      expect(Object.keys(v10.grid).sort()).toEqual(Object.keys(v9.grid).sort())
+      for (const [k, v] of Object.entries(v9.grid)) expect(v10.grid[k]?.length, k).toBe(v.length)
+      expect(Object.values(v10.grid).filter((v) => v.length === 3)).toHaveLength(69)
+      expect(v10.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v9.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+    it('候補プールの件数は v9 を下回らない（実測は同数。sha256 は変わる）', () => {
+      expect(v10.pools.map((p) => p.name)).toEqual(v9.pools.map((p) => p.name))
+      for (const [i, p] of v10.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v9.pools[i]?.count ?? 0)
+      expect(v10.pools.map((p) => p.sha256)).not.toEqual(v9.pools.map((p) => p.sha256))
+    })
+    it('最大面積を超えた部屋の室数（提示案・named 条件）が v9 の 60% 以下に減っている（R-ROOM-01）', () => {
+      const count = (f: Fixture) => {
+        let over = 0
+        for (const c of f.cases) for (const p of c.plans) for (const fl of p.floors) for (const sr of fl) {
+          const [type = '', rest = ''] = sr.split(':')
+          const [, , w = 0, h = 0] = rest.split(',').map(Number)
+          const def = (ROOM as Record<string, { maxArea: number } | undefined>)[type]
+          if (def && type !== 'hall' && type !== 'void' && type !== 'closet' && w * h > def.maxArea) over++
+        }
+        return over
+      }
+      const before = count(v9)
+      expect(before).toBeGreaterThan(0)
+      expect(count(v10)).toBeLessThanOrEqual(before * 0.6)
+    })
+  })
+
   // 移行検証: GEN_VERSION 9 は選抜の規則だけを変える（概念キー＋重なり。候補プールは不変）
   describe('v8 → v9 の移行（選抜の差し替え）', () => {
     let v8: Fixture
     let v9: Fixture
     beforeAll(() => {
       v8 = JSON.parse(readFileSync(FIXTURE_V8, 'utf8')) as Fixture
-      v9 = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
+      v9 = JSON.parse(readFileSync(FIXTURE_V9, 'utf8')) as Fixture
     })
     it('候補プールは完全に不変（件数・上位10件・sha256・sigSha256）', () => {
       expect(v8.genVersion).toBe(8)
@@ -160,12 +190,7 @@ describe('過去の版からの移行検証（総二階・平屋）', () => {
       for (const [k, v] of Object.entries(v8.grid)) expect(v9.grid[k]?.length, k).toBe(v.length)
       expect(v9.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v8.cases.map((c) => [c.name, c.seed, c.plans.length]))
     })
-    it('fixture の各案の key は候補プール（v8 と同一）にある案（選抜の入れ替えにすぎない）', () => {
-      for (const { name, cfg } of ALL) {
-        const keys = new Set<string>(candidatePool(copy(cfg)).map(planKey))
-        for (const c of v9.cases.filter((x) => x.name === name)) for (const p of c.plans) expect(keys.has(p.key), `${name} ${p.key}`).toBe(true)
-      }
-    }, 120_000)
+    // 「fixture の各案の key が候補プールにある」（ライブ生成との比較）は、現行の生成が v10 になったので外した（v9 の記録どうしの比較だけを残す）
   })
 
   // 移行検証（fixture どうしの記録。現行の生成は v8）: GEN_VERSION 7 はスコア「採光」を「二面採光」に置き換えた（棄却はしないので、プールの件数・3案が出る条件は不変。順位だけが変わる）

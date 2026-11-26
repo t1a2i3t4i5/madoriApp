@@ -1,6 +1,6 @@
 import type { FloorRect, Plan, Room } from './types'
 import { floorRect } from './types'
-import { HABITABLE, findEntry, minShort } from './rooms'
+import { HABITABLE, bandHall, findEntry, minShort } from './rooms'
 import { computeDoors, sharedEdge } from './derive'
 import { HALL_RULES, guardViolations } from './circulation'
 import { stairMouthCovered } from './stair'
@@ -79,7 +79,7 @@ export function validateRooms(rooms: readonly Room[], rect: FloorRect): boolean 
     if (r.type !== 'void' && !seen.has(r)) return false
   }
   // ホールの長さ（GEN_VERSION 6）・階段の口の全幅・動線のガード（G1〜G4）
-  const hall = rooms.find((r) => r.type === 'hall')
+  const hall = bandHall(rooms)
   if (hall && hall.w < HALL_RULES.minHallLen) return false
   if (!stairMouthCovered(rooms)) return false
   if (guardViolations(rooms, doors).length > 0) return false

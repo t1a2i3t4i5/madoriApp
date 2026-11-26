@@ -6,6 +6,7 @@ import { layoutFloor } from './slicing'
 import type { LayoutFloorOpts } from './slicing'
 import { carveFloor } from './carve'
 import { trimHall } from './hall'
+import { stackOvers } from './stack'
 import { validateRooms } from './validate'
 import { STAIR_HS } from './stair'
 import { isPrivateRoom, storageOf } from './closets'
@@ -236,6 +237,9 @@ export interface BuildFootprint {
 }
 
 /** 北帯の高さ。2階建てで変種が hN を持たないとき（正規形・変種なし）は STAIR_HS の先頭。平屋は undefined */
+/** 割り付けの後処理（GEN_VERSION 10）: ホール帯の端の吸収 → 列の積み（最大面積を超える細い部屋を主室＋付属に割る） → 収納化 */
+const postLayout = (rs: Room[], plate: { x: number; y: number; W: number; H: number }): Room[] => carveFloor(stackOvers(trimHall(rs, plate), plate))
+
 export function effectiveHN(cfg: PlanConfig, v: Variant): 5 | 6 | undefined {
   return cfg.floors === 2 ? (v.hN ?? STAIR_HS[0]) : undefined
 }
@@ -307,7 +311,7 @@ export function buildPlanStage(
     const f1bands = b1 && applyVariant(b1, 1, v, hasVoid)
     const l1 = f1bands ? layoutFloor(W, H, withNorthH(f1bands, hN), { ignoreMinShort, closet }) : null
     // 割り付けの後に、ホール帯の端の吸収（GEN_VERSION 6）→ 収納化（carve）
-    f1 = !f1bands ? 'variant' : l1 ? { rooms: ignoreMinShort ? l1.rooms : carveFloor(trimHall(l1.rooms, { x: 0, y: 0, W, H })), heights: l1.heights } : 'f1'
+    f1 = !f1bands ? 'variant' : l1 ? { rooms: ignoreMinShort ? l1.rooms : postLayout(l1.rooms, { x: 0, y: 0, W, H }), heights: l1.heights } : 'f1'
     memo?.set(memoKey, f1)
   }
   if (typeof f1 === 'string') return fail(f1)
@@ -328,7 +332,7 @@ export function buildPlanStage(
     const f2base = layoutFloor(W2, H2, f2bandsN, f2opts)
     if (!f2base) return fail('f2')
     const finish = (rooms: Room[]): { carved: Room[]; shifted: Room[] } => {
-      const carved = ignoreMinShort ? rooms : carveFloor(trimHall(rooms, { x: 0, y: 0, W: W2, H: H2 }))
+      const carved = ignoreMinShort ? rooms : postLayout(rooms, { x: 0, y: 0, W: W2, H: H2 })
       return { carved, shifted: ox === 0 ? carved : carved.map((r) => ({ ...r, x: r.x + ox })) }
     }
     let { shifted: f2rooms } = finish(f2base.rooms)

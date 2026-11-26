@@ -1,4 +1,5 @@
 import type { Plan, Room } from './types'
+import { bandHall } from './rooms'
 import { STAIR_OPEN_TYPES, sharedEdge, type Rect } from './derive'
 
 /**
@@ -61,7 +62,7 @@ export function stairMouthCovered(rooms: readonly Room[]): boolean {
 /** 階段の口の辺の全幅が、ホール1室で覆われているか（階段がなければ true）。ホール帯の端の吸収・行き止まりの収納化が使う厳しい版 */
 export function hallCoversMouth(rooms: readonly Room[]): boolean {
   const stair = rooms.find((r) => r.type === 'stair')
-  const hall = rooms.find((r) => r.type === 'hall')
+  const hall = bandHall(rooms)
   if (!stair) return true
   return !!hall && covers(mouthSpans([hall], stair), stair.x, stair.x + stair.w)
 }

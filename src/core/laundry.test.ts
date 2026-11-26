@@ -25,7 +25,7 @@ const stats = (xs: Item[]) => xs.map(({ cfg, plan }) => laundryStats(plan, cfg))
 const med = (xs: LaundryStats[], f: (s: LaundryStats) => number | undefined) => quantile(xs.map(f).filter((v): v is number => v !== undefined), 0.5)
 
 describe('標本 fixture の版', () => {
-  it('gen-v9.json・gen-v9-partial.json の genVersion が現在の GEN_VERSION と一致する', () => {
+  it('gen-v10.json・gen-v10-partial.json の genVersion が現在の GEN_VERSION と一致する', () => {
     expect(gridFullSample().genVersion).toBe(GEN_VERSION)
     expect(gridPartSample().genVersion).toBe(GEN_VERSION)
   })
@@ -66,8 +66,10 @@ describe('laundryStats: 洗濯動線の観測（生成・スコアには効か�
       const dry = med(ss, (s) => s.toDry?.len)
       const garden = med(ss, (s) => s.toGarden?.len)
       expect(dry * 0.455).toBeLessThanOrEqual(th.dryMaxM)
+      // 見直し後の実測: 干す場所までの中央値は 庭までの 人気6 0.49 倍・グリッド 0.32 倍・部分二階 0.33 倍（3.9m・3.1m・2.3m。見直し前は部分二階が 0.79 倍）
       expect(dry).toBeLessThan(garden * 0.6)
       // LDK を横切らない案が大半
+      // 勝手口が付く案のうち toDry.crossesLdk の割合。GEN_VERSION 10（洗濯機の部屋の見直し後）の実測は 人気6 0%・グリッド総二階・平屋 1.6%・部分二階 6.8%（見直し前は 7.6%・21%・45%）
       expect(rate(withBack.filter((s) => s.toDry?.crossesLdk).length, withBack.length)).toBeLessThan(0.15)
       // 個室は通らない（勝手口経由）
       expect(withBack.filter((s) => s.toDry?.crossesPrivate).length).toBe(0)
@@ -75,12 +77,12 @@ describe('laundryStats: 洗濯動線の観測（生成・スコアには効か�
     })
   }
 
-  it('庭までの中央値が実測（人気6 9.4m・グリッド 9.6m・部分二階 8.4m）の近くにある', () => {
-    expect(med(stats(popular), (s) => s.toGarden?.len) * 0.455).toBeGreaterThan(8.5)
+  it('庭までの中央値が実測（GEN_VERSION 10 の見直し後: 人気6 8.1m・グリッド 9.4m・部分二階 7.0m。v9 は 9.4m・9.6m・8.4m）の近くにある', () => {
+    expect(med(stats(popular), (s) => s.toGarden?.len) * 0.455).toBeGreaterThan(7.5)
     expect(med(stats(popular), (s) => s.toGarden?.len) * 0.455).toBeLessThan(10.3)
     expect(med(stats(full), (s) => s.toGarden?.len) * 0.455).toBeGreaterThan(8.7)
     expect(med(stats(full), (s) => s.toGarden?.len) * 0.455).toBeLessThan(10.5)
-    expect(med(stats(part), (s) => s.toGarden?.len) * 0.455).toBeGreaterThan(7.5)
+    expect(med(stats(part), (s) => s.toGarden?.len) * 0.455).toBeGreaterThan(6.5)
     expect(med(stats(part), (s) => s.toGarden?.len) * 0.455).toBeLessThan(9.3)
   })
 
@@ -337,17 +339,18 @@ describe('敷地の文の洗濯の1文（R-TEXT-11。PR-L3）', () => {
         const sd = L.backDoor.side === 'W' ? '西' : '東'
         expect(t).toMatch(new RegExp(`の${sd}(端)?の勝手口`))
         expect(t).toContain(L.backDoor.room.name)
-        const wr = (plan.floors[0]?.rooms ?? []).find((r) => r.type === 'laundry' || r.type === 'wash')
+        const wr = washerRoom(plan)
         expect(t.includes('室内干し')).toBe(!!wr && hasDryPipe(wr))
         if (L.backDoor.room.type === 'hall') expect(t).toContain(`ホールの${sd}端の勝手口`)
       }
     }
+    // GEN_VERSION 10（見直し後）の実測 91.7%（311/339。見直し前は 66%）。勝手口 C の経路が LDK を横切り庭より長い案の文は出さない
     expect(said / all.length).toBeGreaterThan(0.85)
   })
 
-  it('文を出さない形は、勝手口の経路が LDK を横切り庭より長い案で、グリッドの提示案に10件（R-IDX-11）', () => {
+  it('文を出さない形は、勝手口の経路が LDK を横切り庭より長い案で、グリッドの提示案に12件（GEN_VERSION 10 の見直し後の実測: 総二階・平屋 3＋部分二階 9。見直し前は100件、v9 は 10 件。R-IDX-11）', () => {
     const sup = all.filter((p) => backDoorTextSuppressed(laundryStats(p, cfg)))
-    expect(sup.length).toBe(10)
+    expect(sup.length).toBe(12)
     for (const p of sup) {
       const s = laundryStats(p, cfg)
       expect(s.backDoor).toBe('C')
