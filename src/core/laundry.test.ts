@@ -174,18 +174,15 @@ describe('勝手口と物干し場の導出（R-FLOW-07・R-IN-09）', () => {
         expect(d.y >= 0 && d.y + d.h <= plan.H).toBe(true) // 建物の南端を超えない
         // 勝手口の位置が物干し場の長さの範囲にある
         expect(L.backDoor.y >= d.y && L.backDoor.y <= d.y + d.h).toBe(true)
-        // 敷地（lot）は拡幅を含まない（PR-L2 まで）。拡幅の観測値を足せば物干し場が収まる
-        const lotX0 = L.lot.x - (L.backDoor.side === 'W' ? L.lotWidenByDrying : 0)
-        const lotX1 = L.lot.x + L.lot.w + (L.backDoor.side === 'E' ? L.lotWidenByDrying : 0)
-        expect(d.x >= lotX0 && d.x + d.w <= lotX1).toBe(true)
+        // 敷地（lot）は拡幅を含む（PR-L2）ので、物干し場は lot に収まる
+        expect(d.x >= L.lot.x && d.x + d.w <= L.lot.x + L.lot.w).toBe(true)
         const others = [L.building, ...L.cars, ...(L.porch ? [L.porch] : []), ...L.approach, ...L.garden, ...(L.deck ? [L.deck] : [])]
         for (const o of others) expect(overlap(d, o), JSON.stringify(c)).toBe(false)
         if (L.lotWidenByDrying > 0) widened++
-        // lot の余白 + 観測の拡幅 = DRY_D 以上。広げたときはちょうど DRY_D（広げ幅 = DRY_D − lot の余白 > 0）
+        // 物干し場の側の lot の余白は DRY_D 以上。広げたときはちょうど DRY_D
         const margin = L.backDoor.side === 'W' ? -L.lot.x : L.lot.x + L.lot.w - plan.W
-        expect(margin + L.lotWidenByDrying).toBeGreaterThanOrEqual(DRY_D)
-        if (L.lotWidenByDrying > 0) expect(margin + L.lotWidenByDrying).toBe(DRY_D)
-        else expect(margin).toBeGreaterThanOrEqual(DRY_D)
+        expect(margin).toBeGreaterThanOrEqual(DRY_D)
+        if (L.lotWidenByDrying > 0) expect(margin).toBe(DRY_D)
       }
     }
     expect(placed).toBeGreaterThan(300)
@@ -216,21 +213,19 @@ describe('勝手口と物干し場の導出（R-FLOW-07・R-IN-09）', () => {
       const L = siteLayout(plan, cfg)
       expect(s.dryingSide).toBe(L.drying && L.backDoor ? L.backDoor.side : null)
       expect(s.lotWidenByDrying).toBe(L.lotWidenByDrying)
-      // PR-L1 では拡幅は観測値のみで、lot（UI の敷地）には含まない
-      expect(L.lot).toEqual(siteLayout(plan, { ...cfg, parking: cfg.parking }).lot)
       expect(L.lotWidenByDrying).toBeGreaterThanOrEqual(0)
       if (L.lotWidenByDrying > 0) expect(L.drying).not.toBeNull()
     }
   })
 
-  it('lot は物干し場の有無・拡幅で変わらない（物干し場がなくても同じ幅）', () => {
+  it('lot の間口 = 基準 + 横付けの台数分 + 物干し場の拡幅（PR-L2 から拡幅を lot に含める）', () => {
     let widened = 0
     for (const { plan } of samples) {
       for (const c of COMBOS) {
         const L = siteLayout(plan, c)
         const nSide = L.cars.filter((x) => x.mode === 'side').length
         const wrap = L.wrap ? WRAP_MARGIN : 2
-        expect(L.lot.w).toBe(plan.W + 2 + wrap + 6 * nSide)
+        expect(L.lot.w).toBe(plan.W + 2 + wrap + 6 * nSide + L.lotWidenByDrying)
         if (L.lotWidenByDrying > 0) widened++
       }
     }

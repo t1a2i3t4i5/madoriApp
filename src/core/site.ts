@@ -70,7 +70,7 @@ export interface SiteLayout {
   backDoor: BackDoor | null
   /** 物干し場（勝手口の外の建物の横。DRY_D × DRY_L）。backDoor がなければ null（庭ありならデッキが代わり） */
   drying: SiteRect | null
-  /** 物干し場を置くのに必要な敷地の間口の広げ幅（セル。広げなくてよければ 0）。観測値のみで lot.w には含まれない（含めるのは描画と同時の PR-L2） */
+  /** 物干し場を置くのに必要な敷地の間口の広げ幅（セル。広げなくてよければ 0）。PR-L2 から lot.w に含まれる（庭・駐車の範囲の基準は広げる前の値） */
   lotWidenByDrying: number
 }
 
@@ -156,13 +156,13 @@ export function siteLayout(plan: Pick<Plan, 'W' | 'H' | 'floors'>, cfg: Pick<Pla
     backDoor = bd
     drying = { x: bd.side === 'W' ? -DRY_D : W, y: dy0, w: DRY_D, h: dh }
     const have = bd.side === 'W' ? -x0 : x1 - W
-    if (have < DRY_D) {
-      // 観測値のみ。lot には含めない（敷地図に物干し場が描かれる PR-L2 で、描画と同時に lot へ含める）
-      lotWidenByDrying = DRY_D - have
-    }
+    if (have < DRY_D) lotWidenByDrying = DRY_D - have
     break
   }
-  const lot: SiteRect = { x: x0, y: -MARGIN, w: x1 - x0, h: H + D + MARGIN }
+  // 物干し場のための拡幅は lot に含める（PR-L2。敷地図に物干し場が描かれるのと同時）。庭・駐車の基準 x0・x1 は広げる前のまま
+  const widenW = backDoor?.side === 'W' ? lotWidenByDrying : 0
+  const widenE = backDoor?.side === 'E' ? lotWidenByDrying : 0
+  const lot: SiteRect = { x: x0 - widenW, y: -MARGIN, w: x1 - x0 + widenW + widenE, h: H + D + MARGIN }
 
   // 4. アプローチ: 玄関の南外壁の前のポーチ + 駐車（なければ道路）からの通路
   let porch: SiteRect | null = null
@@ -257,7 +257,7 @@ export interface SiteStats {
   ldkByHedge: number
   /** 前庭に並べた台数・建物の横に出した台数 */
   carMode: { front: number; side: number }
-  /** 物干し場の側（勝手口の側。物干し場がなければ null）と、物干し場による敷地の間口の拡幅（セル）。観測のみ */
+  /** 物干し場の側（勝手口の側。物干し場がなければ null）と、物干し場による敷地の間口の拡幅（セル。lot に含まれる） */
   dryingSide: 'W' | 'E' | null
   lotWidenByDrying: number
   /** 敷地の目安（坪・間口と奥行のセル数） */

@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { explainPlan } from '../core/explain'
-import { explainSite } from '../core/site'
+import { explainSite, siteLayout } from '../core/site'
+import { computeWindows } from '../core/windows'
+import { floorRect } from '../core/types'
 import { enumeratePlans, galleryPlans } from '../core/enumerate'
 import { CONDITIONS, PARTIAL_CONDITIONS, defined } from '../core/testing'
 import { addFavorite } from '../lib/favorites'
@@ -157,6 +159,48 @@ describe('コンポーネントの描画', () => {
     expect(b[3]).toBeGreaterThan(defined(a[3]))
     const c = vb(renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" siteStrip />))
     expect(defined(c[1]) + defined(c[3])).toBeGreaterThanOrEqual(plan.H + 2.5)
+  })
+
+  it('FloorSvg: 勝手口（R-DRAW-28）は backDoor を渡した 1F にだけ描かれ、同じ壁の小窓は描き替わる。窓の導出は変わらない', () => {
+    let tested = 0
+    for (const plan of plans.slice(0, 12)) {
+      const bd = siteLayout(plan, cfg).backDoor
+      if (!bd) continue
+      const rooms = plan.floors[0]?.rooms ?? []
+      const small = computeWindows(rooms, floorRect(plan, 0)).filter((w) => w.kind === 'small' && w.room === bd.room && w.side === bd.side).length
+      const off = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" />)
+      const on = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" backDoor={bd} />)
+      const f2 = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={1} uid="t" backDoor={bd} />)
+      // 勝手口の弧（半径 = 戸の幅）が1本増える
+      const arcs = (m: string) => (m.match(/ A 1\.6 1\.6 /g) ?? []).length
+      expect(arcs(on)).toBe(arcs(off) + 1)
+      expect(arcs(f2)).toBe(arcs(renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={1} uid="t" />)))
+      // 窓の白抜き線（stroke-width 0.46）は窓 1 つにつき 1 本。同じ壁の小窓の分だけ減り、勝手口の白抜きが 1 本増える
+      const white = (m: string) => (m.match(/stroke-width="0\.46"/g) ?? []).length
+      expect(white(on) - white(off)).toBe(1 - small)
+      tested++
+    }
+    expect(tested).toBeGreaterThan(0)
+  })
+
+  it('FloorSvg: ランドリーのない案は洗面に洗濯機（丸窓つきの角丸矩形）を描く。ランドリーの案は物干しパイプ（青の一点鎖線）が面積・短辺の条件で出る', () => {
+    const plan = defined(plans.find((p) => p.floors[0]?.rooms.some((r) => r.type === 'wash') && !p.floors[0]?.rooms.some((r) => r.type === 'laundry')))
+    const svg = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" />)
+    expect(svg).toContain('rx="0.25"')
+    const lcfg = { ...cfg, feats: ['laundry'] } as typeof cfg
+    const lp = enumeratePlans(lcfg).find((p) => p.floors[0]?.rooms.some((r) => r.type === 'laundry' && r.w * r.h >= 16 && Math.min(r.w, r.h) >= 3))
+    if (lp) expect(renderToStaticMarkup(<FloorSvg plan={lp} floorIdx={0} uid="t" />)).toContain('stroke="#5f9bbd"')
+  })
+
+  it('SiteSvg: 物干し場（竿の線）と勝手口が、物干し場のある案にだけ出る', () => {
+    let withDry = 0
+    for (const plan of plans.slice(0, 12)) {
+      const L = siteLayout(plan, cfg)
+      const svg = renderToStaticMarkup(<SiteSvg cfg={cfg} plan={plan} uid="s" />)
+      expect(svg.includes('>物干し</text>')).toBe(!!L.drying)
+      if (L.drying) withDry++
+    }
+    expect(withDry).toBeGreaterThan(0)
   })
 
   it('PlanCard: 画面は表示中の階だけ、印刷専用ブロックに全階（1F/2F）の図面がある', () => {

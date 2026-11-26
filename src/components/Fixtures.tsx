@@ -1,5 +1,7 @@
 import type { Room } from '../core/types'
 import type { StairGeom } from '../core/stair'
+import { WASHER_SIZE, hasDryPipe } from '../core/washer'
+import type { Rect } from '../core/derive'
 
 /** 階段の上り矢印と重ならないよう、ラベルは上端に置き、矢印は下側に短縮する（この高さ以上のときだけ。FloorSvg の RoomLabel と共有） */
 export const STAIR_LABEL_MIN_H = 5.2
@@ -55,7 +57,21 @@ function UStair({ geom, floorIdx }: { geom: StairGeom; floorIdx: number }) {
 }
 
 /** 水回りの器具・階段・畳目など、部屋種別ごとの描き込み。stair は geom（折り返し）があれば折り返しで、なければ従来の直進で描く */
-export function Fixtures({ r, geom, floorIdx = 0 }: { r: Room; geom?: StairGeom | null; floorIdx?: number }) {
+/** 洗濯機の記号（ランドリーと洗面で共通。ドラム式の丸窓つき） */
+function Washer({ x, y }: { x: number; y: number }) {
+  const B = '#7f949f'
+  const s = WASHER_SIZE
+  return (
+    <>
+      <rect x={x} y={y} width={s} height={s} rx={0.25} fill="#fff" stroke={B} strokeWidth={0.12} />
+      <circle cx={x + s / 2} cy={y + s / 2} r={0.5} fill="none" stroke={B} strokeWidth={0.1} />
+    </>
+  )
+}
+
+/** 水回りの器具・階段・畳目など、部屋種別ごとの描き込み。stair は geom（折り返し）があれば折り返しで、なければ従来の直進で描く。
+ * washer: 洗面に描く洗濯機の位置（ランドリーのない案。置けなければ null）*/
+export function Fixtures({ r, geom, floorIdx = 0, washer }: { r: Room; geom?: StairGeom | null; floorIdx?: number; washer?: Rect | null }) {
   const { x, y, w, h } = r
   const B = '#7f949f'
   switch (r.type) {
@@ -79,6 +95,7 @@ export function Fixtures({ r, geom, floorIdx = 0 }: { r: Room; geom?: StairGeom 
         <>
           <rect x={x + 0.4} y={y + 0.4} width={bw} height={1.2} fill="#fff" stroke={B} strokeWidth={0.12} />
           <ellipse cx={x + 0.4 + bw / 2} cy={y + 1.0} rx={0.8} ry={0.42} fill="none" stroke={B} strokeWidth={0.1} />
+          {washer && <Washer x={washer.x} y={washer.y} />}
         </>
       )
     }
@@ -132,13 +149,21 @@ export function Fixtures({ r, geom, floorIdx = 0 }: { r: Room; geom?: StairGeom 
     case 'store':
     case 'pantry':
       return <rect x={x + 0.25} y={y + 0.25} width={Math.max(0.6, w - 0.5)} height={0.55} fill="#d8c9a8" stroke="#b3a077" strokeWidth={0.08} />
-    case 'laundry':
+    case 'laundry': {
+      // 室内干しの物干しパイプ（面積 16 以上かつ短辺 3 以上）: 長辺に沿った一点鎖線。洗濯機（北西の隅）と反対の壁寄りに引く。
+      // クローゼットのハンガーパイプ（茶）と区別して青系
+      const pipe = hasDryPipe(r)
+        ? h >= w
+          ? { x1: x + w - 0.9, y1: y + 2.3, x2: x + w - 0.9, y2: y + h - 0.5 }
+          : { x1: x + 2.3, y1: y + h - 0.9, x2: x + w - 0.5, y2: y + h - 0.9 }
+        : null
       return (
         <>
-          <rect x={x + 0.4} y={y + 0.4} width={1.5} height={1.5} rx={0.25} fill="#fff" stroke={B} strokeWidth={0.12} />
-          <circle cx={x + 1.15} cy={y + 1.15} r={0.5} fill="none" stroke={B} strokeWidth={0.1} />
+          <Washer x={x + 0.4} y={y + 0.4} />
+          {pipe && <line {...pipe} stroke="#5f9bbd" strokeWidth={0.14} strokeDasharray="1.2 0.3 0.2 0.3" />}
         </>
       )
+    }
     default:
       return null
   }

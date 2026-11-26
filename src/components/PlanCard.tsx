@@ -30,7 +30,8 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
   const floor = clampFloor(selectedFloor, plan.floors.length)
   const name = planName(cfg, plan)
   const siteText = explainSite(cfg, plan)
-  const siteNote = siteCaption(siteLayout(plan, cfg))
+  const site = siteLayout(plan, cfg)
+  const siteNote = siteCaption(site)
   const cl = storageCount(plan)
   const open = () => onOpen(floor)
   return (
@@ -42,13 +43,13 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
     >
       <StarButton starred={starred} onToggle={onToggleStar} className="absolute top-1.5 right-1.5 z-10" />
       <div className="border-b border-line bg-paper p-1 print:hidden">
-        <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} sweepWindows={cfg.garden > 0} scale={scale} />
+        <FloorSvg plan={plan} floorIdx={floor} uid={`${uidPrefix}${index}f${floor}`} kitchenFace={cfg.feats.includes('kitchenFace')} sweepWindows={cfg.garden > 0} backDoor={site.backDoor} scale={scale} />
       </div>
       {/* 印刷専用: 画面は表示中の階だけなので、印刷時は全階を並べる（pattern id は画面用と分ける） */}
       <div data-print-floors className="hidden gap-2 print:grid print:grid-cols-2" aria-hidden="true">
         {plan.floors.map((_, fi) => (
           <div key={fi} className="border border-plan-line bg-paper p-1.5">
-            <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} sweepWindows={cfg.garden > 0} scale={scale} />
+            <FloorSvg plan={plan} floorIdx={fi} uid={`${uidPrefix}${index}p${fi}`} kitchenFace={cfg.feats.includes('kitchenFace')} sweepWindows={cfg.garden > 0} backDoor={site.backDoor} scale={scale} />
           </div>
         ))}
         {/* 全階の後に敷地図を1つ足す（R-DRAW-27） */}

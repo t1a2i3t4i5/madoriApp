@@ -43,11 +43,8 @@ describe('siteLayout: 配置の不変条件（全標本×駐車0〜2×庭0〜2�
       for (const c of COMBOS) {
         const L = siteLayout(plan, c)
         const ps = parts(L)
-        // 物干し場は観測の拡幅（lotWidenByDrying）の分だけ lot の外に出うる（lot に含めるのは PR-L2）
-        const wide: SiteRect = L.backDoor?.side === 'W'
-          ? { ...L.lot, x: L.lot.x - L.lotWidenByDrying, w: L.lot.w + L.lotWidenByDrying }
-          : { ...L.lot, w: L.lot.w + L.lotWidenByDrying }
-        for (const p of ps) expect(inside(p.name === 'drying' ? wide : L.lot, p.r), `${p.name} ${JSON.stringify(c)}`).toBe(true)
+        // 物干し場の拡幅（lotWidenByDrying）は lot に含まれる（PR-L2）ので、物干し場も lot に収まる
+        for (const p of ps) expect(inside(L.lot, p.r), `${p.name} ${JSON.stringify(c)}`).toBe(true)
         for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
           const a = ps[i], b = ps[j]
           if (a && b) expect(overlap(a.r, b.r), `${a.name} × ${b.name} ${JSON.stringify(c)}`).toBe(false)
@@ -124,8 +121,8 @@ describe('siteLayout: 配置の不変条件（全標本×駐車0〜2×庭0〜2�
         const nSide = L.cars.filter((x) => x.mode === 'side').length
         const base = siteLayout(plan, { parking: 0, garden: c.garden })
         // 敷地の間口 = 基準 + 6×横付けの台数（庭の回り込みの余白は同じ庭の設定で共通）
-        // 物干し場の拡幅（lotWidenByDrying）は観測値で、lot には含まれない
-        expect(L.lot.w).toBe(base.lot.w + 6 * nSide)
+        // 物干し場の拡幅（lotWidenByDrying。PR-L2 から lot に含まれる）は別に引く
+        expect(L.lot.w - L.lotWidenByDrying).toBe(base.lot.w - base.lotWidenByDrying + 6 * nSide)
       }
     }
   })
@@ -263,7 +260,7 @@ describe('siteStats: 観測の実測（スコア・生成には入れない）',
       }
     }
     console.log(rows.join('\n'))
-    // 実測（GEN_VERSION 8）で固定する退行防止。人気6条件: 1台は横付けなし・2台+庭ありは約8割が横付け、敷地の中央値は 1台+庭小さめ 46.5坪（lot は物干し場の拡幅を含まないので PR-L1 の前後で変わらない）
+    // 実測（GEN_VERSION 8）で固定する退行防止。人気6条件: 1台は横付けなし・2台+庭ありは約8割が横付け、敷地の中央値は 1台+庭小さめ 46.5坪（PR-L2 で lot に物干し場の拡幅が入るので、中央値は PR-L1 より少し大きい）
     const med = (xs: Plan[], c: { parking: number; garden: number }) => quantile(xs.map((p) => siteStats(p, c).lotArea), 0.5)
     const sideRate = (xs: Plan[], c: { parking: number; garden: number }) => pct(xs.filter((p) => siteStats(p, c).carMode.side > 0).length, xs.length)
     expect(sideRate(popular, { parking: 1, garden: 1 })).toBe(0)
