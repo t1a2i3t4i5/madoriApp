@@ -234,7 +234,7 @@ function grid(): { full: Plan[]; part: Plan[] } {
 }
 
 describe('標本 fixture の版', () => {
-  it('gen-v9.json・gen-v9-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+  it('gen-v10.json・gen-v10-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
     expect(gridFullSample().genVersion).toBe(GEN_VERSION)
     expect(gridPartSample().genVersion).toBe(GEN_VERSION)
   })

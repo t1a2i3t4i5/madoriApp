@@ -101,8 +101,8 @@ function stairAccess(plan: Plan): '玄関' | '玄関ホール' | null {
   const doors = computeDoors(fl.rooms)
   const linked = (a: Room, b: Room) => doors.some((d) => (d.a === a && d.b === b) || (d.a === b && d.b === a))
   if (linked(entry, stair)) return '玄関'
-  const hall = fl.rooms.find((r) => r.type === 'hall')
-  return hall && linked(entry, hall) && linked(hall, stair) ? '玄関ホール' : null
+  const halls = fl.rooms.filter((r) => r.type === 'hall')
+  return halls.some((h) => linked(entry, h)) && halls.some((h) => linked(h, stair)) ? '玄関ホール' : null
 }
 
 /**

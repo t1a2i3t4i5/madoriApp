@@ -1,5 +1,5 @@
 import type { Room } from './types'
-import { ROOM, minShort } from './rooms'
+import { ROOM, bandHall, minShort } from './rooms'
 import { doorOK, sharedEdge } from './derive'
 import { isPrivateRoom, storageOf } from './closets'
 import { shortSideViolations, wetViolations } from './validate'
@@ -164,7 +164,7 @@ function stairLost(before: Room[], after: Room[]): boolean {
 function carveHallEnds(st0: State): State {
   let st = st0
   for (const end of ['W', 'E'] as const) {
-    const hall = st.rooms.find((r) => r.type === 'hall')
+    const hall = bandHall(st.rooms)
     if (!hall) break
     let done = false
     for (let len = Math.min(6, hall.w - 4); len >= 4 && !done; len--) {
@@ -175,7 +175,7 @@ function carveHallEnds(st0: State): State {
         .sort((a, b) => ovl(b) - ovl(a) || a.x - b.x || a.y - b.y)
       for (const o of owners) {
         const next = clone(st)
-        const nh = next.rooms.find((r) => r.type === 'hall')
+        const nh = bandHall(next.rooms)
         const no = next.rooms.find((r) => r.x === o.x && r.y === o.y && r.type === o.type)
         if (!nh || !no) continue
         const cl: Room = {

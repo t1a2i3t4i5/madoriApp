@@ -80,12 +80,12 @@ function isPlan(v: unknown): v is ScoredPlan {
 }
 
 /**
- * of を付けられる種別（付属収納）→ 持ち主になれる種別（GEN_VERSION 5 の生成と同じ）。
- * クローゼット: 主寝室・洋室。収納（廊下収納・リネン庫など）: ホール・洗面・ランドリー・主寝室・洋室
+ * of を付けられる種別（付属収納）→ 持ち主になれる種別（GEN_VERSION 10 の生成と同じ）。
+ * クローゼット: 主寝室・洋室。収納（廊下収納・リネン庫など）: ホール・洗面・ランドリー・主寝室・洋室。GEN_VERSION 10（列の積み）で LDK・土間・玄関・キッチンを足した
  */
 const OWNER_TYPES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['closet', new Set(['master', 'bed'])],
-  ['store', new Set(['hall', 'wash', 'laundry', 'master', 'bed'])],
+  ['store', new Set(['hall', 'wash', 'laundry', 'master', 'bed', 'ldk', 'doma', 'entry', 'kitchen'])],
 ])
 
 /**

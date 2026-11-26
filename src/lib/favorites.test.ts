@@ -187,6 +187,10 @@ describe('お気に入り', () => {
     expect(loads(mk({ of: 'x' }))).toBe(0)
     expect(loads(mk({ type: 'bath' }))).toBe(0) // of を付けられない種別
     expect(loads(mk({}, { ...bed, type: 'ldk' }))).toBe(0) // 持ち主が個室でない
+    // GEN_VERSION 10（列の積み）: 収納（store）は LDK・土間の持ち主を受け付ける。クローゼットは個室だけ
+    expect(loads(mk({ type: 'store' }, { ...bed, type: 'ldk' }))).toBe(1)
+    expect(loads(mk({ type: 'store' }, { ...bed, type: 'doma' }))).toBe(1)
+    expect(loads(mk({ type: 'store' }, { ...bed, type: 'bath' }))).toBe(0)
     expect(loads(mk({ x: 9, of: { dx: -9, dy: 0 } }))).toBe(0) // 離れている
     // 2階でも同じ規則: 同じ階に持ち主がいれば通り、持ち主が別の階にしかなければ棄却
     const floors2 = (rooms: unknown[]) => ({ ...good, plan: { ...good.plan, floors: [fl, { ...fl, label: '2F', rooms }] } })

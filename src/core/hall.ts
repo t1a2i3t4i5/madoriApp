@@ -1,5 +1,5 @@
 import type { Room, RoomType } from './types'
-import { ROOM } from './rooms'
+import { ROOM, bandHall } from './rooms'
 import { sharedEdge } from './derive'
 import { HALL_RULES, mouthRuleOk } from './circulation'
 import { validateRooms } from './validate'
@@ -50,7 +50,7 @@ export function trimHall(rooms0: readonly Room[], plate: Plate): Room[] {
   // 吸収の前（= 収納化だけ行った場合）の、収納のある個室の数。必要になったときだけ計算する
   let base: number | undefined
   for (const end of ['W', 'E'] as const) {
-    const hall = rooms.find((r) => r.type === 'hall')
+    const hall = bandHall(rooms)
     if (!hall) return rooms
     const north = rooms.filter((r) => r.y + r.h === hall.y)
     const south = rooms.filter((r) => r.y === hall.y + hall.h)

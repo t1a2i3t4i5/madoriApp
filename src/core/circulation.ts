@@ -1,5 +1,6 @@
 import type { Door, Room } from './types'
 import { computeDoors, sharedEdge } from './derive'
+import { bandHall } from './rooms'
 import { hallCoversMouth, stairMouthCovered } from './stair'
 
 /**
@@ -60,7 +61,20 @@ export function guardViolations(rooms: readonly Room[], doors: readonly Door[] =
   const entry = rooms.find((r) => r.type === 'entry') ?? rooms.find((r) => r.type === 'doma')
   if (stair && entry) {
     const direct = nb(entry).includes(stair)
-    const viaHall = nb(entry).some((n) => n.type === 'hall' && nb(n).includes(stair))
+    // 玄関ホール（GEN_VERSION 10）を挟んでもよい: 玄関からホールだけをたどって階段に着けば可
+    const seen = new Set<Room>()
+    const todo = nb(entry).filter((n) => n.type === 'hall')
+    let viaHall = false
+    while (todo.length > 0) {
+      const h = todo.pop() as Room
+      if (seen.has(h)) continue
+      seen.add(h)
+      if (nb(h).includes(stair)) {
+        viaHall = true
+        break
+      }
+      todo.push(...nb(h).filter((n) => n.type === 'hall'))
+    }
     if (!direct && !viaHall) out.push('玄関から LDK を通らずに階段へ行けない')
   }
   return out
@@ -72,6 +86,6 @@ export function mouthRuleOk(rooms: readonly Room[]): boolean {
   if (!stair) return true
   if (HALL_RULES.mouth === 'hall') return hallCoversMouth(rooms)
   if (HALL_RULES.mouth === 'open') return stairMouthCovered(rooms)
-  const hall = rooms.find((r) => r.type === 'hall')
+  const hall = bandHall(rooms)
   return !!hall && sharedEdge(stair, hall) !== null
 }

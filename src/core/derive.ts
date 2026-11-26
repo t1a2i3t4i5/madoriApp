@@ -1,5 +1,5 @@
 import type { Door, DoorSwing, Edge, Pt, Room, RoomType } from './types'
-import { VIA } from './rooms'
+import { VIA, isEntryHall } from './rooms'
 
 /** 2部屋の共有辺。ドアは辺の中央でなく端寄り（34%地点）に置き、部屋中央のラベルと開き弧を分離する */
 export function sharedEdge(a: Room, b: Room): Edge | null {
@@ -238,6 +238,16 @@ function openingSwing(a: Room, e: Edge): DoorSwing {
   return { opens: a.type === 'stair' ? 'b' : 'a', r: 0, hinge: c, closed: c, open: c, center: c, rect: { x: c.x, y: c.y, w: 0, h: 0 } }
 }
 
+/**
+ * 扉のない開口にする、階段以外の組（GEN_VERSION 10。R-SPACE-46）: ホールどうし（帯のホールと玄関ホール）、玄関ホールと玄関・土間
+ * （玄関から上がり框でホールへ上がる。扉を付けず、玄関ホールの狭い奥行で LDK などの扉の弧と重ならないようにする）
+ */
+function isEntryOpening(a: Room, b: Room): boolean {
+  if (a.type === 'hall' && b.type === 'hall') return true
+  const stub = isEntryHall(a) ? b : isEntryHall(b) ? a : null
+  return stub !== null && (stub.type === 'entry' || stub.type === 'doma')
+}
+
 export function computeDoors(rooms: Room[]): Door[] {
   const doors: Door[] = []
   for (const [i, a] of rooms.entries()) {
@@ -247,7 +257,7 @@ export function computeDoors(rooms: Room[]): Door[] {
       doors.push(
         isOwned(a) || isOwned(b)
           ? { a, b, edge: e, swing: foldSwing(a, b, e), kind: 'fold' }
-          : a.type === 'stair' || b.type === 'stair'
+          : a.type === 'stair' || b.type === 'stair' || isEntryOpening(a, b)
             ? { a, b, edge: e, swing: openingSwing(a, e), kind: 'open' }
             : { a, b, edge: e, swing: doorSwing(a, b, e) },
       )

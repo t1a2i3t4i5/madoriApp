@@ -1,4 +1,5 @@
 import type { Plan, Room } from './types'
+import { bandHall } from './rooms'
 
 /**
  * 勝手口の候補（R-FLOW-07。洗濯動線 PR-L1）。純関数・フレームワーク非依存。1F だけ。
@@ -51,6 +52,6 @@ export function backDoorCandidates(plan: Pick<Plan, 'W' | 'floors'>, parkSide: '
     for (const c of cs) out.push({ kind, side: c.side, room, x: c.x, y: c.y, w: BACKDOOR_W })
   }
   add('B', washerRoom(plan))
-  add('C', rooms.find((r) => r.type === 'hall'))
+  add('C', bandHall(rooms))
   return out
 }

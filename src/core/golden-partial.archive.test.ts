@@ -1,11 +1,8 @@
 /// <reference types="node" />
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { GEN_VERSION, candidatePool } from './generate'
-import { planKey } from './enumerate'
+import { GEN_VERSION } from './generate'
 import { PARTIAL_CONDITIONS } from './testing'
-import type { PlanConfig } from './types'
 
 /**
  * 過去の版の移行検証（部分二階）。通常の npm test には入れず、版を上げるときに npm run test:archive で回す（手順は CLAUDE.md の「テスト方針」）。
@@ -13,6 +10,7 @@ import type { PlanConfig } from './types'
  * （現行の生成と fixture の一致は golden-partial.test.ts が保証する）
  */
 const FIXTURE = new URL(`./__fixtures__/gen-v${GEN_VERSION}-partial.json`, import.meta.url)
+const FIXTURE_V9 = new URL('./__fixtures__/gen-v9-partial.json', import.meta.url)
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
 const FIXTURE_V6 = new URL('./__fixtures__/gen-v6-partial.json', import.meta.url)
 const FIXTURE_V7 = new URL('./__fixtures__/gen-v7-partial.json', import.meta.url)
@@ -20,7 +18,6 @@ const FIXTURE_V7_F1 = new URL('./__fixtures__/gen-v7-f1sig.json', import.meta.ur
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5-partial.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-partial-grid-stairs.json', import.meta.url)
 
-const copy = (cfg: PlanConfig): PlanConfig => ({ ...cfg, feats: [...cfg.feats] })
 
 interface Fixture {
   genVersion: number
@@ -84,6 +81,25 @@ describe('過去の版からの移行検証（部分二階）', () => {
     })
   })
 
+  // 移行検証: GEN_VERSION 10 は列の積み（部分二階。3案が出る条件は 44 のまま）
+  describe('v9 → v10 の移行（列の積み）', () => {
+    let v9: Fixture
+    beforeAll(() => {
+      v9 = JSON.parse(readFileSync(FIXTURE_V9, 'utf8')) as Fixture
+    })
+    it('grid: 条件の集合と、3案が出る条件の集合・件数は v9 と同一（44 件）。named 条件の提示件数も同一', () => {
+      expect(Object.keys(now.grid).sort()).toEqual(Object.keys(v9.grid).sort())
+      for (const [k, v] of Object.entries(v9.grid)) expect(now.grid[k]?.length, k).toBe(v.length)
+      expect(Object.values(now.grid).filter((v) => v.length === 3)).toHaveLength(44)
+      expect(now.cases.map((c) => [c.name, c.seed, c.plans.length])).toEqual(v9.cases.map((c) => [c.name, c.seed, c.plans.length]))
+    })
+    it('候補プールの件数は v9 を下回らない（sha256 は変わる）', () => {
+      expect(now.pools.map((p) => p.name)).toEqual(v9.pools.map((p) => p.name))
+      for (const [i, p] of now.pools.entries()) expect(p.count, p.name).toBeGreaterThanOrEqual(v9.pools[i]?.count ?? 0)
+      expect(now.pools.map((p) => p.sha256)).not.toEqual(v9.pools.map((p) => p.sha256))
+    })
+  })
+
   // 移行検証: GEN_VERSION 8 は 2F の帯内の切断線を 1F の壁に寄せる（R-SPACE-35）。1F は不変（総二階側の golden-fixture.test.ts が v7 のコードで記録したハッシュで固定。ここは部分二階）
   describe('v7 → v8 の移行（2F の切断線の寄せ）', () => {
     let v7: Fixture
@@ -92,12 +108,7 @@ describe('過去の版からの移行検証（部分二階）', () => {
       v7 = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture
       f1sig = JSON.parse(readFileSync(FIXTURE_V7_F1, 'utf8')) as typeof f1sig
     })
-    it('1F の部屋は、候補プールのすべての案で v7 と同一（key の集合も同一）', () => {
-      for (const { name, cfg } of PARTIAL_CONDITIONS) {
-        const lines = candidatePool(copy(cfg)).map((p) => `${planKey(p)}|${(p.floors[0]?.rooms ?? []).map((r) => `${r.type}:${r.x},${r.y},${r.w},${r.h}`).join(';')}`).sort()
-        expect(createHash('sha256').update(JSON.stringify(lines)).digest('hex'), name).toBe(f1sig[name])
-      }
-    }, 120_000)
+    // 「1F の部屋は v7 と同一」（ライブ生成との比較）は、GEN_VERSION 10 で 1F にも列の積みが入り成り立たなくなったので外した
     it('候補プールの件数は条件ごとに v7 と完全一致', () => {
       expect(v7.pools.map((p) => p.name)).toEqual(now.pools.map((p) => p.name))
       for (const [i, p] of now.pools.entries()) {

@@ -75,8 +75,10 @@ describe('ドアの開き形状（全条件・全候補・全階）', () => {
           floors++
           const ds = computeDoors(fl.rooms)
           let ov = false
-          for (const [i, x] of ds.entries()) {
-            for (const y of ds.slice(i + 1)) {
+          // 開口（kind 'open'。階段とホール・玄関・土間・LDK、ホールどうし）は弧がない（矩形の幅・高さ 0）ので対象外
+          const arcs = ds.filter((d) => d.kind !== 'open')
+          for (const [i, x] of arcs.entries()) {
+            for (const y of arcs.slice(i + 1)) {
               pairs++
               const p1 = x.swing.rect, q = y.swing.rect
               if (p1.x < q.x + q.w - EPS && q.x < p1.x + p1.w - EPS && p1.y < q.y + q.h - EPS && q.y < p1.y + p1.h - EPS) ov = true

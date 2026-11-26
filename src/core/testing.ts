@@ -150,7 +150,8 @@ export function footprintViolations(plan: Plan): string[] {
 /** 付属収納の持ち主の種別（rooms.ts・closets.ts・favorites.ts とは別に持つ独立実装） */
 const OWNER_OK: Record<string, string[]> = {
   closet: ['master', 'bed'],
-  store: ['hall', 'wash', 'laundry', 'master', 'bed'],
+  // GEN_VERSION 10: 列の積みの付属の持ち主に LDK（リビング収納）・土間（土間収納）・玄関・キッチンも許す
+  store: ['hall', 'wash', 'laundry', 'master', 'bed', 'ldk', 'doma', 'entry', 'kitchen'],
 }
 
 /**
@@ -320,13 +321,21 @@ export function stairViolations(plan: Plan): string[] {
 }
 
 /** 階段の扉・開口の独立検証（R-DOOR-04・R-DOOR-13・R-DOOR-14）: 階段に付くのは kind 'open' だけで、相手はホール・玄関・土間・LDK だけ。開口に葉・弧がない */
+/** 階段以外で開口になってよい組（独立に書いた表）: ホールどうし、玄関ホールと玄関・土間 */
+function isOpenPair(a: Room, b: Room): boolean {
+  if (a.type === 'hall' && b.type === 'hall') return true
+  const stub = a.type === 'hall' && a.name === '玄関ホール' ? b : b.type === 'hall' && b.name === '玄関ホール' ? a : null
+  return stub !== null && (stub.type === 'entry' || stub.type === 'doma')
+}
+
 export function stairDoorViolations(plan: Plan, doorsOf: (rooms: Room[]) => { a: Room; b: Room; kind?: string; swing: { rect: { w: number; h: number } } }[]): string[] {
   const out: string[] = []
   for (const fl of plan.floors) {
     for (const d of doorsOf(fl.rooms)) {
       const other = d.a.type === 'stair' ? d.b : d.b.type === 'stair' ? d.a : null
       if (!other) {
-        if (d.kind === 'open') out.push(`${fl.label} 階段以外に開口がある`)
+        // 階段以外の開口は、ホールどうし（帯のホールと玄関ホール。GEN_VERSION 10）だけ
+        if (d.kind === 'open' && !isOpenPair(d.a, d.b)) out.push(`${fl.label} 階段以外に開口がある`)
         continue
       }
       if (d.kind !== 'open') out.push(`${fl.label} 階段に扉（${d.kind ?? 'swing'}）が付いている`)
@@ -362,7 +371,20 @@ export function guardViolationsIndependent(
     const entry = fl.rooms.find((r) => r.type === 'entry') ?? fl.rooms.find((r) => r.type === 'doma')
     if (stair && entry) {
       const direct = around(entry).includes(stair)
-      const viaHall = around(entry).some((n) => n.type === 'hall' && around(n).includes(stair))
+      // 玄関から、ホール（帯のホール・玄関ホール）だけをたどって階段に着けるか（独立に書いた幅優先探索）
+      let viaHall = false
+      const seen = new Set<Room>()
+      let frontier = around(entry).filter((n) => n.type === 'hall')
+      while (frontier.length > 0 && !viaHall) {
+        const next: Room[] = []
+        for (const h of frontier) {
+          if (seen.has(h)) continue
+          seen.add(h)
+          if (around(h).includes(stair)) viaHall = true
+          next.push(...around(h).filter((n) => n.type === 'hall'))
+        }
+        frontier = next
+      }
       if (!direct && !viaHall) out.push(`${fl.label} G4 玄関から階段へ LDK を通らずに行けない`)
     }
   }
@@ -374,8 +396,10 @@ export function hallViolations(plan: Plan): string[] {
   const out: string[] = []
   for (const fl of plan.floors) {
     const halls = fl.rooms.filter((r) => r.type === 'hall')
-    if (halls.length !== 1) out.push(`${fl.label} ホールが ${halls.length} 個`)
-    for (const h of halls) if (h.w < 4) out.push(`${fl.label} ホールの長さ ${h.w} が4未満`)
+    // 帯のホールは1個、玄関ホール（名前で区別。GEN_VERSION 10）は 0〜2 個（1階の玄関・土間が別々のセルのとき、それぞれの北）。長さの下限は帯のホールだけ
+    const band = halls.filter((h) => h.name !== '玄関ホール')
+    if (band.length !== 1 || halls.length - band.length > 2) out.push(`${fl.label} ホールが ${halls.length} 個`)
+    for (const h of band) if (h.w < 4) out.push(`${fl.label} ホールの長さ ${h.w} が4未満`)
   }
   return out
 }

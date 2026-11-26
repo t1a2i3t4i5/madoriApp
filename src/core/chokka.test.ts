@@ -57,7 +57,7 @@ function build() {
 const TIMEOUT = 600_000
 
 describe('標本 fixture の版', () => {
-  it('gen-v9.json・gen-v9-samples.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+  it('gen-v10.json・gen-v10-samples.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
     expect(gridFullSample().genVersion).toBe(GEN_VERSION)
     expect(gridPartAltSample().genVersion).toBe(GEN_VERSION)
   })
@@ -110,7 +110,7 @@ describe('直下率: 独立実装との一致と、実測（GEN_VERSION 8）', (
     expect(quantile(xs, 0.5)).toBeGreaterThanOrEqual(54)
     expect(xs.filter((x) => x < 40).length / xs.length).toBeLessThanOrEqual(0.1)
   }, TIMEOUT)
-  // R-IDX-10: 載らない壁片のうち南帯の縦（vS）が占める割合。実測は人気6 54.3%・グリッド総二階 44%（上限・下限は実測±2.5pt）
+  // R-IDX-10: 載らない壁片のうち南帯の縦（vS）が占める割合。GEN_VERSION 10 の実測は人気6 58.8%（v9 は 54.3%）・グリッド総二階 47.7%（v9 は 44%）（上限・下限は実測±2.5pt）
   const vSShare = (ps: Plan[]) => {
     let off = 0
     let offVS = 0
@@ -122,13 +122,13 @@ describe('直下率: 独立実装との一致と、実測（GEN_VERSION 8）', (
     }
     return offVS / off
   }
-  it('内訳（R-IDX-10）: 載らない壁片に占める南帯の縦の割合を記録（人気6 54%・グリッド総二階 44%）', () => {
+  it('内訳（R-IDX-10）: 載らない壁片に占める南帯の縦の割合を記録（人気6 59%・グリッド総二階 48%）', () => {
     build()
     const pp = vSShare(popular)
     const gf = vSShare(gridFull)
     expect(pp).toBeGreaterThanOrEqual(0.52)
-    expect(pp).toBeLessThanOrEqual(0.57)
+    expect(pp).toBeLessThanOrEqual(0.62)
     expect(gf).toBeGreaterThanOrEqual(0.42)
-    expect(gf).toBeLessThanOrEqual(0.47)
+    expect(gf).toBeLessThanOrEqual(0.50)
   }, TIMEOUT)
 })

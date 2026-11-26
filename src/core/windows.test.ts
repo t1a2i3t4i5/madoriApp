@@ -120,7 +120,7 @@ describe('windowStats: 提示案の不変条件と実測', () => {
   })
 })
 
-/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 917室。GEN_VERSION 7 までは 918室。v8 の寄せで2階のスコアが変わり選抜される案が入れ替わったため。案数は同じ 207）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 917室は仕様の 916室と 1室違う。fixture（gen-v9.json・gen-v9-partial.json）の提示案の planKey から組み直す（ライブ生成しない）。版の一致は下で検査する */
+/** 提示案の標本（feasibility グリッド・seed 1）。総二階・平屋 207案（居室 917室。GEN_VERSION 7 までは 918室。v8 の寄せで2階のスコアが変わり選抜される案が入れ替わったため。案数は同じ 207）／部分二階 132案（543室）。仕様（window-spec.md）の部分二階の標本（99案・439室）とは別で、部分二階の値は仕様と比べない。総二階・平屋の 917室は仕様の 916室と 1室違う。fixture（gen-v10.json・gen-v10-partial.json）の提示案の planKey から組み直す（ライブ生成しない）。版の一致は下で検査する */
 function grid(): { full: Plan[]; part: Plan[] } {
   return { full: gridFullSample().plans, part: gridPartSample().plans }
 }
@@ -136,7 +136,7 @@ const rate = (plans: Plan[]) => {
 }
 
 describe('標本 fixture の版', () => {
-  it('gen-v9.json・gen-v9-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
+  it('gen-v10.json・gen-v10-partial.json の genVersion が現在の GEN_VERSION と一致する（生成が変われば golden-fixture が落ちる）', () => {
     expect(gridFullSample().genVersion).toBe(GEN_VERSION)
     expect(gridPartSample().genVersion).toBe(GEN_VERSION)
   })
