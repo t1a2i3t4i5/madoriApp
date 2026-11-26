@@ -5,10 +5,10 @@ import { floorRect, type FloorRect } from '../core/types'
 import { computeDoors, doorPath, entryDoor } from '../core/derive'
 import { computeWindows } from '../core/windows'
 import type { WindowSeg } from '../core/windows'
-import { AREA_FS, LABEL_FS, furnish, isVerticalLabel, kitchenCounter, labelSpots, rowFs, stackMetrics, type LabelSpot } from '../core/furnish'
+import { AREA_FS, LABEL_FS, furnish, isVerticalLabel, kitchenCounter, labelSpot, labelSpots, rowFs, stackMetrics, type LabelSpot } from '../core/furnish'
 import { stairGeom, type StairGeom } from '../core/stair'
-import type { BackDoor } from '../core/backdoor'
-import { washerInWash, washerSpot } from '../core/washer'
+import { BACKDOOR_W, type BackDoor } from '../core/backdoor'
+import { dryPipeLine, washBasinRect, washerInWash, washerSpot } from '../core/washer'
 import { Furniture } from './Furniture'
 import { Fixtures, STAIR_LABEL_MIN_H } from './Fixtures'
 import { tatami } from '../lib/format'
@@ -272,13 +272,20 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, sweepWin
   // 洗面の洗濯機（ランドリーのない案。1F だけ。置けなければ描かない）
   const washerAt = useMemo(() => {
     const wr = floorIdx === 0 ? washerInWash(plan) : null
-    return wr ? { room: wr, spot: washerSpot(wr, doors) } : null
-  }, [plan, floorIdx, doors])
+    return wr ? { room: wr, spot: washerSpot(wr, doors, backDoor) } : null
+  }, [plan, floorIdx, doors, backDoor])
+  // ランドリーの室内干しパイプ（ドアの弧・戸口・勝手口の通路を避ける。置けなければ描かない）
+  const pipes = useMemo(() => new Map(floorIdx === 0 ? rooms.map((r) => [r, dryPipeLine(r, doors, backDoor)] as const) : []), [rooms, doors, backDoor, floorIdx])
   const furniture = useMemo(
     () => (showFurniture ? furnish(rooms, doors, { kitchenFace: !!kitchenFace }) : []),
     [showFurniture, rooms, doors, kitchenFace],
   )
   const labelPos = useMemo(() => (furniture.length > 0 ? labelSpots(rooms, doors, furniture, !!kitchenFace) : null), [furniture, rooms, doors, kitchenFace])
+  // 洗濯機のある洗面は、洗濯機・洗面台を避けた位置に部屋名を置く（置けなければ省く）。洗濯機を避けても既定位置で足りるときは既定のまま
+  const washLabel = useMemo(
+    () => (washerAt?.spot ? { room: washerAt.room, spot: labelSpot(washerAt.room, false, [washerAt.spot, washBasinRect(washerAt.room)]) } : null),
+    [washerAt],
+  )
   const geom = useMemo(() => stairGeom(plan, floorIdx), [plan, floorIdx])
   const flows = useMemo(() => (showFlow ? computeFlows(plan, floorIdx) : []), [showFlow, plan, floorIdx])
   // 存在しない階を指された場合は何も描かない（フックの後で判定する）
@@ -286,15 +293,18 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, sweepWin
   const ldk = fl.rooms.find((r) => r.type === 'ldk')
   const entry = findEntry(fl.rooms)
 
-  // 勝手口の弧（半径 1.6）は余白 PAD_X に収まらないので、その側だけ余白を足す
-  const bdPad = bd ? Math.max(0, bd.w + 0.3 - PAD_X) : 0
-  let vbX = -PAD_X - (bd?.side === 'W' ? bdPad : 0), vbW = W + PAD_X * 2 + bdPad
+  // 勝手口の弧（半径 1.6）は余白 PAD_X に収まらない。scale があるとき（カード・比較表）は組全体・全階で縮尺をそろえるため、
+  // 勝手口の有無・側・階にかかわらず両側に一律で余白を足す。scale がない（拡大表示）ときは勝手口の側だけ足す
+  const bdNeed = Math.max(0, BACKDOOR_W + 0.3 - PAD_X)
+  const bdPad = scale ? bdNeed : bd ? bdNeed : 0
+  let vbX = -PAD_X - (scale || bd?.side === 'W' ? bdPad : 0), vbW = W + PAD_X * 2 + bdPad * (scale ? 2 : 1)
   const vbY = -PAD_TOP
   let vbH = H + PAD_TOP + PAD_BOTTOM
   if (scale) {
-    const targetW = scale.maxW + PAD_X * 2
-    vbX -= (targetW - W - PAD_X * 2 - bdPad) / 2
-    vbW = Math.max(targetW, vbW)
+    // 板を中央に置く。幅は maxW（W 以上）+ 左右の余白。vbX ≤ −PAD_X − bdPad が常に成り立つ
+    const targetW = Math.max(scale.maxW, W) + PAD_X * 2 + bdPad * 2
+    vbX = -(targetW - W) / 2
+    vbW = targetW
     vbH = scale.maxH + PAD_TOP + PAD_BOTTOM
   }
   // 敷地帯（南道路）の矩形の下端 H+2.5 まで、余白 0.3 を足して viewBox に収める
@@ -350,7 +360,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, sweepWin
           <rect x={ldk.x + ldk.w - Math.min(8, ldk.w - 3) + 0.1} y={ldk.y + 1.45} width={1.7} height={1.0} fill="#fff" stroke="#8a8a8a" strokeWidth={0.1} />
         </>
       )}
-      {fl.rooms.map((r, i) => <Fixtures key={i} r={r} geom={geom} floorIdx={floorIdx} washer={washerAt && washerAt.room === r ? washerAt.spot : null} />)}
+      {fl.rooms.map((r, i) => <Fixtures key={i} r={r} geom={geom} floorIdx={floorIdx} washer={washerAt && washerAt.room === r ? washerAt.spot : null} pipe={pipes.get(r) ?? null} />)}
       {furniture.length > 0 && <Furniture items={furniture} />}
       {/* ドアの開き弧 */}
       <g stroke="#5a5a5a" strokeWidth={0.13} fill="rgba(90,90,90,0.07)">
@@ -404,7 +414,7 @@ export function FloorSvg({ plan, floorIdx, uid, kitchenFace, siteStrip, sweepWin
       {bd && <BackDoorMark bd={bd} />}
       {/* 動線は部屋名ラベルより下 */}
       {showFlow && <FlowOverlay flows={flows} legendY={legendY} legendX={vbX + 1.2} />}
-      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} geom={geom} spot={labelPos?.[i]} />)}
+      {fl.rooms.map((r, i) => <RoomLabel key={i} r={r} kitchenFace={kitchenFace} furnished={furniture.length > 0} halo={showFlow && flows.length > 0} geom={geom} spot={washLabel && washLabel.room === r ? washLabel.spot : labelPos?.[i]} />)}
       {/* 玄関ドア（南側・外開き） */}
       {entry && entry.y + entry.h === fpBottom && (() => {
         const ed = entryDoor(entry, fpBottom)

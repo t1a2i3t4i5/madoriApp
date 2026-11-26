@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { PlanConfig, ScoredPlan } from '../core/types'
 import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
@@ -30,7 +30,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
   const floor = clampFloor(selectedFloor, plan.floors.length)
   const name = planName(cfg, plan)
   const siteText = explainSite(cfg, plan)
-  const site = siteLayout(plan, cfg)
+  const site = useMemo(() => siteLayout(plan, cfg), [plan, cfg])
   const siteNote = siteCaption(site)
   const cl = storageCount(plan)
   const open = () => onOpen(floor)

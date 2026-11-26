@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { explainPlan } from '../core/explain'
 import { explainSite, siteLayout } from '../core/site'
 import { computeWindows } from '../core/windows'
+import { computeDoors } from '../core/derive'
+import { washerInWash, washerSpot } from '../core/washer'
 import { floorRect } from '../core/types'
 import { enumeratePlans, galleryPlans } from '../core/enumerate'
 import { CONDITIONS, PARTIAL_CONDITIONS, defined } from '../core/testing'
@@ -161,6 +163,34 @@ describe('コンポーネントの描画', () => {
     expect(defined(c[1]) + defined(c[3])).toBeGreaterThanOrEqual(plan.H + 2.5)
   })
 
+  it('FloorSvg: 勝手口の弧の矩形は viewBox に収まり（scale あり・なし）、同じ scale なら組全体・全階で縮尺（vbW）が等しい', () => {
+    const vb = (html: string) => defined(/viewBox="([^"]*)"/.exec(html)?.[1]).split(' ').map(Number) as [number, number, number, number]
+    let tested = 0
+    const groups: (typeof plans)[] = [plans.slice(0, 12), plans.slice(12, 24)]
+    for (const group of groups) {
+      const scale = { maxW: Math.max(...group.map((p) => p.W)), maxH: Math.max(...group.map((p) => p.H)) }
+      const widths = new Set<number>()
+      for (const plan of group) {
+        const bd = siteLayout(plan, cfg).backDoor
+        for (const [fi, opts] of [[0, { scale }], [0, {}], [1, { scale }]] as const) {
+          if (!plan.floors[fi]) continue
+          const [vx, vy, vw, vh] = vb(renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={fi} uid="t" backDoor={bd} {...opts} />))
+          if ('scale' in opts) widths.add(Math.round(vw * 1e6))
+          if (bd && fi === 0) {
+            const x0 = bd.side === 'W' ? bd.x - bd.w : bd.x, x1 = x0 + bd.w
+            expect(x0).toBeGreaterThanOrEqual(vx - 1e-9)
+            expect(x1).toBeLessThanOrEqual(vx + vw + 1e-9)
+            expect(bd.y - bd.w / 2).toBeGreaterThanOrEqual(vy)
+            expect(bd.y + bd.w / 2).toBeLessThanOrEqual(vy + vh)
+            tested++
+          }
+        }
+      }
+      expect(widths.size).toBe(1)
+    }
+    expect(tested).toBeGreaterThan(0)
+  })
+
   it('FloorSvg: 勝手口（R-DRAW-28）は backDoor を渡した 1F にだけ描かれ、同じ壁の小窓は描き替わる。窓の導出は変わらない', () => {
     let tested = 0
     for (const plan of plans.slice(0, 12)) {
@@ -184,8 +214,12 @@ describe('コンポーネントの描画', () => {
   })
 
   it('FloorSvg: ランドリーのない案は洗面に洗濯機（丸窓つきの角丸矩形）を描く。ランドリーの案は物干しパイプ（青の一点鎖線）が面積・短辺の条件で出る', () => {
-    const plan = defined(plans.find((p) => p.floors[0]?.rooms.some((r) => r.type === 'wash') && !p.floors[0]?.rooms.some((r) => r.type === 'laundry')))
-    const svg = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" />)
+    // 洗濯機は戸口の前を避けるので、置ける洗面のある案を選ぶ
+    const plan = defined(plans.find((p) => {
+      const wr = washerInWash(p)
+      return wr && washerSpot(wr, computeDoors(p.floors[0]?.rooms ?? []), siteLayout(p, cfg).backDoor)
+    }))
+    const svg = renderToStaticMarkup(<FloorSvg plan={plan} floorIdx={0} uid="t" backDoor={siteLayout(plan, cfg).backDoor} />)
     expect(svg).toContain('rx="0.25"')
     const lcfg = { ...cfg, feats: ['laundry'] } as typeof cfg
     const lp = enumeratePlans(lcfg).find((p) => p.floors[0]?.rooms.some((r) => r.type === 'laundry' && r.w * r.h >= 16 && Math.min(r.w, r.h) >= 3))

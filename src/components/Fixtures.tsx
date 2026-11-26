@@ -1,6 +1,6 @@
 import type { Room } from '../core/types'
 import type { StairGeom } from '../core/stair'
-import { WASHER_SIZE, hasDryPipe } from '../core/washer'
+import { WASHER_SIZE } from '../core/washer'
 import type { Rect } from '../core/derive'
 
 /** 階段の上り矢印と重ならないよう、ラベルは上端に置き、矢印は下側に短縮する（この高さ以上のときだけ。FloorSvg の RoomLabel と共有） */
@@ -70,8 +70,8 @@ function Washer({ x, y }: { x: number; y: number }) {
 }
 
 /** 水回りの器具・階段・畳目など、部屋種別ごとの描き込み。stair は geom（折り返し）があれば折り返しで、なければ従来の直進で描く。
- * washer: 洗面に描く洗濯機の位置（ランドリーのない案。置けなければ null）*/
-export function Fixtures({ r, geom, floorIdx = 0, washer }: { r: Room; geom?: StairGeom | null; floorIdx?: number; washer?: Rect | null }) {
+ * washer: 洗面に描く洗濯機の位置（ランドリーのない案。置けなければ null）。pipe: ランドリーの室内干しパイプの線（`dryPipeLine`。なければ描かない）*/
+export function Fixtures({ r, geom, floorIdx = 0, washer, pipe }: { r: Room; geom?: StairGeom | null; floorIdx?: number; washer?: Rect | null; pipe?: { x1: number; y1: number; x2: number; y2: number } | null }) {
   const { x, y, w, h } = r
   const B = '#7f949f'
   switch (r.type) {
@@ -152,11 +152,6 @@ export function Fixtures({ r, geom, floorIdx = 0, washer }: { r: Room; geom?: St
     case 'laundry': {
       // 室内干しの物干しパイプ（面積 16 以上かつ短辺 3 以上）: 長辺に沿った一点鎖線。洗濯機（北西の隅）と反対の壁寄りに引く。
       // クローゼットのハンガーパイプ（茶）と区別して青系
-      const pipe = hasDryPipe(r)
-        ? h >= w
-          ? { x1: x + w - 0.9, y1: y + 2.3, x2: x + w - 0.9, y2: y + h - 0.5 }
-          : { x1: x + 2.3, y1: y + h - 0.9, x2: x + w - 0.5, y2: y + h - 0.9 }
-        : null
       return (
         <>
           <Washer x={x + 0.4} y={y + 0.4} />

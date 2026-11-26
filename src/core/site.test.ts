@@ -260,7 +260,7 @@ describe('siteStats: 観測の実測（スコア・生成には入れない）',
       }
     }
     console.log(rows.join('\n'))
-    // 実測（GEN_VERSION 8）で固定する退行防止。人気6条件: 1台は横付けなし・2台+庭ありは約8割が横付け、敷地の中央値は 1台+庭小さめ 46.5坪（PR-L2 で lot に物干し場の拡幅が入るので、中央値は PR-L1 より少し大きい）
+    // 実測（GEN_VERSION 9・PR-L2）で固定する退行防止。人気6条件×6seed（108案）: 1台は横付けなし・2台+庭ありは約8割が横付け、敷地の中央値は 1台+庭あり 46.5坪（lot に物干し場の拡幅 `lotWidenByDrying` を含む PR-L2 の値。総二階・平屋グリッド 58.5坪・部分二階 49.5坪）
     const med = (xs: Plan[], c: { parking: number; garden: number }) => quantile(xs.map((p) => siteStats(p, c).lotArea), 0.5)
     const sideRate = (xs: Plan[], c: { parking: number; garden: number }) => pct(xs.filter((p) => siteStats(p, c).carMode.side > 0).length, xs.length)
     expect(sideRate(popular, { parking: 1, garden: 1 })).toBe(0)
