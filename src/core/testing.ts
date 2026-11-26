@@ -691,7 +691,8 @@ export function laundryIndependent(
   const west = (r: Room) => { let n = 0; for (let y = 0; y < plan.H; y++) if (owner[y]?.[0] === r) n++; return n }
   const east = (r: Room) => { let n = 0; for (let y = 0; y < plan.H; y++) if (owner[y]?.[plan.W - 1] === r) n++; return n }
   const w = rooms.find((r) => r.type === 'laundry') ?? rooms.find((r) => r.type === 'wash')
-  const hall = rooms.find((r) => r.type === 'hall')
+  // 帯のホール（玄関ホールを除く最初のホール。rooms.ts の bandHall と同じ取り方を独立に書いた）
+  const hall = rooms.find((r) => r.type === 'hall' && r.name !== '玄関ホール')
   // 洗面の隣（辺を共有する長さ 2 セル以上）の部屋の種別
   const wash = rooms.find((r) => r.type === 'wash')
   const near = new Map<Room, number>()

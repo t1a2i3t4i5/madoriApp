@@ -23,7 +23,6 @@ const FIXTURE_V9 = new URL('./__fixtures__/gen-v9.json', import.meta.url)
 const FIXTURE_V8 = new URL('./__fixtures__/gen-v8.json', import.meta.url)
 const FIXTURE_V7 = new URL('./__fixtures__/gen-v7.json', import.meta.url)
 /** v7 のコードで記録した、候補プールの条件ごとの「key|1F の部屋」の sha256（v7 → v8 で 1F が不変であることの固定） */
-const FIXTURE_V7_F1 = new URL('./__fixtures__/gen-v7-f1sig.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-grid-stairs.json', import.meta.url)
 
@@ -114,11 +113,9 @@ describe('過去の版からの移行検証（総二階・平屋）', () => {
   describe('v7 → v8 の移行（2F の切断線の寄せ）', () => {
     let v7: Fixture
     let now: Fixture // v8 の記録どうしの比較（現行は v9）
-    let f1sig: Record<string, string>
     beforeAll(() => {
       v7 = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture
       now = JSON.parse(readFileSync(FIXTURE_V8, 'utf8')) as Fixture
-      f1sig = JSON.parse(readFileSync(FIXTURE_V7_F1, 'utf8')) as typeof f1sig
     })
     // 「1F の部屋は v7 と同一」（v7 のコードで記録したハッシュとライブ生成の比較）は、GEN_VERSION 10 で 1F にも列の積みが入り成り立たなくなったので外した
     it('候補プールの件数は条件ごとに v7 と完全一致', () => {

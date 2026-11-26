@@ -153,7 +153,7 @@ describe(`gen-v${GEN_VERSION} スナップショット`, () => {
       expect([...sizes].sort()).toEqual(['4x5', '4x6'])
       expect(Object.keys(now.grid).filter((k) => now.grid[k]?.length === 3).length).toBeGreaterThanOrEqual(69)
     })
-    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 12.0%（GEN_VERSION 10 の実測 11.7。玄関ホールを廊下率に数える R-SPACE-46。v9 は 10.7）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 55%（GEN_VERSION 10 の実測 61.8%。v8 は 55.6%、v7 は 55.9%。個室収納を減らさない条件を足す前は 58.8%）', () => {
+    it('人気6条件 × 6 seed: 廊下率の中央値 ≤ 12.0%（GEN_VERSION 10 の実測 11.9。玄関ホールを廊下率に数える R-SPACE-46。v9 は 10.7）、2F の全幅ホールの案 ≤ 45%（実測 16.7%）、直下率の中央値 ≥ 55%（GEN_VERSION 10 の実測 60.2%。v8 は 55.6%、v7 は 55.9%。個室収納を減らさない条件を足す前は 58.8%）', () => {
       const plans = [...CONDITIONS.slice(0, 3), ...PARTIAL_CONDITIONS.slice(0, 3)].flatMap(({ cfg }) => SEEDS.flatMap((s) => generatePlans(copy(cfg), s)))
       expect(plans).toHaveLength(6 * SEEDS.length * 3)
       expect(quantile(pct(plans.map(hallRatioIndependent)), 0.5)).toBeLessThanOrEqual(12.0)

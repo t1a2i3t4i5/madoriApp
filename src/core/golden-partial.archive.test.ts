@@ -14,7 +14,6 @@ const FIXTURE_V9 = new URL('./__fixtures__/gen-v9-partial.json', import.meta.url
 const FIXTURE_V4 = new URL('./__fixtures__/gen-v4-partial.json', import.meta.url)
 const FIXTURE_V6 = new URL('./__fixtures__/gen-v6-partial.json', import.meta.url)
 const FIXTURE_V7 = new URL('./__fixtures__/gen-v7-partial.json', import.meta.url)
-const FIXTURE_V7_F1 = new URL('./__fixtures__/gen-v7-f1sig.json', import.meta.url)
 const FIXTURE_V5 = new URL('./__fixtures__/gen-v5-partial.json', import.meta.url)
 const FIXTURE_V5_STAIRS = new URL('./__fixtures__/gen-v5-partial-grid-stairs.json', import.meta.url)
 
@@ -103,10 +102,8 @@ describe('過去の版からの移行検証（部分二階）', () => {
   // 移行検証: GEN_VERSION 8 は 2F の帯内の切断線を 1F の壁に寄せる（R-SPACE-35）。1F は不変（総二階側の golden-fixture.test.ts が v7 のコードで記録したハッシュで固定。ここは部分二階）
   describe('v7 → v8 の移行（2F の切断線の寄せ）', () => {
     let v7: Fixture
-    let f1sig: Record<string, string>
     beforeAll(() => {
       v7 = JSON.parse(readFileSync(FIXTURE_V7, 'utf8')) as Fixture
-      f1sig = JSON.parse(readFileSync(FIXTURE_V7_F1, 'utf8')) as typeof f1sig
     })
     // 「1F の部屋は v7 と同一」（ライブ生成との比較）は、GEN_VERSION 10 で 1F にも列の積みが入り成り立たなくなったので外した
     it('候補プールの件数は条件ごとに v7 と完全一致', () => {
