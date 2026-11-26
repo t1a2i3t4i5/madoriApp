@@ -21,12 +21,12 @@
   "{\"area\":30,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
    "2-14x21-E01100-h5-p14x13",
    "0-14x19-E01110-h6-p14x15",
-   "2-19x15-E01100-h6-p13x15"
+   "0-18x16-E01100-h5-p12x16"
   ],
   "{\"area\":30,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "2-14x20-E11100-h6-p14x14",
-   "0-15x18-W01000-h5-p15x14",
-   "2-14x19-E10100-h5-p14x15"
+   "0-18x16-E01100-h5-p12x16",
+   "0-14x19-W11000-h5-p14x15",
+   "0-14x21-W01101-h5-p14x13"
   ],
   "{\"area\":30,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [],
   "{\"area\":30,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [],
@@ -38,56 +38,56 @@
   "{\"area\":30,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
    "0-14x20-E01110-h6-p14x14",
    "0-14x19-W11000-h5-p14x15",
-   "1-14x19-W10111-h6-p14x15"
+   "1-14x20-E00111-h5-p14x14"
   ],
   "{\"area\":30,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [],
   "{\"area\":30,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [],
   "{\"area\":30,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [],
   "{\"area\":30,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [],
   "{\"area\":36,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
-   "2-16x21-E01100-h6-p16x15",
-   "0-18x18-E01110-h6-p14x18",
-   "0-22x16-E01001-h6-p14x16"
+   "0-18x18-W11000-h5-p14x18",
+   "2-22x16-E01100-h5-p14x16",
+   "0-16x20-E01000-h6-p16x16"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
    "0-18x18-E01010-h5-p18x14",
-   "0-18x18-W11010-h5-p18x14",
-   "0-21x16-E01100-h6-p15x16"
+   "0-16x20-W10000-h5-p16x16",
+   "0-18x18-W01101-h6-p18x14"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [
-   "1-16x22-E00100-h6-p16x14",
-   "0-18x18-W00101-h5-p18x14",
-   "0-18x18-E00101-h6-p18x14"
+   "0-18x18-W00001-h5-p18x14",
+   "0-18x18-E00101-h6-p18x14",
+   "1-16x20-E00100-h6-p16x16"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [
    "2-18x19-E01100-h5-p18x13",
-   "1-18x19-W11001-h5-p18x13",
-   "1-18x18-E00100-h5-p18x14"
+   "1-16x23-W10101-h5-p16x13",
+   "1-18x19-W11001-h5-p18x13"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
-   "0-18x18-E01100-h6-p14x18",
-   "0-21x16-E01000-h6-p15x16",
+   "0-16x20-E01110-h5-p16x16",
+   "0-21x16-E01100-h6-p15x16",
    "0-18x19-E01110-h5-p18x13"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "0-18x18-E01100-h6-p14x18",
-   "0-21x16-E01000-h6-p15x16",
-   "1-18x18-W10101-h5-p18x14"
+   "0-18x18-E01100-h5-p18x14",
+   "0-22x16-W10000-h5-p14x16",
+   "0-18x18-W11000-h5-p14x18"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [],
   "{\"area\":36,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [
-   "1-21x16-W11011-h5-p15x16",
+   "1-18x19-W00111-h5-p18x13",
    "0-18x18-E01110-h5-p18x14",
    "1-18x18-W11111-h5-p18x14"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
    "0-16x20-E01100-h5-p16x16",
-   "2-18x18-E01100-h6-p18x14",
-   "0-18x18-E01111-h5-p18x14"
+   "0-18x18-E01101-h6-p18x14",
+   "2-18x18-E01110-h5-p18x14"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
    "2-18x18-E0111m-h5-p18x14",
-   "0-18x18-W10111-h6-p18x14",
+   "0-18x19-W10101-h5-p18x13",
    "0-18x18-W11101-h5-p18x14"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [],
@@ -97,55 +97,55 @@
    "1-18x19-W00002-h5-p18x13"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
-   "2-18x18-E0111m-h5-p18x14",
-   "0-16x21-E01110-h6-p16x15",
-   "0-18x18-E01100-h6-p18x14"
+   "0-18x18-E01110-h6-p18x14",
+   "0-18x18-E01010-h5-p18x14",
+   "0-16x20-E01110-h6-p16x16"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "2-18x18-E0111m-h6-p18x14",
+   "2-18x18-E0111m-h5-p18x14",
    "0-18x18-W01010-h5-p18x14",
-   "0-16x20-E01100-h6-p16x16"
+   "0-18x18-W10010-h6-p18x14"
   ],
   "{\"area\":36,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [],
   "{\"area\":40,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
-   "0-18x20-E01100-h6-p14x20",
-   "0-20x18-E01100-h6-p20x14",
-   "2-18x20-E11100-h5-p14x20"
+   "0-24x16-E01101-h5-p16x16",
+   "0-16x22-E01110-h5-p16x18",
+   "0-23x16-W01010-h6-p17x16"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "0-25x16-E01000-h5-p15x16",
-   "2-18x20-E01100-h5-p14x20",
-   "0-23x16-W11010-h6-p17x16"
+   "0-23x16-W10110-h5-p17x16",
+   "0-20x18-E01110-h5-p20x14",
+   "0-24x16-W01000-h6-p16x16"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [
-   "1-23x16-E00100-h5-p17x16",
+   "1-23x16-E00100-h6-p17x16",
    "0-20x19-E00101-h5-p20x13",
    "0-20x18-W00101-h5-p20x14"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":2,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [
-   "1-24x16-W11100-h5-p16x16",
-   "1-20x18-W10101-h6-p20x14",
-   "2-25x16-E01100-h5-p15x16"
+   "1-23x16-W11000-h6-p17x16",
+   "1-16x22-E00100-h5-p16x18",
+   "1-24x16-W10101-h5-p16x16"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
-   "0-25x16-E01110-h5-p15x16",
-   "0-20x19-E01100-h5-p20x13",
-   "0-16x25-E01100-h5-p16x15"
+   "0-25x16-E01100-h6-p15x16",
+   "0-16x23-E01110-h6-p16x17",
+   "0-18x20-W01000-h6-p14x20"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "0-18x20-E01110-h6-p14x20",
-   "0-24x16-E01110-h6-p16x16",
-   "0-20x19-E01110-h5-p20x13"
+   "0-23x16-E01110-h5-p17x16",
+   "0-20x18-E01110-h6-p20x14",
+   "0-24x16-E01010-h6-p16x16"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [
-   "0-20x19-W00010-h5-p20x13",
-   "0-20x18-E00100-h5-p20x14",
-   "0-23x16-E00000-h6-p17x16"
+   "0-20x18-E00110-h6-p20x14",
+   "0-20x18-W00010-h5-p20x14",
+   "0-23x16-E00000-h5-p17x16"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":3,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [
-   "1-20x18-E00101-h5-p20x14",
+   "2-20x18-E01100-h6-p20x14",
    "1-23x16-W10101-h6-p17x16",
-   "1-20x18-W11101-h5-p20x14"
+   "1-16x22-E00001-h5-p16x18"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
    "2-20x18-E01100-h5-p20x14",
@@ -153,31 +153,31 @@
    "0-20x18-E01111-h6-p20x14"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "0-23x16-E01101-h6-p17x16",
-   "2-20x19-E01110-h5-p20x13",
-   "0-20x18-W01101-h5-p20x14"
+   "0-20x18-W10111-h5-p20x14",
+   "2-20x18-E01110-h6-p20x14",
+   "0-20x18-W11111-h5-p20x14"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [],
   "{\"area\":40,\"floors\":2,\"rooms\":4,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [
-   "1-20x18-E00002-h6-p20x14",
-   "0-20x18-E01111-h6-p20x14",
-   "1-20x18-W11012-h6-p20x14"
+   "0-20x18-E01100-h5-p20x14",
+   "1-20x18-W11002-h6-p20x14",
+   "1-20x18-W10012-h6-p20x14"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[],\"story\":\"partial\"}": [
    "2-24x16-E0111m-h6-p16x16",
    "0-20x18-E01110-h6-p20x14",
-   "0-20x18-E01100-h5-p20x14"
+   "2-20x19-E0111m-h5-p20x13"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[\"doma\"],\"story\":\"partial\"}": [
-   "0-20x18-W10000-h5-p20x14",
-   "2-20x18-E0111m-h6-p20x14",
-   "2-20x18-W0101m-h5-p20x14"
+   "2-24x16-E0111m-h6-p16x16",
+   "0-20x18-W01000-h5-p20x14",
+   "0-20x18-E01110-h6-p20x14"
   ],
   "{\"area\":40,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[\"void\",\"study\"],\"story\":\"partial\"}": [],
   "{\"area\":40,\"floors\":2,\"rooms\":5,\"parking\":1,\"garden\":1,\"feats\":[\"washitsu\",\"laundry\",\"pantry\",\"wic\"],\"story\":\"partial\"}": [
-   "2-20x18-E0101m-h6-p20x14",
-   "1-20x18-W10012-h6-p20x14",
-   "1-20x18-W11002-h6-p20x14"
+   "1-20x18-E00002-h5-p20x14",
+   "0-20x18-E01110-h6-p20x14",
+   "1-20x18-W10002-h6-p20x14"
   ]
  }
 }

@@ -348,9 +348,9 @@ describe('敷地の文の洗濯の1文（R-TEXT-11。PR-L3）', () => {
     expect(said / all.length).toBeGreaterThan(0.6)
   })
 
-  it('文を出さない形は、勝手口の経路が LDK を横切り庭より長い案で、グリッドの提示案に100件（GEN_VERSION 10 の実測。v9 は 10 件。R-IDX-11）', () => {
+  it('文を出さない形は、勝手口の経路が LDK を横切り庭より長い案で、グリッドの提示案に12件（GEN_VERSION 10 の実測。列の積みで洗濯機の部屋の外壁接触を失っていた間は100件。v9 は 10 件。R-IDX-11）', () => {
     const sup = all.filter((p) => backDoorTextSuppressed(laundryStats(p, cfg)))
-    expect(sup.length).toBe(100)
+    expect(sup.length).toBe(12)
     for (const p of sup) {
       const s = laundryStats(p, cfg)
       expect(s.backDoor).toBe('C')

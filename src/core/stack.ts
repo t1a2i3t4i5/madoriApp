@@ -58,6 +58,8 @@ export function stackOvers(rooms0: readonly Room[], plate: Plate): Room[] {
         if (cur.type === 'entry' || cur.type === 'doma') {
           if (!south || !fillHallSide) continue
         }
+        // 洗濯機の部屋は、付属をホールと反対側に付けて、ホールからの入口を塞がない（carveWetOvers と同じ向き）
+        if ((cur.type === 'wash' || cur.type === 'laundry') && fillHallSide) continue
         const fillTop = north ? !fillHallSide : fillHallSide
         const fill: Room = { ...cur, y: fillTop ? cur.y : cur.y + hm, h: fh, area: cur.w * fh }
         const main: Room = { ...cur, y: fillTop ? cur.y + fh : cur.y, h: hm, area: cur.w * hm }
@@ -77,7 +79,12 @@ export function stackOvers(rooms0: readonly Room[], plate: Plate): Room[] {
       const wm = Math.max(need, Math.ceil(minOf(cur) / cur.h), cur.w - 2)
       if (cur.w - wm === 2 && cur.h * 2 <= ROOM.store.maxArea) {
         const fw = 2
+        // 洗濯機の部屋（洗面・ランドリー）は、東西の外壁に接していたら、付属を外壁と反対側に付けて接し方を失わない（勝手口 B・R-FLOW-07）
+        const wallW = cur.x === plate.x
+        const wallE = cur.x + cur.w === plate.x + plate.W
+        const keepWall = cur.type === 'wash' || cur.type === 'laundry'
         for (const left of [true, false]) {
+          if (keepWall && ((left && wallW) || (!left && wallE))) continue
           const fill: Room = { ...cur, x: left ? cur.x : cur.x + wm, w: fw, area: fw * cur.h }
           const main: Room = { ...cur, x: left ? cur.x + fw : cur.x, w: wm, area: wm * cur.h }
           cands.push({ main, fill })
