@@ -4,6 +4,7 @@ import { computeDoors } from './derive'
 import { gridFullSample, gridPartSample } from './fixtureSamples'
 import { GEN_VERSION, generatePlans } from './generate'
 import { computeFlows } from '../lib/flow'
+import { hasDryPipe } from './washer'
 import { backDoorTextSuppressed, laundryClause, laundryRoutes, laundryStats, makeRouter, type LaundryStats } from './laundry'
 import { siteLayout, siteStats, CAR_D, DRY_D, DRY_L, WRAP_MARGIN, type SiteRect } from './site'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, laundryIndependent, quantile } from './testing'
@@ -333,9 +334,12 @@ describe('敷地の文の洗濯の1文（R-TEXT-11。PR-L3）', () => {
       expect(says).toBe(!!L.backDoor && !!L.drying && !backDoorTextSuppressed(s))
       if (says && L.backDoor) {
         said++
-        expect(t).toContain(`の${L.backDoor.side === 'W' ? '西' : '東'}の勝手口`)
+        const sd = L.backDoor.side === 'W' ? '西' : '東'
+        expect(t).toMatch(new RegExp(`の${sd}(端)?の勝手口`))
         expect(t).toContain(L.backDoor.room.name)
-        expect(t.includes('室内干し')).toBe(s.indoorDry)
+        const wr = (plan.floors[0]?.rooms ?? []).find((r) => r.type === 'laundry' || r.type === 'wash')
+        expect(t.includes('室内干し')).toBe(!!wr && hasDryPipe(wr))
+        if (L.backDoor.room.type === 'hall') expect(t).toContain(`ホールの${sd}端の勝手口`)
       }
     }
     expect(said / all.length).toBeGreaterThan(0.85)
@@ -349,7 +353,7 @@ describe('敷地の文の洗濯の1文（R-TEXT-11。PR-L3）', () => {
       expect(s.backDoor).toBe('C')
       expect(s.washOnlyFromLdk).toBe(true)
       expect(laundryClause(p, cfg)).not.toContain('勝手口')
-      expect(laundryClause(p, cfg)).toContain('LDK を通って')
+      expect(laundryClause(p, cfg)).toMatch(/物干し場より、LDK を通って(庭|ウッドデッキ)に出るほうが近道です/)
     }
   })
 
@@ -359,9 +363,9 @@ describe('敷地の文の洗濯の1文（R-TEXT-11。PR-L3）', () => {
       const noBack = !siteLayout(plan, cfg).backDoor || backDoorTextSuppressed(s)
       if (!noBack) continue
       const withGarden = laundryClause(plan, cfg)
-      expect(withGarden).toMatch(/LDK を通って(庭|ウッドデッキ)で干す配置です/)
+      expect(withGarden).toMatch(/LDK を通って(庭|ウッドデッキ)(で干す配置です|に出るほうが近道です)/)
       const noGarden = laundryClause(plan, { parking: 1, garden: 0 })
-      expect(noGarden === '' || noGarden === 'ランドリーで室内干しができます。' || noGarden.includes('勝手口')).toBe(true)
+      expect(noGarden === '' || noGarden === '雨の日はランドリーで室内干しができます。' || noGarden.includes('勝手口')).toBe(true)
     }
   })
 

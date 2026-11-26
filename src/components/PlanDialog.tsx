@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PlanConfig, ScoredPlan } from '../core/types'
 import { SCORE_WEIGHTS } from '../core/score'
 import { planName, planTags } from '../core/describe'
 import { explainPlan } from '../core/explain'
-import { explainSite, siteCaption, siteLayout } from '../core/site'
+import { siteCaption, siteLayout } from '../core/site'
+import { explainSite } from '../core/siteText'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
@@ -67,7 +68,7 @@ export function PlanDialog({ cfg, plan, initialFloor, onClose, starred, onToggle
     return () => document.removeEventListener('keydown', onKey)
   }, [])
   const name = planName(cfg, plan)
-  const siteText = explainSite(cfg, plan)
+  const siteText = useMemo(() => explainSite(cfg, plan), [cfg, plan])
   const site = siteLayout(plan, cfg)
   const siteNote = siteCaption(site)
   return (

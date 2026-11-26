@@ -5,7 +5,8 @@ import { explainPlan } from '../core/explain'
 import { FloorSvg } from './FloorSvg'
 import { FloorTabs } from './FloorTabs'
 import { SiteSvg } from './SiteSvg'
-import { explainSite, siteCaption, siteLayout } from '../core/site'
+import { siteCaption, siteLayout } from '../core/site'
+import { explainSite } from '../core/siteText'
 import { floorAreaLabel, meters } from '../lib/format'
 import { storageCount } from '../lib/metrics'
 import { clampFloor } from '../lib/floor'
@@ -29,7 +30,7 @@ export function PlanCard({ cfg, plan, index, scale, onOpen, starred, onToggleSta
   // 条件変更で階数が減ってもタブ選択が残るため、存在する階にクランプする
   const floor = clampFloor(selectedFloor, plan.floors.length)
   const name = planName(cfg, plan)
-  const siteText = explainSite(cfg, plan)
+  const siteText = useMemo(() => explainSite(cfg, plan), [cfg, plan])
   const site = useMemo(() => siteLayout(plan, cfg), [plan, cfg])
   const siteNote = siteCaption(site)
   const cl = storageCount(plan)
