@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { GEN_VERSION, generatePlans } from './generate'
 import { gridFullSample, gridPartSample } from './fixtureSamples'
+import { laundryClause } from './laundry'
 import { findEntry } from './rooms'
-import { explainSite, siteCaption, siteLayout, siteStats, type SiteLayout, type SiteRect } from './site'
+import { explainSite } from './siteText'
+import { siteCaption, siteLayout, siteStats, type SiteLayout, type SiteRect } from './site'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, quantile } from './testing'
 import type { Plan, PlanConfig } from './types'
 
@@ -167,8 +169,12 @@ describe('siteLayout: 配置の不変条件（全標本×駐車0〜2×庭0〜2�
 
 describe('explainSite: 当てはまる事実だけを書く', () => {
   const samples = present(POPULAR, [1])
-  it('駐車も庭もなければ、LDK の目隠しの文だけ', () => {
-    for (const { plan } of samples) expect(explainSite({ parking: 0, garden: 0 }, plan)).toBe('LDK の南は道路に近いため、生け垣などの目隠しを想定しています。')
+  it('駐車も庭もなければ、LDK の目隠しの文で始まり、あとは洗濯の1文だけ（あれば）', () => {
+    for (const { plan } of samples) {
+      const t = explainSite({ parking: 0, garden: 0 }, plan)
+      expect(t.startsWith('LDK の南は道路に近いため、生け垣などの目隠しを想定しています。')).toBe(true)
+      expect(t).toBe('LDK の南は道路に近いため、生け垣などの目隠しを想定しています。' + laundryClause(plan, { parking: 0, garden: 0 }))
+    }
   })
   it('庭なしのときだけ生け垣、庭ありのときだけ庭・デッキ', () => {
     for (const { plan } of samples) {

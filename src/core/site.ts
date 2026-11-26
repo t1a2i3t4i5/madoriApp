@@ -301,9 +301,10 @@ const DIR = { W: '西', E: '東' } as const
 /**
  * 敷地の解説文（R-TEXT-02: 当てはまる事実だけ。PR3）。`explainPlan` とは別関数
  * （explainPlan の出力は gen-v8-partial.json の fixture に入っているので、ここに文を足さない）。
- * 駐車も庭もなくて書くことがなければ空文字
+ * 洗濯の1文（`laundryClause`。R-TEXT-11）は含めない（laundry.ts が siteLayout を使うので、site.ts から参照すると循環する）。
+ * 洗濯の文まで含めた敷地の文は `siteText.ts` の `explainSite`。書くことがなければ空文字
  */
-export function explainSite(cfg: Pick<PlanConfig, 'parking' | 'garden'>, plan: Pick<Plan, 'W' | 'H' | 'floors'>): string {
+export function explainSiteLayout(cfg: Pick<PlanConfig, 'parking' | 'garden'>, plan: Plan): string {
   const L = siteLayout(plan, cfg)
   const ldk = plan.floors[0]?.rooms.find((r) => r.type === 'ldk')
   if (!ldk) return ''
