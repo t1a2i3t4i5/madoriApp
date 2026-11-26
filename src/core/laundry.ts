@@ -235,3 +235,36 @@ export function laundryStats(plan: Plan, cfg: Pick<PlanConfig, 'parking' | 'gard
     washOnlyFromLdk: only,
   }
 }
+
+const SIDE = { W: '西', E: '東' } as const
+
+/**
+ * 勝手口の文を出さない形（R-IDX-11・R-TEXT-11）: 勝手口の経路が LDK を横切り、かつ庭までの経路より長い案。
+ * 洗面に LDK からしか入れない案で勝手口 C が付く形（実測 10 件）で、「勝手口から出られる」と書くと実態より近く読める
+ */
+export function backDoorTextSuppressed(s: Pick<LaundryStats, 'backDoor' | 'toGarden' | 'toDry'>): boolean {
+  if (!s.backDoor || !s.toDry) return false
+  return s.toDry.crossesLdk && (!s.toGarden || s.toDry.len > s.toGarden.len)
+}
+
+/**
+ * 敷地の文に足す洗濯の1文（R-TEXT-11。PR-L3）。観測の事実だけを書き、洗濯機の部屋がない案・干す場所のない案は空文字。
+ * 勝手口がある案: 勝手口から物干し場へ。ない案（または文を出さない形）: 庭ありなら LDK を通って庭・デッキで干す
+ */
+export function laundryClause(plan: Plan, cfg: Pick<PlanConfig, 'parking' | 'garden'>): string {
+  const s = laundryStats(plan, cfg)
+  if (!s.washer) return ''
+  const washer = washerRoom(plan)
+  const L = siteLayout(plan, cfg)
+  const bd = L.backDoor
+  const indoor = s.indoorDry ? '、雨の日はランドリーで室内干しもできます' : ''
+  if (bd && L.drying && !backDoorTextSuppressed(s)) {
+    const where = bd.room === washer ? bd.room.name : `${bd.room.name}の端`
+    return `${where}の${SIDE[bd.side]}の勝手口から、建物の${SIDE[bd.side]}側の物干し場へ出られます${indoor}。`
+  }
+  if (cfg.garden > 0 && s.toGarden) {
+    const spot = L.deck ? 'ウッドデッキ' : '庭'
+    return `洗濯物は LDK を通って${spot}で干す配置です${indoor}。`
+  }
+  return s.indoorDry ? 'ランドリーで室内干しができます。' : ''
+}

@@ -4,7 +4,7 @@ import { computeDoors } from './derive'
 import { gridFullSample, gridPartSample } from './fixtureSamples'
 import { GEN_VERSION, generatePlans } from './generate'
 import { computeFlows } from '../lib/flow'
-import { laundryRoutes, laundryStats, makeRouter, type LaundryStats } from './laundry'
+import { backDoorTextSuppressed, laundryClause, laundryRoutes, laundryStats, makeRouter, type LaundryStats } from './laundry'
 import { siteLayout, siteStats, CAR_D, DRY_D, DRY_L, WRAP_MARGIN, type SiteRect } from './site'
 import { CONDITIONS, PARTIAL_CONDITIONS, SEEDS, laundryIndependent, quantile } from './testing'
 import type { Plan, PlanConfig, Room } from './types'
@@ -314,5 +314,61 @@ describe('flow.ts の生活動線と laundry の経路の長さ（退行防止�
       n++
     }
     expect(n).toBeGreaterThan(50)
+  })
+})
+
+describe('敷地の文の洗濯の1文（R-TEXT-11。PR-L3）', () => {
+  const cfg = { parking: 1, garden: 1 }
+  const { plans: full } = gridFullSample()
+  const { plans: part } = gridPartSample()
+  const all = [...full, ...part]
+
+  it('勝手口の文は、勝手口がある案で、文を出さない形を除いて出る。出る文は勝手口の側・部屋と一致する', () => {
+    let said = 0
+    for (const plan of all) {
+      const s = laundryStats(plan, cfg)
+      const t = laundryClause(plan, cfg)
+      const L = siteLayout(plan, cfg)
+      const says = t.includes('勝手口')
+      expect(says).toBe(!!L.backDoor && !!L.drying && !backDoorTextSuppressed(s))
+      if (says && L.backDoor) {
+        said++
+        expect(t).toContain(`の${L.backDoor.side === 'W' ? '西' : '東'}の勝手口`)
+        expect(t).toContain(L.backDoor.room.name)
+        expect(t.includes('室内干し')).toBe(s.indoorDry)
+      }
+    }
+    expect(said / all.length).toBeGreaterThan(0.85)
+  })
+
+  it('文を出さない形は、勝手口の経路が LDK を横切り庭より長い案で、グリッドの提示案に10件（R-IDX-11）', () => {
+    const sup = all.filter((p) => backDoorTextSuppressed(laundryStats(p, cfg)))
+    expect(sup.length).toBe(10)
+    for (const p of sup) {
+      const s = laundryStats(p, cfg)
+      expect(s.backDoor).toBe('C')
+      expect(s.washOnlyFromLdk).toBe(true)
+      expect(laundryClause(p, cfg)).not.toContain('勝手口')
+      expect(laundryClause(p, cfg)).toContain('LDK を通って')
+    }
+  })
+
+  it('勝手口がない案・文を出さない案は、庭ありなら庭・デッキで干す文、庭なしなら室内干しの文か空', () => {
+    for (const plan of all) {
+      const s = laundryStats(plan, cfg)
+      const noBack = !siteLayout(plan, cfg).backDoor || backDoorTextSuppressed(s)
+      if (!noBack) continue
+      const withGarden = laundryClause(plan, cfg)
+      expect(withGarden).toMatch(/LDK を通って(庭|ウッドデッキ)で干す配置です/)
+      const noGarden = laundryClause(plan, { parking: 1, garden: 0 })
+      expect(noGarden === '' || noGarden === 'ランドリーで室内干しができます。' || noGarden.includes('勝手口')).toBe(true)
+    }
+  })
+
+  it('洗濯機の部屋がない案は空', () => {
+    const base = full[0]
+    if (!base) throw new Error('標本なし')
+    const noWash = { ...base, floors: base.floors.map((f) => ({ ...f, rooms: f.rooms.filter((r) => r.type !== 'wash' && r.type !== 'laundry') })) }
+    expect(laundryClause(noWash, cfg)).toBe('')
   })
 })
