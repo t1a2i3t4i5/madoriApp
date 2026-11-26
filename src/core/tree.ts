@@ -88,14 +88,16 @@ function build(rooms: readonly Room[], rect: TreeRect, prefer: Dir): TreeNode | 
  * 固定3帯の階は、根が H（帯）・その子が V（帯内の列）・列は葉か H 分割（クローゼットの切り出しなど）になる（R-SPACE-42）
  */
 export function buildTree(rooms: readonly Room[], rect: TreeRect): TreeNode | null {
+  // 面積0・負の部屋は、面積の合計に効かず葉にもならずに黙って落ちるので、木にしない
+  if (rooms.some((r) => r.w <= 0 || r.h <= 0)) return null
   const area = rooms.reduce((s, r) => s + r.w * r.h, 0)
   if (area !== rect.W * rect.H) return null
   return build(rooms, rect, 'H')
 }
 
-/** 木の葉の部屋（北 → 南・西 → 東の深さ優先の順） */
-export function treeRooms(node: TreeNode): Room[] {
-  if (node.kind === 'leaf') return [node.room as Room]
+/** 木の葉の部屋（北 → 南・西 → 東の深さ優先の順）。部屋は木が持つものそのもので、書き換えない */
+export function treeRooms(node: TreeNode): Readonly<Room>[] {
+  if (node.kind === 'leaf') return [node.room]
   return node.children.flatMap(treeRooms)
 }
 
@@ -104,7 +106,7 @@ export function treeDepth(node: TreeNode): number {
   return node.kind === 'leaf' ? 0 : 1 + Math.max(...node.children.map(treeDepth))
 }
 
-/** 固定3帯のテンプレート（R-SPACE-41・42）に収まる木か: 根が H 分割、その子（帯）が V 分割か葉、帯の子（列）は葉か H 分割の葉の並び */
+/** 固定3帯の形（R-SPACE-42 の形の検査）に収まる木か: 根が H 分割、その子（帯）が V 分割か葉、帯の子（列）は葉か H 分割の葉の並び */
 export function isBandTemplate(node: TreeNode): boolean {
   if (node.kind !== 'split' || node.dir !== 'H') return false
   return node.children.every((band) => {
